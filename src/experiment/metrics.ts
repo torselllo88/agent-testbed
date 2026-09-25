@@ -1,0 +1,206 @@
+import type { TokenUsage } from "../llm/provider.js";
+import { EventType, type ExperimentEvent } from "./events.js";
+import type { Termination } from "./outcome.js";
+
+interface TokenCount {
+  prompt: number;
+  completion: number;
+  total: number;
+}
+
+export interface ExperimentMetrics {
+  termination: Termination | null;
+  intervened: boolean;
+  interventions: Array<{ seq: number; command: unknown; flowAltering: boolean }>;
+  durationMs: { active: number | null; wall: number | null };
+  turns: { total: number; byKind: Record<string, number>; byAgent: Record<string, number> };
+  messages: { public: number; system: number; byAgent: Record<string, number> };
+  passes: { total: number; byAgent: Record<string, number> };
+  tokens: {
+    agent: number;
+    orchestration: number;
+    total: number;
+    byAgent: Record<string, TokenCount>;
+  };
+  costUsd: { total: number; agent: number; orchestration: number; callsWithUnknownCost: number };
+  llmCalls: { total: number; failed: number; parseFailures: number; byPurpose: Record<string, number> };
+  routing: { decisions: number; bySource: Record<string, number>; invalidExplicitTargets: number; classifierFailures: number };
+  readiness: { invalidations: number };
+  proposals: {
+    attempts: number;
+    formatRejections: number;
+    declined: number;
+    frozen: number;
+    final: { id: string; proposerId: string; body: unknown; rationale: string; hash: string } | null;
+  };
+  votes: {
+    rounds: Array<{ proposalId: string; reached: boolean; approvals: number; required: number; votes: unknown }>;
+    final: Array<{ agentId: string; vote: string; reason: string }> | null;
+  };
+  consensusReached: boolean;
+  evaluation: Record<string, unknown> | null;
+  protocolIncidents: Record<string, number>;
+  errors: number;
+}
+
+const inc = (map: Record<string, number>, key: string, by = 1) => {
+  map[key] = (map[key] ?? 0) + by;
+};
+
+/**
+ * Derives every reported number from the event log alone (the log is the
+ * source of truth; the stored summary is just a cache of this). Pure — can be
+ * re-run over any stored trace, including traces from older runs.
+ */
+export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: boolean } = {}): ExperimentMetrics {
+  const m: ExperimentMetrics = {
+    termination: null,
+    intervened: opts.intervened ?? false,
+    interventions: [],
+    durationMs: { active: null, wall: null },
+    turns: { total: 0, byKind: {}, byAgent: {} },
+    messages: { public: 0, system: 0, byAgent: {} },
+    passes: { total: 0, byAgent: {} },
+    tokens: { agent: 0, orchestration: 0, total: 0, byAgent: {} },
+    costUsd: { total: 0, agent: 0, orchestration: 0, callsWithUnknownCost: 0 },
+    llmCalls: { total: 0, failed: 0, parseFailures: 0, byPurpose: {} },
+    routing: { decisions: 0, bySource: {}, invalidExplicitTargets: 0, classifierFailures: 0 },
+    readiness: { invalidations: 0 },
+    proposals: { attempts: 0, formatRejections: 0, declined: 0, frozen: 0, final: null },
+    votes: { rounds: [], final: null },
+    consensusReached: false,
+    evaluation: null,
+    protocolIncidents: {},
+    errors: 0,
+  };
+
+  let startedTs: string | null = null;
+  let finishedTs: string | null = null;
+  const frozenById = new Map<string, Record<string, unknown>>();
+
+  for (const e of events) {
+    const p = e.payload;
+    switch (e.type) {
+      case EventType.EXPERIMENT_STARTED:
+        startedTs = e.ts;
+        break;
+      case EventType.EXPERIMENT_FINISHED:
+        finishedTs = e.ts;
+        m.termination = p.termination as Termination;
+        m.durationMs.active = typeof p.activeElapsedMs === "number" ? p.activeElapsedMs : null;
+        break;
+      case EventType.TURN_STARTED:
+        m.turns.total += 1;
+        inc(m.turns.byKind, String(p.kind));
+        if (e.agentId) inc(m.turns.byAgent, e.agentId);
+        break;
+      case EventType.AGENT_META:
+        if (p.pass === true && e.agentId) {
+          m.passes.total += 1;
+          inc(m.passes.byAgent, e.agentId);
+        }
+        break;
+      case EventType.MESSAGE_POSTED: {
+        const sender = p.sender as { kind: string; agentId?: string };
+        if (sender.kind === "agent" && sender.agentId) {
+          m.messages.public += 1;
+          inc(m.messages.byAgent, sender.agentId);
+        } else {
+          m.messages.system += 1;
+        }
+        break;
+      }
+      case EventType.LLM_CALL: {
+        m.llmCalls.total += 1;
+        inc(m.llmCalls.byPurpose, String(p.purpose));
+        if (p.error) m.llmCalls.failed += 1;
+        if (p.parseOk === false) m.llmCalls.parseFailures += 1;
+        const usage = p.usage as TokenUsage | null;
+        const tokens = usage ? usage.promptTokens + usage.completionTokens : 0;
+        const cost = typeof p.costUsd === "number" ? p.costUsd : null;
+        if (cost === null) m.costUsd.callsWithUnknownCost += 1;
+        if (p.category === "orchestration") {
+          m.tokens.orchestration += tokens;
+          m.costUsd.orchestration += cost ?? 0;
+        } else {
+          m.tokens.agent += tokens;
+          m.costUsd.agent += cost ?? 0;
+          if (e.agentId && usage) {
+            const entry = (m.tokens.byAgent[e.agentId] ??= { prompt: 0, completion: 0, total: 0 });
+            entry.prompt += usage.promptTokens;
+            entry.completion += usage.completionTokens;
+            entry.total += tokens;
+          }
+        }
+        break;
+      }
+      case EventType.ROUTING_DECISION: {
+        m.routing.decisions += 1;
+        inc(m.routing.bySource, String(p.source));
+        const details = (p.details ?? {}) as Record<string, unknown>;
+        if (details.invalidExplicitTarget) m.routing.invalidExplicitTargets += 1;
+        if (details.classifierFailure) m.routing.classifierFailures += 1;
+        break;
+      }
+      case EventType.READINESS_INVALIDATED:
+        m.readiness.invalidations += 1;
+        break;
+      case EventType.PROPOSAL_REQUESTED:
+        m.proposals.attempts += 1;
+        break;
+      case EventType.PROPOSAL_REJECTED_FORMAT:
+        m.proposals.formatRejections += 1;
+        break;
+      case EventType.PROPOSAL_DECLINED:
+        m.proposals.declined += 1;
+        break;
+      case EventType.PROPOSAL_FROZEN:
+        m.proposals.frozen += 1;
+        frozenById.set(String(p.id), p);
+        break;
+      case EventType.CONSENSUS_RESULT: {
+        const votes = p.votes as Array<{ agentId: string; vote: string; reason: string }>;
+        m.votes.rounds.push({
+          proposalId: String(p.proposalId),
+          reached: p.reached === true,
+          approvals: Number(p.approvals),
+          required: Number(p.required),
+          votes,
+        });
+        m.votes.final = votes;
+        m.consensusReached = p.reached === true;
+        const frozen = frozenById.get(String(p.proposalId));
+        if (frozen) {
+          m.proposals.final = {
+            id: String(frozen.id),
+            proposerId: String(frozen.proposerId),
+            body: frozen.body,
+            rationale: String(frozen.rationale ?? ""),
+            hash: String(frozen.hash),
+          };
+        }
+        break;
+      }
+      case EventType.EVALUATION_RESULT:
+        m.evaluation = p;
+        break;
+      case EventType.PROTOCOL_INCIDENT:
+        inc(m.protocolIncidents, String(p.kind));
+        break;
+      case EventType.OPERATOR_INTERVENTION:
+        m.interventions.push({ seq: e.seq, command: p.command, flowAltering: p.flowAltering === true });
+        if (p.flowAltering === true) m.intervened = true;
+        break;
+      case EventType.ERROR:
+        m.errors += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  m.tokens.total = m.tokens.agent + m.tokens.orchestration;
+  m.costUsd.total = m.costUsd.agent + m.costUsd.orchestration;
+  if (startedTs && finishedTs) m.durationMs.wall = new Date(finishedTs).getTime() - new Date(startedTs).getTime();
+  return m;
+}

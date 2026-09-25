@@ -1,0 +1,699 @@
+import { randomUUID } from "node:crypto";
+import { createConsensusRule, type CastVote, type ConsensusResult, type ConsensusRule } from "../consensus/index.js";
+import { getTestbedVersion } from "../config/version.js";
+import type { EvaluatorRegistry } from "../evaluation/registry.js";
+import type { ScenarioEvaluator } from "../evaluation/types.js";
+import type { ProviderRegistry } from "../llm/registry.js";
+import type { Db } from "../persistence/db.js";
+import { EventRepository } from "../persistence/eventRepository.js";
+import { ExperimentRepository } from "../persistence/experimentRepository.js";
+import { createScheduler, type RoutingDecision, type Scheduler } from "../scheduling/index.js";
+import type { LastTurn } from "../scheduling/types.js";
+import { createTransport, type RoomMessage, type Transport } from "../transport/index.js";
+import { BudgetTracker, type UsageTotals } from "./budget.js";
+import { canonicalJson, configHash, parseExperimentConfig, sha256, type AgentConfig, type ExperimentConfig } from "./config.js";
+import { EventLog, EventType } from "./events.js";
+import { LlmCaller } from "./llmCaller.js";
+import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
+import { termination, TerminateRun, type Termination } from "./outcome.js";
+import { formatZodError } from "./parseJson.js";
+import { assertTransition, Phase } from "./phases.js";
+import {
+  ProposalEnvelopeSchema,
+  proposalJsonSchema,
+  renderDiscussionPrompt,
+  renderProposalPrompt,
+  renderSystemPrompt,
+  renderVotePrompt,
+  TURN_JSON_SCHEMA,
+  TurnResponseSchema,
+  VOTE_JSON_SCHEMA,
+  VoteResponseSchema,
+} from "./protocol.js";
+import { ReadinessTracker, type AgentReadiness, type ReadinessChange } from "./readiness.js";
+
+export interface RunnerDeps {
+  db: Db;
+  providers: ProviderRegistry;
+  evaluators: EvaluatorRegistry;
+  /** Override for tests; defaults to the transport named in the config. */
+  createTransport?: (config: ExperimentConfig) => Transport;
+}
+
+export interface RunOptions {
+  id?: string;
+  scenarioId?: string | null;
+  scenarioVersion?: number | null;
+  batchId?: string | null;
+  conditionKey?: string | null;
+}
+
+export type OperatorCommand =
+  | { type: "pause" }
+  | { type: "resume" }
+  /** While paused: let exactly one more activation run, then pause again. */
+  | { type: "step" }
+  | { type: "select_next"; agentId: string }
+  | { type: "force_decision" }
+  | { type: "stop" };
+
+/** Commands that change what happens in the run (not just when) — they mark the run as intervened. */
+const FLOW_ALTERING: ReadonlySet<OperatorCommand["type"]> = new Set(["select_next", "force_decision", "stop"]);
+
+export class InvalidCommandError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidCommandError";
+  }
+}
+
+export interface FrozenProposal {
+  readonly id: string;
+  readonly attempt: number;
+  readonly proposerId: string;
+  readonly rationale: string;
+  readonly body: unknown;
+  /** sha256 of the canonical JSON body — every vote references it. */
+  readonly hash: string;
+}
+
+export interface LiveState {
+  experimentId: string;
+  phase: Phase;
+  paused: boolean;
+  currentAgentId: string | null;
+  pendingNextAgentId: string | null;
+  turn: number;
+  globalTurnLimit: number;
+  discussion: { segment: number; turnsUsed: number; turnLimit: number };
+  proposalAttempt: number;
+  maxProposalAttempts: number;
+  readiness: Record<string, AgentReadiness>;
+  lastRouting: RoutingDecision | null;
+  usage: UsageTotals;
+  activeElapsedMs: number;
+  termination: Termination | null;
+}
+
+type DiscussionEnd = "all_ready" | "discussion_turn_limit" | "operator";
+
+/**
+ * Runs one experiment from INITIALIZING to FINISHED. Owns the lifecycle —
+ * phases, turn assignment, budgets, the proposal -> vote -> commit sequence,
+ * operator controls — and nothing else: every substantive decision is made
+ * by the agents, and correctness is judged afterwards by the evaluator.
+ * Manual runs and batch runs go through exactly this class.
+ */
+export class ExperimentRunner {
+  readonly id: string;
+  readonly config: ExperimentConfig;
+
+  private readonly experiments: ExperimentRepository;
+  private readonly log: EventLog;
+  private readonly budget: BudgetTracker;
+  private readonly llm: LlmCaller;
+  private readonly scheduler: Scheduler;
+  private readonly consensus: ConsensusRule;
+  private readonly evaluator: ScenarioEvaluator;
+  private readonly evaluatorParams: unknown;
+  private readonly transport: Transport;
+  private readonly readiness: ReadinessTracker;
+  private readonly agents: Map<string, AgentConfig>;
+  private readonly abort = new AbortController();
+
+  private phase: Phase = Phase.INITIALIZING;
+  private started = false;
+  private finished: Termination | null = null;
+  private currentAgentId: string | null = null;
+  private lastTurn: LastTurn | null = null;
+  private lastRouting: RoutingDecision | null = null;
+  private readonly lastActivatedTurn = new Map<string, number>();
+  private readonly discussionTurnsByAgent = new Map<string, number>();
+  private discussion = { segment: 1, turnsUsed: 0, turnLimit: 0 };
+  private proposalAttempt = 1;
+
+  // Operator control state.
+  private paused = false;
+  private stepsAllowed = 0;
+  private stopRequested = false;
+  private forceDecisionRequested = false;
+  private pendingNextAgentId: string | null = null;
+  private wake: (() => void) | null = null;
+
+  /** Validates everything that can be validated up front, so a broken config fails before a run record exists. */
+  constructor(
+    private readonly deps: RunnerDeps,
+    rawConfig: unknown,
+    options: RunOptions = {}
+  ) {
+    this.config = parseExperimentConfig(rawConfig);
+    this.id = options.id ?? randomUUID();
+    this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
+
+    this.evaluator = deps.evaluators.get(this.config.evaluator.id);
+    const params = this.evaluator.paramsSchema.safeParse(this.config.evaluator.params);
+    if (!params.success) throw new Error(`Invalid evaluator params: ${formatZodError(params.error)}`);
+    this.evaluatorParams = params.data;
+
+    const modelRefs = [...this.config.agents.map((a) => a.model)];
+    if (this.config.scheduler.type === "hybrid" && this.config.scheduler.classifier) modelRefs.push(this.config.scheduler.classifier);
+    for (const ref of modelRefs) {
+      deps.providers.get(ref.provider); // throws a clear "not configured" error
+      if (ref.provider === "stub" && !deps.providers.stub.models().includes(ref.model)) {
+        throw new Error(`Unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);
+      }
+    }
+
+    this.experiments = new ExperimentRepository(deps.db);
+    this.log = new EventLog(this.id, new EventRepository(deps.db), deps.providers.secretValues(), () => this.phase);
+    this.budget = new BudgetTracker(this.config.limits);
+    this.llm = new LlmCaller(deps.providers, this.log, this.budget, this.config.runtime, this.abort.signal);
+    this.scheduler = createScheduler(this.config.scheduler, { llm: this.llm });
+    this.consensus = createConsensusRule(this.config.consensus);
+    this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
+    this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
+    this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
+
+    this.experiments.create({
+      id: this.id,
+      scenarioId: options.scenarioId,
+      scenarioVersion: options.scenarioVersion,
+      config: this.config,
+      configHash: configHash(this.config),
+      batchId: options.batchId,
+      conditionKey: options.conditionKey,
+      testbedVersion: getTestbedVersion(),
+    });
+  }
+
+  // ---------------------------------------------------------------- public API
+
+  async run(): Promise<ExperimentMetrics> {
+    if (this.started) throw new Error("ExperimentRunner.run() can only be called once");
+    this.started = true;
+
+    let outcome: Termination;
+    try {
+      outcome = await this.execute();
+    } catch (err) {
+      if (err instanceof TerminateRun) {
+        outcome = err.termination;
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        this.log.append(EventType.ERROR, { message, stack: err instanceof Error ? err.stack : undefined });
+        outcome = termination("ERROR", message);
+      }
+    } finally {
+      await this.transport.close().catch(() => undefined);
+    }
+    return this.finish(outcome);
+  }
+
+  control(command: OperatorCommand): void {
+    if (this.finished) throw new InvalidCommandError("Experiment has already finished");
+    switch (command.type) {
+      case "pause":
+        if (this.paused) throw new InvalidCommandError("Already paused");
+        this.paused = true;
+        break;
+      case "resume":
+        if (!this.paused) throw new InvalidCommandError("Not paused");
+        this.paused = false;
+        break;
+      case "step":
+        if (!this.paused) throw new InvalidCommandError("Step is only available while paused");
+        this.stepsAllowed += 1;
+        break;
+      case "select_next":
+        if (!this.agents.has(command.agentId)) throw new InvalidCommandError(`Unknown agent "${command.agentId}"`);
+        if (this.phase !== Phase.DISCUSSION && this.phase !== Phase.INITIALIZING) {
+          throw new InvalidCommandError("Selecting the next agent is only possible during discussion");
+        }
+        this.pendingNextAgentId = command.agentId;
+        break;
+      case "force_decision":
+        if (this.phase !== Phase.DISCUSSION) throw new InvalidCommandError("Forcing the decision is only possible during discussion");
+        this.forceDecisionRequested = true;
+        break;
+      case "stop":
+        this.stopRequested = true;
+        this.abort.abort(new TerminateRun(termination("STOPPED_BY_OPERATOR", "Stopped by operator")));
+        break;
+    }
+
+    const intervened = FLOW_ALTERING.has(command.type);
+    this.log.append(EventType.OPERATOR_INTERVENTION, { command, turn: this.budget.turnsUsed(), flowAltering: intervened });
+    if (intervened) this.experiments.update(this.id, { intervened: true });
+    this.wake?.();
+  }
+
+  state(): LiveState {
+    return {
+      experimentId: this.id,
+      phase: this.phase,
+      paused: this.paused,
+      currentAgentId: this.currentAgentId,
+      pendingNextAgentId: this.pendingNextAgentId,
+      turn: this.budget.turnsUsed(),
+      globalTurnLimit: this.config.limits.globalTurnLimit,
+      discussion: { ...this.discussion },
+      proposalAttempt: this.proposalAttempt,
+      maxProposalAttempts: this.config.decision.maxProposalAttempts,
+      readiness: this.readiness.snapshot(),
+      lastRouting: this.lastRouting,
+      usage: this.budget.totals(),
+      activeElapsedMs: this.budget.activeElapsedMs(),
+      termination: this.finished,
+    };
+  }
+
+  isFinished(): boolean {
+    return this.finished !== null;
+  }
+
+  // ---------------------------------------------------------------- lifecycle
+
+  private async execute(): Promise<Termination> {
+    const { config } = this;
+    this.experiments.update(this.id, { startedAt: new Date().toISOString() });
+    this.log.append(EventType.EXPERIMENT_STARTED, {
+      config,
+      configHash: configHash(config),
+      testbedVersion: getTestbedVersion(),
+      evaluator: { id: this.evaluator.id, version: this.evaluator.version },
+      transport: this.transport.kind,
+      scheduler: this.scheduler.type,
+      consensusRule: this.consensus.id,
+      agents: config.agents.map((a) => ({ id: a.id, name: a.name, role: a.role, model: a.model })),
+    });
+    this.budget.start();
+
+    await this.transport.open({
+      experimentId: this.id,
+      participants: config.agents.map((a) => ({ agentId: a.id, displayName: a.name })),
+    });
+    this.transition(Phase.DISCUSSION, { segment: 1, turnLimit: this.discussion.turnLimit });
+
+    for (;;) {
+      await this.runDiscussion();
+
+      const proposal = await this.runProposal();
+      if (proposal !== "declined") {
+        this.transition(Phase.VOTING, { proposalId: proposal.id });
+        const consensus = await this.runVoting(proposal);
+        if (consensus.reached) return this.runEvaluation(proposal);
+        if (this.proposalAttempt >= config.decision.maxProposalAttempts) {
+          throw new TerminateRun(
+            termination("CONSENSUS_FAILURE", `No proposal reached ${consensus.rule} after ${this.proposalAttempt} attempt(s)`, {
+              lastConsensus: consensus,
+            })
+          );
+        }
+      } else if (this.proposalAttempt >= config.decision.maxProposalAttempts) {
+        throw new TerminateRun(
+          termination("NO_PROPOSAL", `The proposer declined to submit a proposal (attempt ${this.proposalAttempt})`)
+        );
+      }
+
+      // Budget remains for another attempt: back to discussion with a fresh
+      // (shorter) turn allowance and everyone's readiness reset.
+      this.proposalAttempt += 1;
+      this.readiness.reset();
+      this.discussion = { segment: this.discussion.segment + 1, turnsUsed: 0, turnLimit: config.limits.rediscussionTurnLimit };
+      this.transition(Phase.DISCUSSION, { segment: this.discussion.segment, turnLimit: this.discussion.turnLimit });
+    }
+  }
+
+  private async runDiscussion(): Promise<void> {
+    let end: DiscussionEnd;
+    for (;;) {
+      await this.checkpoint();
+      if (this.forceDecisionRequested) {
+        this.forceDecisionRequested = false;
+        end = "operator";
+        break;
+      }
+      if (this.readiness.allReady()) {
+        end = "all_ready";
+        break;
+      }
+      if (this.discussion.turnsUsed >= this.discussion.turnLimit) {
+        end = "discussion_turn_limit";
+        break;
+      }
+      this.enforceHardLimits(1);
+
+      const decision = await this.route();
+      await this.discussionTurn(decision.agentId);
+      this.discussion.turnsUsed += 1;
+    }
+    this.pendingNextAgentId = null;
+    this.transition(Phase.PROPOSAL, { discussionEnd: end, discussionTurnsUsed: this.discussion.turnsUsed, proposalAttempt: this.proposalAttempt });
+  }
+
+  private async route(): Promise<RoutingDecision> {
+    let decision: RoutingDecision;
+    const stale = this.readiness.staleBlockingConsensus();
+    if (this.pendingNextAgentId) {
+      decision = { agentId: this.pendingNextAgentId, source: "operator", reason: "selected by operator" };
+      this.pendingNextAgentId = null;
+    } else if (stale.length > 0) {
+      // Everyone has declared readiness, but some declarations predate later
+      // information: re-ask exactly those agents. Lifecycle rule, not routing
+      // on content.
+      decision = { agentId: stale[0]!, source: "readiness_recheck", reason: "readiness went stale after new information", details: { stale } };
+    } else {
+      decision = await this.scheduler.next({
+        config: this.config,
+        transcript: await this.transport.history(),
+        lastTurn: this.lastTurn,
+        lastActivatedTurn: this.lastActivatedTurn,
+        turn: this.budget.turnsUsed() + 1,
+      });
+    }
+    this.lastRouting = decision;
+    this.log.append(EventType.ROUTING_DECISION, { ...decision, turn: this.budget.turnsUsed() + 1 }, decision.agentId);
+    return decision;
+  }
+
+  private async discussionTurn(agentId: string): Promise<void> {
+    const agent = this.agents.get(agentId)!;
+    const turn = this.startTurn(agentId, "discussion");
+    const agentTurn = this.discussionTurnsByAgent.get(agentId) ?? 0;
+    this.discussionTurnsByAgent.set(agentId, agentTurn + 1);
+
+    const transcript = await this.transport.history();
+    const result = await this.llm.call({
+      category: "agent",
+      purpose: "discussion",
+      agentId,
+      modelRef: agent.model,
+      messages: [
+        { role: "system", content: renderSystemPrompt(this.config, agent) },
+        {
+          role: "user",
+          content: renderDiscussionPrompt(this.config, agent, transcript, {
+            discussionTurnsUsed: this.discussion.turnsUsed,
+            discussionTurnLimit: this.discussion.turnLimit,
+            proposalAttempt: this.proposalAttempt,
+            maxProposalAttempts: this.config.decision.maxProposalAttempts,
+          }),
+        },
+      ],
+      response: { name: "agent_turn", schema: TurnResponseSchema, jsonSchema: TURN_JSON_SCHEMA },
+      context: { agentId, purpose: "discussion", agentTurn, turn, segment: this.discussion.segment, proposalAttempt: this.proposalAttempt },
+      turn,
+    });
+
+    if (!result.ok) {
+      // The turn happened (it counts), but produced nothing usable: treated
+      // like a PASS that leaves the agent's readiness unchanged.
+      this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "unparseable_turn", turn, error: result.parseError, rawText: result.rawText }, agentId);
+      this.lastTurn = { agentId, pass: true, target: null };
+      this.completeTurn(agentId, turn, { kind: "discussion", result: "unparseable" });
+      return;
+    }
+
+    const response = result.value;
+    const pass = response.pass || response.message.trim() === "";
+    this.log.append(
+      EventType.AGENT_META,
+      { turn, pass, target: response.target, intent: response.intent, readyToCommit: response.readyToCommit },
+      agentId
+    );
+
+    let atIndex = transcript.length;
+    if (!pass) {
+      const message = await this.publish({ kind: "agent", agentId }, response.message.trim());
+      atIndex = message.index;
+      this.logReadinessChanges(this.readiness.onSubstantiveMessage(agentId, message.index), "invalidated", message.index);
+    }
+    const change = this.readiness.declare(agentId, response.readyToCommit, atIndex);
+    if (change) this.logReadinessChanges([change], "declared", atIndex);
+
+    this.lastTurn = { agentId, pass, target: pass ? null : response.target };
+    this.completeTurn(agentId, turn, { kind: "discussion", result: pass ? "pass" : "message" });
+  }
+
+  private async runProposal(): Promise<FrozenProposal | "declined"> {
+    const { decision } = this.config;
+    const proposer = this.agents.get(decision.proposerId)!;
+    const schema = proposalJsonSchema(this.evaluator.proposalSchema);
+    this.log.append(EventType.PROPOSAL_REQUESTED, { attempt: this.proposalAttempt, proposerId: proposer.id }, proposer.id);
+
+    let feedback: string | undefined;
+    let lastFailure: { kind: "parse" | "schema"; error: string } | null = null;
+    for (let formatTry = 0; formatTry <= decision.maxProposalFormatRetries; formatTry++) {
+      await this.checkpoint();
+      this.enforceHardLimits(1);
+
+      const turn = this.startTurn(proposer.id, "proposal");
+      const transcript = await this.transport.history();
+      const result = await this.llm.call({
+        category: "agent",
+        purpose: "proposal",
+        agentId: proposer.id,
+        modelRef: proposer.model,
+        messages: [
+          { role: "system", content: renderSystemPrompt(this.config, proposer) },
+          { role: "user", content: renderProposalPrompt(this.config, proposer, transcript, schema, feedback) },
+        ],
+        response: { name: "final_proposal", schema: ProposalEnvelopeSchema, jsonSchema: schema },
+        context: { agentId: proposer.id, purpose: "proposal", proposalAttempt: this.proposalAttempt, formatTry, turn },
+        turn,
+      });
+
+      if (!result.ok) {
+        lastFailure = { kind: "parse", error: result.parseError };
+        this.log.append(EventType.PROPOSAL_REJECTED_FORMAT, { attempt: this.proposalAttempt, formatTry, kind: "parse", error: result.parseError, rawText: result.rawText }, proposer.id);
+        feedback = `the response was not a JSON object of the required shape (${result.parseError})`;
+        this.completeTurn(proposer.id, turn, { kind: "proposal", result: "unparseable" });
+        continue;
+      }
+
+      const envelope = result.value;
+      if (envelope.proposal === null || envelope.proposal === undefined) {
+        this.log.append(EventType.PROPOSAL_DECLINED, { attempt: this.proposalAttempt, rationale: envelope.rationale }, proposer.id);
+        if (envelope.rationale.trim()) await this.publish({ kind: "agent", agentId: proposer.id }, envelope.rationale.trim());
+        this.completeTurn(proposer.id, turn, { kind: "proposal", result: "declined" });
+        return "declined";
+      }
+
+      // Structure only — never success constraints, which would leak the evaluator.
+      const validated = this.evaluator.proposalSchema.safeParse(envelope.proposal);
+      if (!validated.success) {
+        const error = formatZodError(validated.error);
+        lastFailure = { kind: "schema", error };
+        this.log.append(
+          EventType.PROPOSAL_REJECTED_FORMAT,
+          { attempt: this.proposalAttempt, formatTry, kind: "schema", error, proposal: envelope.proposal },
+          proposer.id
+        );
+        feedback = `the proposal does not match the required structure (${error})`;
+        this.completeTurn(proposer.id, turn, { kind: "proposal", result: "schema_invalid" });
+        continue;
+      }
+
+      const frozen: FrozenProposal = deepFreeze({
+        id: `${this.id}:p${this.proposalAttempt}`,
+        attempt: this.proposalAttempt,
+        proposerId: proposer.id,
+        rationale: envelope.rationale,
+        body: validated.data,
+        hash: sha256(canonicalJson(validated.data)),
+      });
+      this.log.append(EventType.PROPOSAL_FROZEN, { ...frozen }, proposer.id);
+      this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen" });
+      await this.publish(
+        { kind: "system" },
+        `Final proposal #${frozen.attempt} submitted by ${proposer.name}:\n${JSON.stringify(frozen.body)}\nRationale: ${frozen.rationale || "(none)"}\nVoting is open.`
+      );
+      return frozen;
+    }
+
+    const failure = lastFailure!;
+    throw new TerminateRun(
+      termination(
+        failure.kind === "parse" ? "PROPOSAL_PARSE_FAILED" : "PROPOSAL_INVALID",
+        `Proposer ${proposer.id} did not produce a valid proposal after ${decision.maxProposalFormatRetries + 1} submission(s): ${failure.error}`,
+        { attempt: this.proposalAttempt, error: failure.error }
+      )
+    );
+  }
+
+  /** Blind and parallel: every agent votes on the same frozen proposal and the same transcript snapshot, without seeing any other vote. */
+  private async runVoting(proposal: FrozenProposal): Promise<ConsensusResult> {
+    const voters = this.config.agents;
+    await this.checkpoint();
+    this.enforceHardLimits(voters.length);
+
+    const transcript = await this.transport.history();
+    const proposerName = this.agents.get(proposal.proposerId)!.name;
+    const turns = voters.map((voter) => this.startTurn(voter.id, "vote"));
+
+    const settled = await Promise.allSettled(
+      voters.map((voter, i) =>
+        this.llm.call({
+          category: "agent",
+          purpose: "vote",
+          agentId: voter.id,
+          modelRef: voter.model,
+          messages: [
+            { role: "system", content: renderSystemPrompt(this.config, voter) },
+            {
+              role: "user",
+              content: renderVotePrompt(this.config, voter, transcript, { proposerName, rationale: proposal.rationale, body: proposal.body }),
+            },
+          ],
+          response: { name: "vote", schema: VoteResponseSchema, jsonSchema: VOTE_JSON_SCHEMA },
+          context: { agentId: voter.id, purpose: "vote", proposalAttempt: proposal.attempt, proposal: proposal.body, turn: turns[i] },
+          turn: turns[i],
+        })
+      )
+    );
+    const failure = settled.find((s): s is PromiseRejectedResult => s.status === "rejected");
+    if (failure) throw failure.reason;
+
+    const votes: CastVote[] = voters.map((voter, i) => {
+      const result = (settled[i] as PromiseFulfilledResult<Awaited<ReturnType<LlmCaller["call"]>>>).value;
+      let vote: CastVote;
+      if (result.ok) {
+        const value = result.value as { vote: "APPROVE" | "REJECT"; reason: string };
+        vote = { agentId: voter.id, vote: value.vote, reason: value.reason };
+      } else {
+        this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "invalid_vote", turn: turns[i], error: result.parseError, rawText: result.rawText }, voter.id);
+        vote = { agentId: voter.id, vote: "INVALID", reason: "" };
+      }
+      this.log.append(EventType.VOTE_CAST, { proposalId: proposal.id, proposalHash: proposal.hash, vote: vote.vote, reason: vote.reason, turn: turns[i] }, voter.id);
+      this.completeTurn(voter.id, turns[i]!, { kind: "vote", result: vote.vote });
+      return vote;
+    });
+
+    const consensus = this.consensus.decide(votes, voters.map((v) => v.id));
+    this.log.append(EventType.CONSENSUS_RESULT, { proposalId: proposal.id, proposalHash: proposal.hash, ...consensus, votes });
+
+    if (!consensus.reached) {
+      const reasons = votes
+        .filter((v) => v.vote !== "APPROVE")
+        .map((v) => `- ${this.agents.get(v.agentId)!.name}: ${v.vote}${v.reason ? ` — ${v.reason}` : ""}`)
+        .join("\n");
+      await this.publish(
+        { kind: "system" },
+        `Proposal #${proposal.attempt} was not approved (${consensus.approvals} of ${consensus.eligible} approved; ${consensus.rule} requires ${consensus.required}).${reasons ? `\n${reasons}` : ""}`
+      );
+    }
+    return consensus;
+  }
+
+  private runEvaluation(proposal: FrozenProposal): Termination {
+    this.transition(Phase.COMMITTED, { proposalId: proposal.id, proposalHash: proposal.hash });
+    this.transition(Phase.EVALUATION, { evaluator: this.evaluator.id, evaluatorVersion: this.evaluator.version });
+    const result = this.evaluator.evaluate(proposal.body, this.evaluatorParams);
+    this.log.append(EventType.EVALUATION_RESULT, {
+      evaluator: this.evaluator.id,
+      evaluatorVersion: this.evaluator.version,
+      proposalId: proposal.id,
+      proposalHash: proposal.hash,
+      ...result,
+    });
+    return result.outcome === "SUCCESS"
+      ? termination("SUCCESS", "Committed proposal passed every evaluator check")
+      : termination("MISSION_FAILURE", `Committed proposal violated: ${result.violated.join(", ")}`, { violated: result.violated });
+  }
+
+  private finish(outcome: Termination): ExperimentMetrics {
+    this.finished = outcome;
+    this.currentAgentId = null;
+    if (this.phase !== Phase.FINISHED) this.transition(Phase.FINISHED, { outcome: outcome.outcome });
+    this.log.append(EventType.EXPERIMENT_FINISHED, {
+      termination: outcome,
+      usage: this.budget.totals(),
+      turns: this.budget.turnsUsed(),
+      activeElapsedMs: this.budget.activeElapsedMs(),
+    });
+
+    const record = this.experiments.getOrThrow(this.id);
+    const metrics = computeMetrics(new EventRepository(this.deps.db).list(this.id), { intervened: record.intervened });
+    this.experiments.update(this.id, {
+      phase: Phase.FINISHED,
+      status: outcome.status,
+      outcome: outcome.outcome,
+      outcomeDetail: { category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) },
+      finishedAt: new Date().toISOString(),
+      summary: metrics as unknown as Record<string, unknown>,
+    });
+    return metrics;
+  }
+
+  // ---------------------------------------------------------------- helpers
+
+  private transition(to: Phase, payload: Record<string, unknown> = {}): void {
+    assertTransition(this.phase, to);
+    const from = this.phase;
+    this.phase = to;
+    this.log.append(EventType.PHASE_CHANGED, { from, to, ...payload });
+    this.experiments.update(this.id, { phase: to });
+  }
+
+  private startTurn(agentId: string, kind: "discussion" | "proposal" | "vote"): number {
+    const turn = this.budget.recordTurn();
+    this.currentAgentId = agentId;
+    this.log.append(EventType.TURN_STARTED, { turn, kind }, agentId);
+    return turn;
+  }
+
+  private completeTurn(agentId: string, turn: number, payload: Record<string, unknown>): void {
+    this.lastActivatedTurn.set(agentId, turn);
+    this.currentAgentId = null;
+    this.log.append(EventType.TURN_COMPLETED, { turn, ...payload }, agentId);
+  }
+
+  private async publish(sender: RoomMessage["sender"], text: string): Promise<RoomMessage> {
+    const message = await this.transport.publish({ sender, text });
+    this.log.append(
+      EventType.MESSAGE_POSTED,
+      { index: message.index, messageId: message.id, sender: message.sender, text: message.text },
+      sender.kind === "agent" ? sender.agentId : null
+    );
+    return message;
+  }
+
+  private logReadinessChanges(changes: ReadinessChange[], cause: "declared" | "invalidated", atIndex: number): void {
+    for (const change of changes) {
+      this.log.append(
+        cause === "invalidated" ? EventType.READINESS_INVALIDATED : EventType.READINESS_CHANGED,
+        { from: change.from, to: change.to, atIndex },
+        change.agentId
+      );
+    }
+  }
+
+  private enforceHardLimits(turnsNeeded: number): void {
+    const hit = this.budget.checkHardLimits(turnsNeeded);
+    if (hit) throw new TerminateRun(hit);
+  }
+
+  /** Step boundary: honors stop, and blocks while paused (paused time does not count against the time limit). */
+  private async checkpoint(): Promise<void> {
+    for (;;) {
+      if (this.stopRequested) throw new TerminateRun(termination("STOPPED_BY_OPERATOR", "Stopped by operator"));
+      if (!this.paused) return;
+      if (this.stepsAllowed > 0) {
+        this.stepsAllowed -= 1;
+        return;
+      }
+      this.budget.pause();
+      await new Promise<void>((resolve) => (this.wake = resolve));
+      this.wake = null;
+      this.budget.resume();
+    }
+  }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  }
+  return value;
+}

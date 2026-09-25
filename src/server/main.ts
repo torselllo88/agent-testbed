@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { env } from "../config/env.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
+import { StubProvider } from "../llm/stubProvider.js";
+import { registerBuiltinStubs } from "../scenarios/index.js";
 import { openDb } from "../persistence/db.js";
 import { createApp } from "./app.js";
 
 const db = openDb();
-const providers = createProviderRegistryFromEnv();
+const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
 const server = createApp({ db, providers });
 
 server.listen(env.port, env.host, () => {

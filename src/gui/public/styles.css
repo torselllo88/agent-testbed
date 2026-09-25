@@ -132,31 +132,6 @@ a { color: var(--accent-ink); }
 .sidebar-icon { display: inline-flex; flex: 0 0 auto; }
 .sidebar-icon svg { display: block; }
 
-.sidebar-section-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  padding: 16px 12px 4px;
-}
-
-.sidebar-footer-link {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-
-/* Same look as the other sidebar-footer-link (Help), but it's a <button>, not an <a> — reset native button chrome so it doesn't stand out. */
-.sidebar-signout {
-  width: 100%;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--border);
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
 .theme-toggle {
   align-self: flex-start;
   margin-top: 12px;
@@ -169,10 +144,12 @@ a { color: var(--accent-ink); }
   display: inline-flex;
 }
 
+/* Wider than a document page on purpose: the live experiment view puts the
+   room conversation and the runtime-state panel side by side. */
 .app {
   flex: 1;
   min-width: 0;
-  max-width: 880px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 28px 24px 80px;
 }
@@ -188,28 +165,20 @@ a { color: var(--accent-ink); }
     align-items: center;
     overflow-x: auto;
     padding: 10px 12px;
-    /* Fades the trailing edge instead of hard-clipping it — the only cue
-       that most of the admin nav is scrolled off-screen at this width,
-       since there's no scrollbar to speak of on a real touch device. A
-       no-op visually whenever everything already fits (nothing there to
-       fade against). */
     -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
     mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
   }
   .brand { padding: 4px 12px; }
   .sidebar-nav { flex-direction: row; }
-  .sidebar-section-label { padding: 8px 8px 8px 16px; }
-  .sidebar-footer-link { margin: 0 0 0 8px; border-top: none; padding-top: 0; }
-  /* theme-toggle keeps its column-layout `align-self: flex-start` unless
-     reset here — in a row (`align-items: center`) that instead reads as the
-     cross-axis (vertical) position, pinning it to the top edge while every
-     sibling sits vertically centered next to it. */
   .theme-toggle { margin: 0 0 0 8px; align-self: center; }
+  .app { padding: 20px 16px 60px; }
 }
 
 h1, h2, h3 { margin: 0; }
 h1 { font-size: 22px; }
 h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+
+.muted { color: var(--muted); }
 
 .row {
   display: flex;
@@ -259,6 +228,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   outline-offset: 2px;
 }
 
+input[type="text"], input[type="number"], select, textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+textarea { resize: vertical; width: 100%; }
+textarea.code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  min-height: 420px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 
 .badge {
@@ -272,35 +264,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   white-space: nowrap;
 }
 
-.limits-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.limits-row { display: flex; gap: 16px; flex-wrap: wrap; }
-
-.limits-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.limits-row input {
-  font: inherit;
-  width: 100px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-}
-
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.bad { background: var(--bad-bg); color: var(--bad); }
@@ -310,69 +273,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 14px; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
-tr.run-row { cursor: pointer; }
-tr.run-row:hover { background: var(--bg); }
+tr.link-row { cursor: pointer; }
+tr.link-row:hover { background: var(--bg); }
 
-.run-list-empty { color: var(--muted); padding: 20px 0; }
-
-.new-run {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.new-run textarea, .new-run select {
-  font: inherit;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.new-run textarea { min-height: 70px; resize: vertical; }
-
-#retry-source {
-  display: block;
-  width: 100%;
-  min-height: 70px;
-  margin-top: 8px;
-  font: inherit;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  resize: vertical;
-  box-sizing: border-box;
-}
-
-.guidance-textarea {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 4px;
-  margin-bottom: 8px;
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  resize: vertical;
-  box-sizing: border-box;
-}
-
-.field-label {
-  font-size: 12px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-pre.letter {
+pre.code {
   white-space: pre-wrap;
-  font-family: inherit;
+  word-break: break-word;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -383,15 +291,9 @@ pre.letter {
 ul.plain { margin: 6px 0 0; padding-left: 18px; }
 ul.plain li { margin-bottom: 3px; }
 
-.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 14px; }
+.kv { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; margin: 0; }
 .kv dt { color: var(--muted); }
-.kv dd { margin: 0; }
-
-.qa { margin-bottom: 12px; }
-.qa .q { font-weight: 600; margin-bottom: 3px; }
-
-.trace-row { font-size: 13px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-.trace-row td { padding: 5px 6px; }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
 .warning-banner {
   background: var(--warn-bg);
@@ -413,115 +315,22 @@ ul.plain li { margin-bottom: 3px; }
   font-size: 14px;
 }
 
-.loading { color: var(--muted); padding: 20px 0; }
+.success-banner {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
 
-.back-link { font-size: 13px; margin-bottom: 14px; display: inline-block; }
+.loading { color: var(--muted); padding: 20px 0; }
 
 .overflow-x { overflow-x: auto; }
 
-.evidence-entry { padding: 8px 0; border-bottom: 1px solid var(--border); }
-.evidence-entry:last-child { border-bottom: none; }
-
-.piece-card {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-  margin-top: 14px;
-}
-.piece-card:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
-.piece-card h3 { margin-bottom: 8px; }
-.piece-card .actions { margin: 8px 0; }
-
-/* Two distinct disclosure "flavors", color-differentiated so it's obvious at
-   a glance which kind of thing a collapsible is about to open:
-   - .content-disclosure (+ details.card): read-only content — Vacancy Report,
-     Execution trace, Resume selection, a piece's own generated text. Neutral/
-     muted chevron, no accent — nothing to fill in once it's open.
-   - .piece-regenerate: an action form — Regenerate this piece, + Add another
-     question, Edit source & retry analysis. Accent-tinted left border +
-     chevron, signaling "this opens editable controls", not just more text. */
-.piece-regenerate {
-  margin-top: 10px;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: 8px 12px;
-  background: var(--bg);
-}
-.content-disclosure {
-  margin-top: 10px;
-}
-.piece-regenerate summary,
-.content-disclosure summary,
-details.card summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  margin: -6px -8px;
-  border-radius: 6px;
-}
-.piece-regenerate summary:hover,
-.content-disclosure summary:hover,
-details.card summary:hover {
-  background: var(--sidebar-active-bg);
-}
-.piece-regenerate[open] summary,
-.content-disclosure[open] summary {
-  margin-bottom: 8px;
-}
-.disclosure-chevron { flex-shrink: 0; transition: transform 0.15s ease; color: var(--muted); }
-.piece-regenerate .disclosure-chevron { color: var(--accent); }
-details[open] .disclosure-chevron { transform: rotate(180deg); }
-.piece-regenerate input[type="text"],
-.piece-regenerate input[type="number"] {
-  display: block;
-  width: 100%;
-  font: inherit;
-  padding: 6px 8px;
-  margin-bottom: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  box-sizing: border-box;
-}
-
-.manual-questions { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
-.manual-question-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.manual-question-row .mq-question {
-  flex: 1 1 300px;
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-}
-.manual-question-row .mq-max-chars {
-  width: 160px;
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-}
-
 details.card summary { cursor: pointer; }
 details.card summary h2 { display: inline; }
-
-/* ---------- Phase 2: page header / breadcrumb / empty states ---------- */
 
 .page-header {
   display: flex;
@@ -541,113 +350,3 @@ details.card summary h2 { display: inline; }
   color: var(--muted);
 }
 .empty-state p { margin: 4px 0; }
-
-.success-banner {
-  background: var(--ok-bg);
-  color: var(--ok);
-  border: 1px solid var(--ok);
-  border-radius: 6px;
-  padding: 10px 14px;
-  margin-top: 12px;
-  font-size: 14px;
-}
-
-/* ---------- Phase 2: admin pages ---------- */
-
-.admin-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-@media (max-width: 520px) {
-  .admin-card-grid { grid-template-columns: 1fr; }
-}
-
-.admin-card {
-  text-decoration: none;
-  color: var(--ink);
-  display: block;
-  transition: border-color 0.15s;
-}
-.admin-card:hover { border-color: var(--accent); }
-.admin-card h3 { margin: 10px 0 4px; }
-.admin-card-icon { color: var(--accent); }
-
-.admin-list-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.admin-list-row:last-child { border-bottom: none; }
-.admin-list-row .actions { flex: 0 0 auto; margin-top: 0; }
-
-.admin-edit-form { align-items: stretch; }
-.admin-edit-form input[type="text"],
-.admin-edit-form input[type="password"],
-.admin-edit-form textarea {
-  display: block;
-  width: 100%;
-  font: inherit;
-  padding: 6px 8px;
-  margin-bottom: 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  box-sizing: border-box;
-}
-
-.settings-section { margin-bottom: 16px; }
-.settings-section label { display: block; margin: 10px 0; }
-.settings-section select,
-.settings-section input[type="text"],
-.settings-section input[type="password"] {
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  margin-left: 8px;
-}
-
-.provider-fields { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.provider-fields h3 { margin-bottom: 8px; }
-
-.key-status-row { margin: 10px 0; }
-.key-status { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-.key-input {
-  display: block;
-  margin-top: 6px;
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  width: 100%;
-  max-width: 320px;
-  box-sizing: border-box;
-}
-.upload-dropzone {
-  border: 1.5px dashed var(--border);
-  border-radius: 8px;
-  padding: 28px;
-  text-align: center;
-  color: var(--muted);
-}
-.upload-dropzone.dragover { border-color: var(--accent); background: var(--bg); }
-.upload-browse-btn {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 14px;
-}

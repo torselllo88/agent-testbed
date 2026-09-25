@@ -1,97 +1,65 @@
 import { AzureOpenAI } from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { env } from "../config/env.js";
-import { AgentName } from "../types/agent.js";
-import type {
-  GenerateStructuredParams,
-  GenerateStructuredResult,
-  LlmProvider,
-  ModelConsumer,
-} from "./provider.js";
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import { toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider } from "./provider.js";
 
-/** Same shape as `env.azureOpenAi` — see OpenRouterProviderConfig's identical reasoning. */
 export interface AzureProviderConfig {
-  apiKey?: string;
-  endpoint?: string;
-  apiVersion?: string;
-  defaultDeployment?: string;
-  largeDeployment?: string;
-  deploymentByConsumer?: Partial<Record<ModelConsumer, string>>;
+  apiKey: string;
+  endpoint: string;
+  apiVersion: string;
 }
 
-export function isAzureOpenAiConfigured(config: AzureProviderConfig = env.azureOpenAi): boolean {
-  return Boolean(config.apiKey && config.endpoint && config.apiVersion && config.defaultDeployment);
-}
-
+/**
+ * Azure OpenAI: an experiment's `model` is the deployment name. No
+ * `deployment` is bound on the client on purpose — passing it per request
+ * lets each agent target its own deployment through one client.
+ */
 export class AzureOpenAiProvider implements LlmProvider {
+  readonly id = "azure" as const;
   private readonly client: AzureOpenAI;
-  private readonly cfg: AzureProviderConfig;
 
-  constructor(config: AzureProviderConfig = env.azureOpenAi) {
-    this.cfg = config;
-    const cfg = config;
-    if (!cfg.apiKey || !cfg.endpoint || !cfg.apiVersion) {
-      throw new Error("Azure OpenAI is not configured — check AZURE_OPENAI_* in .env or the admin Settings page");
-    }
-    // No `deployment` here on purpose: passing `model: <deploymentName>` per
-    // request (see generateStructured) lets each consumer target its own
-    // deployment without constructing a separate client per consumer.
+  constructor(config: AzureProviderConfig) {
     this.client = new AzureOpenAI({
-      apiKey: cfg.apiKey,
-      endpoint: cfg.endpoint,
-      apiVersion: cfg.apiVersion,
+      apiKey: config.apiKey,
+      endpoint: config.endpoint,
+      apiVersion: config.apiVersion,
+      maxRetries: 0,
     });
   }
 
-  async generateStructured<T>(
-    params: GenerateStructuredParams<T>
-  ): Promise<GenerateStructuredResult<T>> {
-    const deployment = this.deploymentFor(params.consumer);
-
-    const completion = await this.client.chat.completions.parse({
-      model: deployment,
-      messages: [
-        { role: "system", content: params.systemPrompt },
-        { role: "user", content: params.userPrompt },
-      ],
-      response_format: zodResponseFormat(params.schema, params.schemaName),
-    });
-
-    const parsed = completion.choices[0]?.message.parsed;
-    if (!parsed) {
-      throw new Error(`Azure OpenAI (deployment: ${deployment}) returned no parsed structured output`);
-    }
-
-    return {
-      data: parsed,
-      model: deployment,
-      tokenUsage: {
-        promptTokens: completion.usage?.prompt_tokens ?? 0,
-        completionTokens: completion.usage?.completion_tokens ?? 0,
-      },
+  async complete(request: CompletionRequest): Promise<CompletionResult> {
+    const body: ChatCompletionCreateParamsNonStreaming = {
+      model: request.model,
+      messages: request.messages,
+      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(request.seed !== undefined ? { seed: request.seed } : {}),
+      ...(request.maxOutputTokens !== undefined ? { max_completion_tokens: request.maxOutputTokens } : {}),
+      ...(request.responseFormat
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: request.responseFormat.name, schema: request.responseFormat.schema, strict: true },
+            },
+          }
+        : {}),
     };
-  }
 
-  /**
-   * Resolution order: an explicit per-consumer override always wins (so
-   * Writer, Critic, Resume Selector, etc. can each be pointed at a completely
-   * independent deployment) -> Critic falls back to the legacy "large" alias
-   * if no CRITIC-specific override is set -> everyone falls back to the base
-   * deployment. Only the base deployment is required to configure Azure at
-   * all; every other override is optional.
-   */
-  private deploymentFor(consumer: ModelConsumer): string {
-    const cfg = this.cfg;
-    const override = cfg.deploymentByConsumer?.[consumer];
-    if (override) return override;
-
-    if (consumer === AgentName.CRITIC && cfg.largeDeployment) {
-      return cfg.largeDeployment;
+    let completion;
+    try {
+      completion = await this.client.chat.completions.create(body, { signal: request.signal });
+    } catch (err) {
+      throw toProviderError(err, `Azure OpenAI (deployment: ${request.model}) request failed`);
     }
 
-    if (!cfg.defaultDeployment) {
-      throw new Error(`No Azure OpenAI deployment configured for "${consumer}" (set AZURE_OPENAI_DEPLOYMENT at minimum)`);
-    }
-    return cfg.defaultDeployment;
+    const choice = completion.choices[0];
+    return {
+      text: choice?.message.content ?? "",
+      requestedModel: request.model,
+      servedModel: completion.model || request.model,
+      usage: completion.usage
+        ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens }
+        : null,
+      finishReason: choice?.finish_reason ?? undefined,
+      providerMeta: { completionId: completion.id },
+    };
   }
 }

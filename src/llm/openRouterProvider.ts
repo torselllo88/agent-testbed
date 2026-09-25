@@ -1,34 +1,19 @@
 import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { env } from "../config/env.js";
-import type {
-  GenerateStructuredParams,
-  GenerateStructuredResult,
-  LlmProvider,
-  ModelConsumer,
-} from "./provider.js";
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import { toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider } from "./provider.js";
 
-/** Same shape as `env.openRouter` — lets a caller (see providerFactory.ts) overlay admin-panel-stored settings on top of the .env defaults without this class ever reading the global `env` singleton itself. */
 export interface OpenRouterProviderConfig {
-  apiKey?: string;
-  baseUrl?: string;
+  apiKey: string;
+  baseUrl: string;
   siteUrl?: string;
   siteName?: string;
-  defaultModel?: string;
-  modelByConsumer?: Partial<Record<ModelConsumer, string>>;
-}
-
-export function isOpenRouterConfigured(config: OpenRouterProviderConfig = env.openRouter): boolean {
-  return Boolean(config.apiKey && config.defaultModel);
 }
 
 /**
  * The `openai` SDK's APIError.message is just `"${status} ${error.message}"`
- * — for OpenRouter specifically, `error.message` is often a generic wrapper
- * ("Provider returned error") while the actual upstream provider's real
- * error text lives one level deeper, at `error.metadata.raw` (OpenRouter's
- * documented passthrough-error shape). Without this, every provider-side
- * rejection looks identical and undiagnosable from the message alone.
+ * — for OpenRouter, `error.message` is often a generic wrapper ("Provider
+ * returned error") while the upstream provider's real error text lives at
+ * `error.metadata.raw`. Without this every upstream rejection looks alike.
  */
 function extractOpenRouterErrorDetail(err: unknown): string {
   const base = err instanceof Error ? err.message : String(err);
@@ -41,74 +26,69 @@ function extractOpenRouterErrorDetail(err: unknown): string {
   return `${base} (upstream provider${provider ? ` "${provider}"` : ""} said: ${raw})`;
 }
 
-export class OpenRouterProvider implements LlmProvider {
-  private readonly client: OpenAI;
-  private readonly cfg: OpenRouterProviderConfig;
+/** Fields OpenRouter adds on top of the OpenAI chat-completion response shape. */
+interface OpenRouterExtras {
+  provider?: string;
+  usage?: { cost?: number };
+}
 
-  constructor(config: OpenRouterProviderConfig = env.openRouter) {
-    this.cfg = config;
-    const cfg = config;
-    if (!cfg.apiKey) {
-      throw new Error("OpenRouter is not configured — check OPENROUTER_API_KEY in .env or the admin Settings page");
-    }
+export class OpenRouterProvider implements LlmProvider {
+  readonly id = "openrouter" as const;
+  private readonly client: OpenAI;
+
+  constructor(config: OpenRouterProviderConfig) {
     this.client = new OpenAI({
-      apiKey: cfg.apiKey,
-      baseURL: cfg.baseUrl ?? env.openRouter.baseUrl,
+      apiKey: config.apiKey,
+      baseURL: config.baseUrl,
+      // Retries are the agent runtime's job, so each attempt is traced individually.
+      maxRetries: 0,
       defaultHeaders: {
-        ...(cfg.siteUrl ? { "HTTP-Referer": cfg.siteUrl } : {}),
-        ...(cfg.siteName ? { "X-Title": cfg.siteName } : {}),
+        ...(config.siteUrl ? { "HTTP-Referer": config.siteUrl } : {}),
+        ...(config.siteName ? { "X-Title": config.siteName } : {}),
       },
     });
   }
 
-  async generateStructured<T>(
-    params: GenerateStructuredParams<T>
-  ): Promise<GenerateStructuredResult<T>> {
-    const model = this.modelFor(params.consumer);
+  async complete(request: CompletionRequest): Promise<CompletionResult> {
+    const body: ChatCompletionCreateParamsNonStreaming & { usage?: { include: boolean } } = {
+      model: request.model,
+      messages: request.messages,
+      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(request.seed !== undefined ? { seed: request.seed } : {}),
+      ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
+      ...(request.responseFormat
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: request.responseFormat.name, schema: request.responseFormat.schema, strict: true },
+            },
+          }
+        : {}),
+      // OpenRouter usage accounting: makes the response carry the real billed cost.
+      usage: { include: true },
+    };
 
     let completion;
     try {
-      completion = await this.client.chat.completions.parse({
-        model,
-        messages: [
-          { role: "system", content: params.systemPrompt },
-          { role: "user", content: params.userPrompt },
-        ],
-        response_format: zodResponseFormat(params.schema, params.schemaName),
-      });
+      completion = await this.client.chat.completions.create(body, { signal: request.signal });
     } catch (err) {
-      throw new Error(`OpenRouter (model: ${model}) request failed: ${extractOpenRouterErrorDetail(err)}`);
+      const providerError = toProviderError(err, `OpenRouter (model: ${request.model}) request failed`);
+      providerError.message = `OpenRouter (model: ${request.model}) request failed: ${extractOpenRouterErrorDetail(err)}`;
+      throw providerError;
     }
 
-    const parsed = completion.choices[0]?.message.parsed;
-    if (!parsed) {
-      throw new Error(`OpenRouter (model: ${model}) returned no parsed structured output`);
-    }
-
+    const extras = completion as unknown as OpenRouterExtras;
+    const choice = completion.choices[0];
     return {
-      data: parsed,
-      model,
-      tokenUsage: {
-        promptTokens: completion.usage?.prompt_tokens ?? 0,
-        completionTokens: completion.usage?.completion_tokens ?? 0,
-      },
+      text: choice?.message.content ?? "",
+      requestedModel: request.model,
+      servedModel: completion.model || request.model,
+      usage: completion.usage
+        ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens }
+        : null,
+      reportedCostUsd: typeof extras.usage?.cost === "number" ? extras.usage.cost : undefined,
+      finishReason: choice?.finish_reason ?? undefined,
+      providerMeta: { generationId: completion.id, ...(extras.provider ? { upstreamProvider: extras.provider } : {}) },
     };
-  }
-
-  /**
-   * Resolution order: an explicit per-consumer override always wins -> everyone
-   * else falls back to the shared default model. Only the default model is
-   * required to configure OpenRouter at all; every per-consumer override is
-   * optional.
-   */
-  private modelFor(consumer: ModelConsumer): string {
-    const cfg = this.cfg;
-    const override = cfg.modelByConsumer?.[consumer];
-    if (override) return override;
-
-    if (!cfg.defaultModel) {
-      throw new Error(`No OpenRouter model configured for "${consumer}" (set LLM_MODEL_DEFAULT at minimum)`);
-    }
-    return cfg.defaultModel;
   }
 }

@@ -1,29 +1,16 @@
 {
-  "name": "rolecase",
+  "name": "agent-testbed",
   "version": "0.1.0",
-  "description": "An AI assistant for evaluating job opportunities and drafting tailored applications, with human approval at every step.",
+  "description": "A small, configurable testbed for multi-agent LLM coordination experiments: shared room, routing, consensus, deterministic evaluation, full event trace.",
   "license": "Apache-2.0",
-  "keywords": ["ai-agents", "job-search", "resume", "cover-letter", "llm", "multi-agent", "openrouter"],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/torselllo88/rolecase.git"
-  },
-  "homepage": "https://github.com/torselllo88/rolecase#readme",
-  "bugs": {
-    "url": "https://github.com/torselllo88/rolecase/issues"
-  },
+  "keywords": ["ai-agents", "multi-agent", "llm", "coordination", "experiments", "openrouter"],
   "type": "module",
   "private": true,
-  "bin": {
-    "rolecase": "./dist/cli/index.js"
-  },
   "scripts": {
     "setup": "npm install",
     "start": "npm run setup && npm run gui",
     "build": "tsc -p tsconfig.json",
-    "cli": "tsx src/cli/index.ts",
-    "mcp": "tsx src/mcp/server.ts",
-    "gui": "tsx src/gui/server.ts",
+    "gui": "tsx src/server/main.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -31,12 +18,8 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "cheerio": "^1.1.2",
-    "commander": "^12.1.0",
     "dotenv": "^16.6.1",
     "openai": "^6.45.0",
-    "pdf-parse": "^2.4.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {

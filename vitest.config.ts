@@ -4,13 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     env: {
-      // Redirects fileStore's on-disk artifacts to a throwaway directory so
-      // running tests never writes into the real data/runs/ used by the CLI.
-      // The actual secret-hermeticity guarantee (every agent/tool forced onto
-      // its deterministic stub path, regardless of what's in a developer's
-      // real .env) lives in config/env.ts itself now — it skips loading .env
-      // entirely whenever process.env.VITEST is set, rather than requiring a
-      // manually-maintained list of every secret var name here.
+      // Any test that opens an on-disk DB writes here, never into the real data/.
+      // Secret hermeticity lives in config/env.ts itself: it skips loading
+      // .env entirely whenever process.env.VITEST is set.
       DATA_DIR: path.resolve(process.cwd(), ".vitest-data"),
     },
     server: {

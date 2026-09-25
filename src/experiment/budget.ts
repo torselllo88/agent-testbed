@@ -18,9 +18,17 @@ export interface UsageTotals {
 
 /**
  * Counts every LLM call (retries and failed attempts included) and every
- * agent activation, and answers "has a hard limit been hit?". Checked by the
- * runner at step boundaries: an in-flight call is never cut short for
- * tokens, so a limit can be overshot by at most one step's worth of usage.
+ * agent activation, and answers "has a hard limit been hit?".
+ *
+ * Token and cost limits are checked by the runner at step boundaries; an
+ * in-flight call is never cut short for tokens. A limit can therefore be
+ * overshot by one step's worth of usage — and a step is not always one call:
+ * a discussion turn may include parse retries, and the VOTING step is N
+ * parallel calls (one per agent). The overshoot is recorded in the
+ * termination detail. The cost cap is an emergency brake, not a guarantee:
+ * cost is only known after a call returns; per-call `maxOutputTokens` on a
+ * model reference is what bounds the worst case. The time limit is the
+ * exception — it also aborts an in-flight call (see LlmCaller).
  */
 export class BudgetTracker {
   private agentTokens = 0;
@@ -136,6 +144,7 @@ export class BudgetTracker {
         limit: "agentTokenLimit",
         value: limits.agentTokenLimit,
         used: this.experimentalBudgetTokens(),
+        overshoot: this.experimentalBudgetTokens() - limits.agentTokenLimit,
         countOrchestrationTokens: limits.countOrchestrationTokens,
       });
     }
@@ -145,6 +154,7 @@ export class BudgetTracker {
         limit: "totalTokenCap",
         value: limits.totalTokenCap,
         used: total,
+        overshoot: total - limits.totalTokenCap,
       });
     }
     if (limits.totalCostCapUsd !== null && this.costUsd >= limits.totalCostCapUsd) {
@@ -152,6 +162,7 @@ export class BudgetTracker {
         limit: "totalCostCapUsd",
         value: limits.totalCostCapUsd,
         used: this.costUsd,
+        overshoot: this.costUsd - limits.totalCostCapUsd,
         callsWithUnknownCost: this.callsWithUnknownCost,
       });
     }

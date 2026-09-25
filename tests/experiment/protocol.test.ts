@@ -204,6 +204,25 @@ describe("protocol robustness and accounting", () => {
   });
 });
 
+describe("agent visibility", () => {
+  it.each([false, true])("shows agents the discussion budget only when agentVisibility.discussionBudget=%s", async (visible) => {
+    const prompts: string[] = [];
+    const { done } = runWith(
+      {
+        discussion: (_agentId, _n, req) => {
+          prompts.push(req.messages.at(-1)!.content);
+          return turnJson({ pass: true, ready: true });
+        },
+      },
+      (c) => {
+        c.agentVisibility.discussionBudget = visible;
+      }
+    );
+    await done;
+    expect(prompts.some((p) => p.includes("discussion turns used"))).toBe(visible);
+  });
+});
+
 describe("operator controls", () => {
   it("pause holds the run; step runs exactly one activation; resume continues", async () => {
     const h = createHarness({ scripts: { "test/agent": script({}) } });
@@ -277,7 +296,7 @@ describe("config validation up front", () => {
 
     const config2 = testConfig();
     useModel(config2, "does/not-exist");
-    expect(() => h.runner(config2)).toThrow(/Unknown stub model/);
+    expect(() => h.runner(config2)).toThrow(/unknown stub model/);
     expect(h.db.prepare(`SELECT COUNT(*) AS n FROM experiments`).get()).toEqual({ n: 0 });
   });
 });

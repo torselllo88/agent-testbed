@@ -150,19 +150,9 @@ export class ExperimentRunner {
     this.id = options.id ?? randomUUID();
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
 
-    this.evaluator = deps.evaluators.get(this.config.evaluator.id);
-    const params = this.evaluator.paramsSchema.safeParse(this.config.evaluator.params);
-    if (!params.success) throw new Error(`Invalid evaluator params: ${formatZodError(params.error)}`);
-    this.evaluatorParams = params.data;
-
-    const modelRefs = [...this.config.agents.map((a) => a.model)];
-    if (this.config.scheduler.type === "hybrid" && this.config.scheduler.classifier) modelRefs.push(this.config.scheduler.classifier);
-    for (const ref of modelRefs) {
-      deps.providers.get(ref.provider); // throws a clear "not configured" error
-      if (ref.provider === "stub" && !deps.providers.stub.models().includes(ref.model)) {
-        throw new Error(`Unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);
-      }
-    }
+    const runnable = checkRunnable(deps, this.config);
+    this.evaluator = runnable.evaluator;
+    this.evaluatorParams = runnable.evaluatorParams;
 
     this.experiments = new ExperimentRepository(deps.db);
     this.log = new EventLog(this.id, new EventRepository(deps.db), deps.providers.secretValues(), () => this.phase);
@@ -299,7 +289,8 @@ export class ExperimentRunner {
 
       const proposal = await this.runProposal();
       if (proposal !== "declined") {
-        this.transition(Phase.VOTING, { proposalId: proposal.id });
+        // One step, but N concurrent LLM calls — budget checks happen before and after it, not between the calls.
+        this.transition(Phase.VOTING, { proposalId: proposal.id, parallelCalls: config.agents.length });
         const consensus = await this.runVoting(proposal);
         if (consensus.reached) return this.runEvaluation(proposal);
         if (this.proposalAttempt >= config.decision.maxProposalAttempts) {
@@ -675,6 +666,10 @@ export class ExperimentRunner {
 
   /** Step boundary: honors stop, and blocks while paused (paused time does not count against the time limit). */
   private async checkpoint(): Promise<void> {
+    // Yield to the event loop between steps. With instant (stub) providers the
+    // whole run would otherwise execute in one microtask chain, starving HTTP
+    // requests — including the operator's own pause/stop.
+    await new Promise<void>((resolve) => setImmediate(resolve));
     for (;;) {
       if (this.stopRequested) throw new TerminateRun(termination("STOPPED_BY_OPERATOR", "Stopped by operator"));
       if (!this.paused) return;
@@ -688,6 +683,49 @@ export class ExperimentRunner {
       this.budget.resume();
     }
   }
+}
+
+/** A schema-valid config that still cannot run here (unknown evaluator, bad params, provider not configured, ...). */
+export class ConfigNotRunnableError extends Error {
+  constructor(public readonly problems: string[]) {
+    super(`Config cannot run: ${problems.join("; ")}`);
+    this.name = "ConfigNotRunnableError";
+  }
+}
+
+/**
+ * Everything beyond the config schema that must hold for a run to start —
+ * checked before a run record is created, and by the editor's validation.
+ */
+export function checkRunnable(
+  deps: Pick<RunnerDeps, "providers" | "evaluators">,
+  config: ExperimentConfig
+): { evaluator: ScenarioEvaluator; evaluatorParams: unknown } {
+  const problems: string[] = [];
+  let evaluator: ScenarioEvaluator | undefined;
+  let evaluatorParams: unknown;
+  try {
+    evaluator = deps.evaluators.get(config.evaluator.id);
+    const params = evaluator.paramsSchema.safeParse(config.evaluator.params);
+    if (params.success) evaluatorParams = params.data;
+    else problems.push(`evaluator.params: ${formatZodError(params.error)}`);
+  } catch (err) {
+    problems.push(err instanceof Error ? err.message : String(err));
+  }
+
+  const modelRefs: Array<[string, ExperimentConfig["agents"][number]["model"]]> = config.agents.map((a) => [`agent "${a.id}"`, a.model]);
+  if (config.scheduler.type === "hybrid" && config.scheduler.classifier) modelRefs.push(["router classifier", config.scheduler.classifier]);
+  for (const [who, ref] of modelRefs) {
+    if (!deps.providers.has(ref.provider)) {
+      problems.push(`${who}: LLM provider "${ref.provider}" is not configured`);
+    } else if (ref.provider === "stub" && !deps.providers.stub.models().includes(ref.model)) {
+      problems.push(`${who}: unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);
+    }
+  }
+  if (config.transport.type !== "local") problems.push(`transport "${config.transport.type}" is not implemented yet`);
+
+  if (problems.length > 0 || !evaluator) throw new ConfigNotRunnableError(problems);
+  return { evaluator, evaluatorParams };
 }
 
 function deepFreeze<T>(value: T): T {

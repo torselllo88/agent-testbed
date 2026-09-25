@@ -89,6 +89,18 @@ export const LimitsConfigSchema = z.object({
 });
 export type LimitsConfig = z.infer<typeof LimitsConfigSchema>;
 
+/**
+ * What the runtime tells agents about the protocol's own state. Part of the
+ * coordination protocol, not presentation: an agent that sees "21 of 24
+ * turns used" hurries and agrees sooner. Off by default for baseline
+ * research runs; the runtime and UI always know these numbers regardless.
+ */
+export const AgentVisibilityConfigSchema = z.object({
+  /** Show agents the discussion turns used / limit and the proposal attempt number. */
+  discussionBudget: z.boolean().default(false),
+});
+export type AgentVisibilityConfig = z.infer<typeof AgentVisibilityConfigSchema>;
+
 export const RuntimeConfigSchema = z.object({
   /** Re-asks for the same activation when the response is not parseable JSON of the expected shape. */
   maxParseRetries: z.number().int().min(0).default(1),
@@ -120,6 +132,7 @@ export const ExperimentConfigSchema = z
     consensus: ConsensusConfigSchema,
     decision: DecisionConfigSchema,
     limits: LimitsConfigSchema.default({}),
+    agentVisibility: AgentVisibilityConfigSchema.default({}),
     runtime: RuntimeConfigSchema.default({}),
     evaluator: z.object({
       id: z.string().min(1),

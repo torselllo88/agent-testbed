@@ -1,7 +1,22 @@
+import { renderBatches } from "./pages/batches.js";
+import { renderExperiment } from "./pages/experiment.js";
+import { renderExperiments } from "./pages/experiments.js";
 import { renderHome } from "./pages/home.js";
+import { renderScenarioEditor } from "./pages/scenarioEditor.js";
+import { renderScenarios } from "./pages/scenarios.js";
 import { initShell, setActiveRoute } from "./shell.js";
 
-const ROUTES = [];
+const ROUTES = [
+  {
+    pattern: /^#\/scenarios\/([^/?]+)(?:\?tab=(\w+))?$/,
+    routeKey: "scenarios",
+    render: (m) => renderScenarioEditor(decodeURIComponent(m[1]), m[2]),
+  },
+  { pattern: /^#\/scenarios$/, routeKey: "scenarios", render: renderScenarios },
+  { pattern: /^#\/experiments\/([^/]+)$/, routeKey: "experiments", render: (m) => renderExperiment(decodeURIComponent(m[1])) },
+  { pattern: /^#\/experiments$/, routeKey: "experiments", render: renderExperiments },
+  { pattern: /^#\/batches$/, routeKey: "batches", render: renderBatches },
+];
 
 function router() {
   const hash = location.hash || "#/";

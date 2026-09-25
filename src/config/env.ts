@@ -35,6 +35,14 @@ export const env = {
     endpoint: process.env.AZURE_OPENAI_ENDPOINT || undefined,
     apiVersion: process.env.AZURE_OPENAI_API_VERSION || undefined,
   },
+  /**
+   * Artificial latency per stub-provider call in the web server, so a stub
+   * run can be watched live. The CLI and batch runs always use 0.
+   */
+  stubLatencyMs: (() => {
+    const parsed = Number.parseInt(process.env.STUB_LATENCY_MS ?? "", 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 300;
+  })(),
   /** PORT is what most PaaS platforms inject; GUI_PORT is the local-dev override. */
   port: parseIntEnv(process.env.PORT ?? process.env.GUI_PORT, 3939),
   /** Loopback by default — a plain `npm start` should never be reachable from the network. */

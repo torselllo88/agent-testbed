@@ -34,6 +34,13 @@ export class EventRepository {
       .run(experimentId, event.seq, event.ts, event.phase, event.type, event.agentId, serializedPayload);
   }
 
+  maxSeq(experimentId: string): number {
+    const row = this.db.prepare(`SELECT MAX(seq) AS maxSeq FROM events WHERE experiment_id = ?`).get(experimentId) as {
+      maxSeq: number | null;
+    };
+    return row.maxSeq ?? 0;
+  }
+
   list(experimentId: string, afterSeq = 0): ExperimentEvent[] {
     const rows = this.db
       .prepare(`SELECT seq, ts, phase, type, agent_id, payload_json FROM events WHERE experiment_id = ? AND seq > ? ORDER BY seq`)

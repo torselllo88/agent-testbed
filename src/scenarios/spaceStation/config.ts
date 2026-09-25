@@ -127,6 +127,7 @@ Additional facts:
       totalCostCapUsd: null,
       timeLimitSeconds: 900,
     },
+    agentVisibility: { discussionBudget: false },
     runtime: { maxParseRetries: 1, maxProviderRetries: 2, providerRetryDelayMs: 2000, callTimeoutSeconds: 120 },
     evaluator: {
       id: "space-station",

@@ -287,6 +287,31 @@ describe("operator controls", () => {
   });
 });
 
+describe("operator stop mid-call", () => {
+  it("aborts the in-flight call and still logs the aborted attempt", async () => {
+    const hanging: LlmProvider = {
+      id: "openrouter",
+      complete: (req) =>
+        new Promise((_resolve, reject) => req.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true })),
+    };
+    const h = createHarness({ providers: [hanging] });
+    const config = testConfig();
+    for (const agent of config.agents) agent.model = { provider: "openrouter", model: "vendor/model", structuredOutput: "native" };
+    const runner = h.runner(config);
+    const done = runner.run();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(runner.state().currentAgentId).toBe("operations");
+    runner.control({ type: "stop" });
+    const metrics = await done;
+
+    expect(metrics.termination?.outcome).toBe("STOPPED_BY_OPERATOR");
+    const calls = ofType(h.events(runner.id), "llm_call");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.payload.error).toMatchObject({ aborted: true, retryable: false });
+    expect(metrics.costUsd.callsWithUnknownCost).toBe(1);
+  });
+});
+
 describe("config validation up front", () => {
   it("refuses unconfigured providers and unknown stub models before creating a run", () => {
     const h = createHarness();

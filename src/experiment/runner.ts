@@ -46,6 +46,14 @@ export interface RunOptions {
   scenarioVersion?: number | null;
   batchId?: string | null;
   conditionKey?: string | null;
+  repetition?: number | null;
+  origin?: RunEnvironment["origin"];
+}
+
+/** Recorded on experiment_started. The stub latency matters: it changes every duration metric. */
+export interface RunEnvironment {
+  stubLatencyMs: number;
+  origin: "interactive" | "batch" | "cli";
 }
 
 export type OperatorCommand =
@@ -131,6 +139,7 @@ export class ExperimentRunner {
   private readonly discussionTurnsByAgent = new Map<string, number>();
   private discussion = { segment: 1, turnsUsed: 0, turnLimit: 0 };
   private proposalAttempt = 1;
+  private readonly environment: RunEnvironment;
 
   // Operator control state.
   private paused = false;
@@ -163,6 +172,7 @@ export class ExperimentRunner {
     this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
     this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
+    this.environment = { stubLatencyMs: deps.providers.stub.latency, origin: options.origin ?? "interactive" };
 
     this.experiments.create({
       id: this.id,
@@ -172,6 +182,7 @@ export class ExperimentRunner {
       configHash: configHash(this.config),
       batchId: options.batchId,
       conditionKey: options.conditionKey,
+      repetition: options.repetition,
       testbedVersion: getTestbedVersion(),
     });
   }
@@ -270,6 +281,7 @@ export class ExperimentRunner {
       config,
       configHash: configHash(config),
       testbedVersion: getTestbedVersion(),
+      environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
       transport: this.transport.kind,
       scheduler: this.scheduler.type,

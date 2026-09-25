@@ -1,0 +1,16 @@
+{
+  "name": "Space Station: scheduler × consensus (stub agents)",
+  "base": { "builtin": "space-station" },
+  "variables": [
+    { "path": "scheduler.type", "label": "scheduler", "values": ["round_robin", "hybrid"] },
+    { "path": "consensus.rule", "label": "consensus", "values": ["unanimity", "majority"] },
+    {
+      "path": "agents.*.model.model",
+      "label": "agents",
+      "values": ["space-station/cooperative", "space-station/insufficient-power", "space-station/life-support-veto"]
+    }
+  ],
+  "repetitions": 3,
+  "concurrency": 4,
+  "order": "interleaved"
+}

@@ -1,10 +1,19 @@
 import { api, app, badge, escapeHtml, formatCost, formatDate, formatDuration, formatNumber, outcomeBadge, showError } from "../shared.js";
 
+function readIncludeBatches() {
+  try {
+    return localStorage.getItem("experiments.includeBatches") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export async function renderExperiments() {
   app.innerHTML = `<div class="loading">Loading…</div>`;
+  const includeBatches = readIncludeBatches();
   let experiments;
   try {
-    ({ experiments } = await api("/api/experiments"));
+    ({ experiments } = await api(`/api/experiments${includeBatches ? "" : "?batches=exclude"}`));
   } catch (err) {
     app.innerHTML = "";
     showError(err.message);
@@ -26,7 +35,8 @@ export async function renderExperiments() {
     .join("");
 
   app.innerHTML = `
-    <div class="page-header"><h1>Experiments</h1></div>
+    <div class="page-header"><h1>Experiments</h1>
+      <label class="check"><input type="checkbox" id="include-batches" ${includeBatches ? "checked" : ""}/> include batch runs</label></div>
     <div class="card overflow-x">
       ${
         experiments.length
@@ -36,4 +46,12 @@ export async function renderExperiments() {
     </div>
   `;
   app.querySelectorAll("tr.link-row").forEach((row) => row.addEventListener("click", () => (location.hash = row.dataset.href)));
+  document.getElementById("include-batches").addEventListener("change", (e) => {
+    try {
+      localStorage.setItem("experiments.includeBatches", e.target.checked ? "1" : "0");
+    } catch {
+      // storage unavailable — fall through to a plain re-render
+    }
+    renderExperiments();
+  });
 }

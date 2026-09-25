@@ -1,3 +1,4 @@
+import type { ProviderRegistry } from "../llm/registry.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
 import { EventType, type ExperimentEvent } from "./events.js";
@@ -8,6 +9,8 @@ import { ExperimentRunner, InvalidCommandError, type LiveState, type OperatorCom
 
 export interface StartInput extends RunOptions {
   config: unknown;
+  /** Override the provider registry for this run (batch runs use their own stub latency). */
+  providers?: ProviderRegistry;
 }
 
 /**
@@ -26,8 +29,8 @@ export class ExperimentService {
 
   /** Validates and starts a run in the background; returns once the run record exists. */
   start(input: StartInput): { runner: ExperimentRunner; done: Promise<ExperimentMetrics> } {
-    const { config, ...options } = input;
-    const runner = new ExperimentRunner(this.deps, config, options);
+    const { config, providers, ...options } = input;
+    const runner = new ExperimentRunner(providers ? { ...this.deps, providers } : this.deps, config, options);
     const done = runner.run().finally(() => this.running.delete(runner.id));
     done.catch((err: unknown) => console.error(`Experiment ${runner.id} crashed while finishing:`, err));
     const entry = { runner, done };

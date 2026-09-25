@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS experiments (
   config_hash TEXT NOT NULL,
   batch_id TEXT REFERENCES batches(id) ON DELETE SET NULL,
   condition_key TEXT,
+  -- 1-based repetition index within its batch condition (null outside batches).
+  repetition INTEGER,
   phase TEXT NOT NULL,
   status TEXT,
   outcome TEXT,

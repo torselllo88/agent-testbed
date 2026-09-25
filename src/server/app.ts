@@ -2,6 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
@@ -26,6 +27,7 @@ export interface AppDeps {
   providers: ProviderRegistry;
   evaluators: EvaluatorRegistry;
   service: ExperimentService;
+  batches: BatchService;
 }
 
 interface RouteContext {
@@ -50,6 +52,7 @@ const ID = "([^/]+)";
 const ConfigBody = z.object({ config: z.unknown() });
 const CreateScenarioBody = z.union([z.object({ builtin: z.string() }), ConfigBody]);
 const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional() });
+const BatchBody = z.object({ spec: z.unknown() });
 const ControlBody = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pause") }),
   z.object({ type: z.literal("resume") }),
@@ -217,6 +220,7 @@ const ROUTES: Route[] = [
       const list = experiments.list({
         scenarioId: url.searchParams.get("scenarioId") ?? undefined,
         batchId: url.searchParams.get("batchId") ?? undefined,
+        excludeBatches: url.searchParams.get("batches") === "exclude",
         limit: Number(url.searchParams.get("limit")) || undefined,
       });
       sendJson(res, 200, { experiments: list.map((e) => experimentSummary(e, deps.service.isRunning(e.id))) });
@@ -293,6 +297,91 @@ const ROUTES: Route[] = [
       sendJson(res, 200, { exportedAt: new Date().toISOString(), experiment, events: events.list(id) });
     },
   },
+
+  // ------------------------------------------------------------ batches
+  {
+    method: "POST",
+    pattern: /^\/api\/batches\/preview$/,
+    handle: async ({ req, res, deps }) => {
+      const { spec } = await body(req, BatchBody);
+      try {
+        const resolved = deps.batches.resolve(spec);
+        sendJson(res, 200, { ok: true, conditions: resolved.conditions, totalRuns: resolved.totalRuns, spec: resolved.spec, problems: [] });
+      } catch (err) {
+        if (err instanceof BatchValidationError) return sendJson(res, 200, { ok: false, problems: err.problems });
+        throw err;
+      }
+    },
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/batches$/,
+    handle: async ({ req, res, deps }) => {
+      const { spec } = await body(req, BatchBody);
+      sendJson(res, 201, { batch: deps.batches.start(spec) });
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/api\/batches$/,
+    handle: ({ res, deps }) =>
+      sendJson(res, 200, {
+        batches: deps.batches.list().map(({ batch, progress }) => ({
+          id: batch.id,
+          name: batch.name,
+          status: batch.status,
+          createdAt: batch.createdAt,
+          finishedAt: batch.finishedAt,
+          conditions: batch.resolved.conditions.length,
+          repetitions: batch.resolved.spec.repetitions,
+          progress,
+        })),
+      }),
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/batches/${ID}$`),
+    handle: ({ res, params, deps }) => sendJson(res, 200, deps.batches.view(decodeRouteParam(params[0]!))),
+  },
+  {
+    method: "POST",
+    pattern: new RegExp(`^/api/batches/${ID}/cancel$`),
+    handle: ({ res, params, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      deps.batches.view(id); // 404 for an unknown batch
+      if (!deps.batches.isRunning(id)) throw new HttpError(409, "Batch is not running");
+      deps.batches.cancel(id);
+      sendJson(res, 200, { ok: true });
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/batches/${ID}/export$`),
+    handle: ({ res, params, url, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      const view = deps.batches.view(id);
+      if (url.searchParams.get("format") === "csv") {
+        res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="batch-${id}.csv"` });
+        res.end(deps.batches.csv(id));
+        return;
+      }
+      res.setHeader("Content-Disposition", `attachment; filename="batch-${id}.json"`);
+      sendJson(res, 200, {
+        exportedAt: new Date().toISOString(),
+        ...view,
+        runs: deps.batches.runs(id).map((r) => ({
+          id: r.id,
+          conditionKey: r.conditionKey,
+          repetition: r.repetition,
+          outcome: r.outcome,
+          status: r.status,
+          intervened: r.intervened,
+          configHash: r.configHash,
+          summary: r.summary,
+        })),
+      });
+    },
+  },
 ];
 
 function errorStatusAndMessage(err: unknown): { status: number; body: Record<string, unknown> } {
@@ -301,8 +390,9 @@ function errorStatusAndMessage(err: unknown): { status: number; body: Record<str
     return { status: 400, body: { error: err.message, problems: err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`) } };
   }
   if (err instanceof ConfigNotRunnableError) return { status: 400, body: { error: err.message, problems: err.problems } };
+  if (err instanceof BatchValidationError) return { status: 400, body: { error: err.message, problems: err.problems } };
   if (err instanceof InvalidCommandError) return { status: 409, body: { error: err.message } };
-  if (err instanceof Error && /^(Scenario|Experiment) not found:/.test(err.message)) return { status: 404, body: { error: err.message } };
+  if (err instanceof Error && /^(Scenario|Experiment|Batch) not found:/.test(err.message)) return { status: 404, body: { error: err.message } };
   return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } };
 }
 

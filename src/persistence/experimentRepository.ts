@@ -12,6 +12,7 @@ export interface ExperimentRecord {
   configHash: string;
   batchId: string | null;
   conditionKey: string | null;
+  repetition: number | null;
   phase: Phase;
   status: RunStatus | null;
   outcome: Outcome | null;
@@ -32,6 +33,7 @@ interface ExperimentRow {
   config_hash: string;
   batch_id: string | null;
   condition_key: string | null;
+  repetition: number | null;
   phase: string;
   status: string | null;
   outcome: string | null;
@@ -53,6 +55,7 @@ function rowToRecord(row: ExperimentRow): ExperimentRecord {
     configHash: row.config_hash,
     batchId: row.batch_id,
     conditionKey: row.condition_key,
+    repetition: row.repetition,
     phase: row.phase as Phase,
     status: row.status as RunStatus | null,
     outcome: row.outcome as Outcome | null,
@@ -74,6 +77,7 @@ export interface NewExperiment {
   configHash: string;
   batchId?: string | null;
   conditionKey?: string | null;
+  repetition?: number | null;
   testbedVersion: TestbedVersion;
 }
 
@@ -106,9 +110,9 @@ export class ExperimentRepository {
     this.db
       .prepare(
         `INSERT INTO experiments
-          (id, scenario_id, scenario_version, config_snapshot_json, config_hash, batch_id, condition_key,
+          (id, scenario_id, scenario_version, config_snapshot_json, config_hash, batch_id, condition_key, repetition,
            phase, intervened, testbed_version_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?)`
       )
       .run(
         input.id,
@@ -118,6 +122,7 @@ export class ExperimentRepository {
         input.configHash,
         input.batchId ?? null,
         input.conditionKey ?? null,
+        input.repetition ?? null,
         JSON.stringify(input.testbedVersion),
         new Date().toISOString()
       );
@@ -135,7 +140,7 @@ export class ExperimentRepository {
     return record;
   }
 
-  list(filter: { batchId?: string; scenarioId?: string; limit?: number } = {}): ExperimentRecord[] {
+  list(filter: { batchId?: string; scenarioId?: string; excludeBatches?: boolean; limit?: number } = {}): ExperimentRecord[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
     if (filter.batchId) {
@@ -146,10 +151,11 @@ export class ExperimentRepository {
       clauses.push("scenario_id = ?");
       params.push(filter.scenarioId);
     }
+    if (filter.excludeBatches) clauses.push("batch_id IS NULL");
     const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
     params.push(filter.limit ?? 500);
     const rows = this.db
-      .prepare(`SELECT * FROM experiments${where} ORDER BY created_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM experiments${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(...params) as unknown as ExperimentRow[];
     return rows.map(rowToRecord);
   }

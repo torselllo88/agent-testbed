@@ -30,6 +30,12 @@ export class ProviderRegistry {
     this.secrets = secrets.filter((s) => s.length >= 8);
   }
 
+  /** Same real providers and secrets, with a different stub instance (see StubProvider.withLatency). */
+  withStub(stub: StubProvider): ProviderRegistry {
+    const real = [...this.providers.values()].filter((p) => p.id !== "stub");
+    return new ProviderRegistry(real, stub, this.secrets);
+  }
+
   get(id: ProviderId): LlmProvider {
     const provider = this.providers.get(id);
     if (!provider) {

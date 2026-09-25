@@ -437,3 +437,14 @@ input.invalid, textarea.invalid { border-color: var(--bad); outline-color: var(-
 
 table.trace td { font-size: 12px; padding: 4px 6px; vertical-align: top; }
 tr.payload-row td { background: var(--bg); }
+
+/* ---------- batches ---------- */
+
+.grid-var { display: grid; grid-template-columns: 2fr 1fr 3fr auto; gap: 0 12px; align-items: center; }
+@media (max-width: 900px) {
+  .grid-var { grid-template-columns: 1fr; }
+}
+.progress { height: 8px; background: var(--neutral-bg); border-radius: 100px; overflow: hidden; margin-bottom: 8px; }
+.progress-bar { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+tfoot td { font-weight: 600; border-top: 2px solid var(--border); }
+code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }

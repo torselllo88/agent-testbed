@@ -39,6 +39,17 @@ export class StubProvider implements LlmProvider {
   /** Artificial per-call latency, so a stub run can be watched live in the UI. 0 in tests. */
   constructor(private readonly latencyMs = 0) {}
 
+  get latency(): number {
+    return this.latencyMs;
+  }
+
+  /** Same scripts, different latency — e.g. batch runs at 0 ms regardless of the web demo's setting. */
+  withLatency(latencyMs: number): StubProvider {
+    const copy = new StubProvider(latencyMs);
+    for (const [model, responder] of this.scripts) copy.register(model, responder);
+    return copy;
+  }
+
   register(model: string, responder: StubResponder): this {
     this.scripts.set(model, responder);
     return this;

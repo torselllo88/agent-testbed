@@ -16,8 +16,19 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
 
 export type Db = DatabaseSyncType;
 
+/**
+ * CREATE TABLE IF NOT EXISTS is a no-op against an existing table, so a
+ * column added after a database was created needs this PRAGMA-guarded ALTER
+ * (SQLite has no ADD COLUMN IF NOT EXISTS). No-op for a fresh database.
+ */
+function ensureColumn(db: Db, table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+
 function applyMigrations(db: Db): void {
   db.exec(INIT_SQL);
+  ensureColumn(db, "experiments", "repetition", "repetition INTEGER");
 }
 
 export function openDb(dataDir: string = env.dataDir): Db {
@@ -25,6 +36,11 @@ export function openDb(dataDir: string = env.dataDir): Db {
   fs.mkdirSync(dbDir, { recursive: true });
   const db = new DatabaseSync(path.join(dbDir, "testbed.sqlite3"));
   db.exec("PRAGMA journal_mode = WAL;");
+  // Every trace event is its own write. With the default FULL, each one
+  // fsyncs (~2 ms on a typical disk) — the dominant cost of a stub run. In
+  // WAL mode NORMAL stays safe across process crashes and restarts; only an
+  // OS crash / power loss can drop the most recent commits.
+  db.exec("PRAGMA synchronous = NORMAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   // Default busy_timeout is 0ms — a second writer (e.g. a CLI batch run
   // while the server holds this file open) would otherwise get an immediate

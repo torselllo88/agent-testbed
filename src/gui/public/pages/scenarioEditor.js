@@ -166,7 +166,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
 
     raw: () => `
       <p class="muted">The complete config. Edits here replace the form state; invalid JSON is not applied.</p>
-      ${state.rawError ? `<div class="error-banner">${escapeHtml(state.rawError)}</div>` : ""}
+      <div id="raw-error">${state.rawError ? `<div class="error-banner">${escapeHtml(state.rawError)}</div>` : ""}</div>
       <textarea id="raw-json" class="code" spellcheck="false">${escapeHtml(state.rawText ?? JSON.stringify(state.draft, null, 2))}</textarea>`,
   };
 
@@ -252,6 +252,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
           state.rawError = `Not valid JSON: ${err.message}`;
           el.classList.add("invalid");
         }
+        // Update the message in place — re-rendering would reset the textarea's cursor.
+        document.getElementById("raw-error").innerHTML = state.rawError ? `<div class="error-banner">${escapeHtml(state.rawError)}</div>` : "";
         markDirty();
         return;
       }

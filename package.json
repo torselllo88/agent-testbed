@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "gui": "tsx src/server/main.ts",
     "experiment": "tsx src/cli/run.ts",
+    "batch": "tsx src/cli/batch.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

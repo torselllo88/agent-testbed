@@ -150,20 +150,32 @@ export class LlmCaller {
           },
         };
       } catch (err) {
-        this.throwIfStopped();
+        // Every attempt is logged — including one cut short by operator stop
+        // or the time limit, which a real provider may still have billed.
+        const stopped = this.runSignal.aborted;
+        const outOfTime = !stopped && this.budget.checkTimeLimit() !== null;
         const providerError =
           err instanceof ProviderError
             ? err
-            : isAbortError(err)
-              ? new ProviderError(`Call timed out after ${this.runtime.callTimeoutSeconds}s`, true)
-              : new ProviderError(err instanceof Error ? err.message : String(err), true);
+            : stopped
+              ? new ProviderError("Call aborted: experiment stopped by operator", false)
+              : outOfTime
+                ? new ProviderError("Call aborted: experiment time limit reached", false)
+                : isAbortError(err)
+                  ? new ProviderError(`Call timed out after ${this.runtime.callTimeoutSeconds}s`, true)
+                  : new ProviderError(err instanceof Error ? err.message : String(err), true);
 
         this.budget.recordCall(spec.category, null, undefined);
         this.log.append(
           EventType.LLM_CALL,
           {
             ...base,
-            error: { message: providerError.message, status: providerError.status ?? null, retryable: providerError.retryable },
+            error: {
+              message: providerError.message,
+              status: providerError.status ?? null,
+              retryable: providerError.retryable,
+              aborted: stopped || outOfTime,
+            },
             usage: null,
             costUsd: null,
             costSource: "unknown",
@@ -172,6 +184,7 @@ export class LlmCaller {
           spec.agentId
         );
 
+        this.throwIfStopped();
         this.throwIfOutOfTime();
         if (!providerError.retryable || providerAttempt >= this.runtime.maxProviderRetries) {
           throw new TerminateRun(

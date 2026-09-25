@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import type http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BatchService } from "../../src/batch/service.js";
 import { ExperimentService } from "../../src/experiment/service.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
@@ -14,6 +15,7 @@ import { script, turnJson } from "../helpers/harness.js";
 let server: http.Server;
 let baseUrl: string;
 let service: ExperimentService;
+let batches: BatchService;
 const db = createInMemoryDb();
 
 beforeAll(async () => {
@@ -22,7 +24,8 @@ beforeAll(async () => {
   const providers = new ProviderRegistry([], stub);
   const evaluators = createEvaluatorRegistry();
   service = new ExperimentService({ db, providers, evaluators });
-  server = createApp({ db, providers, evaluators, service });
+  batches = new BatchService({ db, providers, evaluators, service });
+  server = createApp({ db, providers, evaluators, service, batches });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -162,6 +165,53 @@ describe("experiments API", () => {
     expect(res.status).toBe(400);
     expect(res.body.problems[0]).toMatch(/unknown stub model/);
     expect(new ExperimentRepository(db).list().length).toBe(before);
+  });
+});
+
+describe("batches API", () => {
+  const spec = {
+    name: "api batch",
+    base: { builtin: "space-station" },
+    repetitions: 2,
+    variables: [{ path: "consensus.rule", label: "consensus", values: ["unanimity", "majority"] }],
+  };
+
+  it("previews conditions without running anything, and reports problems", async () => {
+    const ok = await call("POST", "/api/batches/preview", { spec });
+    expect(ok.body).toMatchObject({ ok: true, totalRuns: 4 });
+    expect(ok.body.conditions.map((c: { key: string }) => c.key)).toEqual(["consensus=unanimity", "consensus=majority"]);
+
+    const bad = await call("POST", "/api/batches/preview", { spec: { ...spec, variables: [{ path: "consensus.rule", values: ["dictator"] }] } });
+    expect(bad.body.ok).toBe(false);
+    expect(bad.body.problems[0]).toMatch(/consensus.rule/);
+    expect((await call("POST", "/api/batches", { spec: { ...spec, repetitions: 0 } })).status).toBe(400);
+  });
+
+  it("runs a batch and serves aggregates, CSV and JSON export", async () => {
+    const created = await call("POST", "/api/batches", { spec });
+    expect(created.status).toBe(201);
+    const id = created.body.batch.id;
+    await batches.settle(id);
+
+    const view = (await call("GET", `/api/batches/${id}`)).body;
+    expect(view.batch.status).toBe("completed");
+    expect(view.aggregates.map((a: { key: string; success: number }) => [a.key, a.success])).toEqual([
+      ["consensus=unanimity", 2],
+      ["consensus=majority", 2],
+    ]);
+    expect((await call("GET", "/api/batches")).body.batches.find((b: { id: string }) => b.id === id)).toMatchObject({
+      progress: { total: 4, finished: 4 },
+    });
+
+    const csv = await fetch(`${baseUrl}/api/batches/${id}/export?format=csv`);
+    expect(csv.headers.get("content-type")).toContain("text/csv");
+    expect((await csv.text()).trim().split("\n")).toHaveLength(5);
+    const json = (await call("GET", `/api/batches/${id}/export`)).body;
+    expect(json.runs).toHaveLength(4);
+    expect(json.batch.resolved.baseConfig.name).toBe("Space Station Emergency");
+
+    expect((await call("POST", `/api/batches/${id}/cancel`, {})).status).toBe(409);
+    expect((await call("GET", `/api/batches/nope`)).status).toBe(404);
   });
 });
 

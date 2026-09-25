@@ -1,3 +1,4 @@
+import { renderBatch } from "./pages/batch.js";
 import { renderBatches } from "./pages/batches.js";
 import { renderExperiment } from "./pages/experiment.js";
 import { renderExperiments } from "./pages/experiments.js";
@@ -15,6 +16,7 @@ const ROUTES = [
   { pattern: /^#\/scenarios$/, routeKey: "scenarios", render: renderScenarios },
   { pattern: /^#\/experiments\/([^/]+)$/, routeKey: "experiments", render: (m) => renderExperiment(decodeURIComponent(m[1])) },
   { pattern: /^#\/experiments$/, routeKey: "experiments", render: renderExperiments },
+  { pattern: /^#\/batches\/([^/]+)$/, routeKey: "batches", render: (m) => renderBatch(decodeURIComponent(m[1])) },
   { pattern: /^#\/batches$/, routeKey: "batches", render: renderBatches },
 ];
 

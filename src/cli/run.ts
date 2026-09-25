@@ -23,7 +23,7 @@ const rawConfig: unknown = builtin ? builtin.config() : JSON.parse(fs.readFileSy
 
 const db = openDb(values.db);
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
-const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry() }, rawConfig);
+const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry() }, rawConfig, { origin: "cli" });
 
 process.on("SIGINT", () => {
   console.error("\nStopping experiment…");

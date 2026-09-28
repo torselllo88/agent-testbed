@@ -19,6 +19,18 @@ export interface JsonResponseFormat {
   schema: Record<string, unknown>;
 }
 
+/** Upstream-provider routing, currently understood only by the OpenRouter provider (see experiment/config.ts). */
+export interface ProviderRouting {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  allowFallbacks?: boolean;
+  requireParameters?: boolean;
+  sort?: "price" | "throughput" | "latency";
+  quantizations?: string[];
+  dataCollection?: "allow" | "deny";
+}
+
 export interface CompletionRequest {
   /** Provider-specific model id (OpenRouter model id, Azure deployment name, stub script name). */
   model: string;
@@ -28,6 +40,7 @@ export interface CompletionRequest {
   seed?: number;
   maxOutputTokens?: number;
   responseFormat?: JsonResponseFormat;
+  routing?: ProviderRouting;
   signal?: AbortSignal;
   /**
    * Opaque caller context (e.g. which agent, which phase). Real providers

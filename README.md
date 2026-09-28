@@ -25,7 +25,7 @@ shows the whole transformation.
 
 - [Quick start](#quick-start)
 - [Core ideas](#core-ideas)
-- [The reference scenario: Space Station Emergency](#the-reference-scenario-space-station-emergency)
+- [The reference scenario: Space Station Benchmark](#the-reference-scenario-space-station-benchmark)
 - [Using the web UI](#using-the-web-ui)
 - [Command line](#command-line)
 - [Experiment configuration](#experiment-configuration)
@@ -54,13 +54,13 @@ npm run gui          # → http://localhost:3939
 That is all that is needed for a first look. Without any API key, every agent
 runs on the built-in **stub provider**: scripted, deterministic stand-ins for
 the Space Station officers. The whole scenario then runs end-to-end, free and
-offline. The first start creates the Space Station scenario in the database.
+offline. The first start saves a copy of the built-in Space Station Benchmark scenario in the database.
 
 To run real LLM agents:
 
 1. `cp .env.example .env` and set `OPENROUTER_API_KEY` (or the Azure OpenAI variables).
 2. Restart `npm run gui`. The Overview page shows which providers are configured.
-3. Open **Scenarios → Space Station Emergency → Agents**. For each agent set
+3. Open **Scenarios → Space Station Benchmark → Agents**. For each agent set
    provider `openrouter` and a model, e.g. `anthropic/claude-sonnet-5`.
    Different agents can use different models. Point the router classifier
    (**Protocol** tab) at a real model too, or turn it off.
@@ -94,7 +94,7 @@ can be capped (`limits.totalCostCapUsd`, `limits.totalTokenCap`).
 
 ---
 
-## The reference scenario: Space Station Emergency
+## The reference scenario: Space Station Benchmark
 
 Reactor cooling loop A has failed. Four officers must agree on a recovery
 procedure. Each one knows only part of the picture:
@@ -132,6 +132,13 @@ checks six constraints and reports each one:
 
 The station's numbers are editable evaluator parameters. If you change them,
 keep the agents' private context consistent with them.
+
+**Versions.** v2 of the built-in scenario states explicitly, in Power's private
+information, that the 40 kW life-support allocation is existing load (not
+additional demand) and that the 10 kW reserve is free for the coolant system.
+In live runs, cheap models read the v1 wording as "40 kW + 30 kW must be
+covered" and gave up. Saved copies of a built-in scenario keep the version they
+were created from; nothing is updated automatically.
 
 **Stub agents.** Three scripted variants exercise distinct outcomes without any
 API key:
@@ -228,7 +235,8 @@ with all defaults filled in, and hashed canonically. The complete reference is
     "id": "power", "name": "Power Systems", "role": "…",
     "model": { "provider": "openrouter", "model": "anthropic/claude-sonnet-5",
                "temperature": 0.7, "seed": 1, "maxOutputTokens": 800,
-               "structuredOutput": "native" },             // or "prompt"
+               "structuredOutput": "native",              // or "prompt"
+               "routing": { "only": ["together"] } },      // optional, OpenRouter only (see below)
     "systemPrompt": "…",
     "privateContext": "…",                                 // only this agent sees it
     "tools": []                                            // reserved
@@ -267,6 +275,19 @@ Notes:
   JSON schema. Use `"prompt"` for model routes that reject `response_format`.
   The schema is always included in the prompt, and every response is parsed and
   validated either way.
+- **`routing`** (OpenRouter only; rejected for other providers) constrains
+  which upstream backend serves the model: `order`, `only`, `ignore` (provider
+  slugs, e.g. `"deepinfra"`), `allowFallbacks`, `requireParameters`, `sort`
+  (`price` / `throughput` / `latency`), `quantizations`, `dataCollection`.
+  Omitted means OpenRouter chooses automatically. One effective default:
+  **`requireParameters: true` whenever `structuredOutput` is `"native"`**,
+  because routing to a backend without `response_format` support contradicts
+  that mode (seen live: the same Llama model degenerated on one backend). An
+  explicit `false` overrides it, and the editor warns about it. The same model
+  can behave materially differently per backend, so every `llm_call` records
+  both the requested and the effective routing, plus the backend that actually
+  served it (`providerMeta.upstreamProvider`, a display name rather than a
+  slug). In a batch, vary it like any field: `agents.*.model.routing`.
 
 ---
 
@@ -441,7 +462,7 @@ Event types, in the order they typically appear:
 | `phase_changed` | from, to, why (e.g. `discussionEnd: all_ready`) |
 | `routing_decision` | chosen agent, source, reason, details (invalid target, classifier failure) |
 | `turn_started` / `turn_completed` | turn number, kind, result |
-| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, usage, cost and its source (reported / estimated / unknown), duration, request-queue wait, parse result, temperature, seed |
+| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown), duration, request-queue wait, parse result, temperature, seed |
 | `message_posted` | a public room message (agent or moderator) |
 | `agent_meta` | the hidden control metadata of a turn |
 | `readiness_changed` / `readiness_invalidated` | readiness transitions |

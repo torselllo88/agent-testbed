@@ -65,7 +65,7 @@ describe("Space Station end-to-end (stub agents)", () => {
     expect(events.at(-1)!.type).toBe("experiment_finished");
     expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));
     expect(events[0]!.payload).toMatchObject({ configHash: expect.any(String), evaluator: { id: "space-station", version: "1" } });
-    expect(new ExperimentRepository(h.db).get(runner.id)?.config.name).toBe("Space Station Emergency");
+    expect(new ExperimentRepository(h.db).get(runner.id)?.config.name).toBe("Space Station Benchmark");
   });
 });
 

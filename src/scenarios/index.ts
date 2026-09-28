@@ -15,11 +15,20 @@ import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 export interface BuiltinScenario {
   id: string;
   name: string;
+  /**
+   * Bumped whenever the built-in definition changes in a way that affects
+   * runs. Saved copies in a database are never updated automatically — they
+   * keep the version they were created from.
+   *   v1: original wording
+   *   v2: Power's private information states explicitly that the 40 kW life-support
+   *       allocation is existing load (not extra demand) and the 10 kW reserve is free
+   */
+  version: number;
   config: () => ExperimentConfig;
 }
 
 export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
-  { id: "space-station", name: "Space Station Emergency", config: () => spaceStationConfig() },
+  { id: "space-station", name: "Space Station Benchmark", version: 2, config: () => spaceStationConfig() },
 ];
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {

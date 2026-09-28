@@ -61,17 +61,64 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
   };
   const agentOptions = () => state.draft.agents.map((a) => [a.id, `${a.name} (${a.id})`]);
 
+  const csvInput = (path, placeholder) => {
+    const v = getPath(state.draft, path);
+    return `<input type="text" data-path="${path}" data-kind="csv-optional" value="${valueAttr(Array.isArray(v) ? v.join(", ") : v)}" placeholder="${escapeHtml(placeholder)}" />`;
+  };
+  const triState = (path, labels) => {
+    const v = getPath(state.draft, path);
+    const current = v === undefined ? "" : String(v);
+    return `<select data-path="${path}" data-kind="optional-bool">${[["", labels[0]], ["true", "true"], ["false", "false"]]
+      .map(([value, label]) => `<option value="${value}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`)
+      .join("")}</select>`;
+  };
+  const optionalSelect = (path, options, defaultLabel) => {
+    const current = getPath(state.draft, path) ?? "";
+    return `<select data-path="${path}" data-kind="optional-string">${[["", defaultLabel], ...options.map((o) => [o, o])]
+      .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`)
+      .join("")}</select>`;
+  };
+
+  // OpenRouter-specific upstream-provider routing. Hidden for other providers (the config rejects it there).
+  const routingFields = (base) => {
+    const ref = getPath(state.draft, base);
+    if (ref?.provider !== "openrouter") return "";
+    const r = `${base}.routing`;
+    const warn =
+      ref.structuredOutput === "native" && ref.routing?.requireParameters === false
+        ? `<div class="warning-banner">Native structured output with requireParameters=false: OpenRouter may route to a backend that ignores the response schema.</div>`
+        : "";
+    const configured = ref.routing && Object.keys(ref.routing).length;
+    return `<details class="advanced" ${configured ? "open" : ""}><summary>OpenRouter routing (advanced)${configured ? " — configured" : " — automatic"}</summary>
+      <p class="muted small">Leave empty to let OpenRouter choose the upstream provider. Values are provider slugs, comma-separated (e.g. <code>deepinfra, together</code>). The backend that actually served each call is recorded in the trace.</p>
+      ${warn}
+      <div class="grid-3">
+        ${field("Only", csvInput(`${r}.only`, "e.g. together"), "use only these providers")}
+        ${field("Order", csvInput(`${r}.order`, "e.g. together, deepinfra"), "try these first, in order")}
+        ${field("Ignore", csvInput(`${r}.ignore`, "e.g. deepinfra"), "never use these")}
+      </div>
+      <div class="grid-4">
+        ${field("Allow fallbacks", triState(`${r}.allowFallbacks`, ["default (true)"]))}
+        ${field("Require parameters", triState(`${r}.requireParameters`, [ref.structuredOutput === "native" ? "default (true for native)" : "default (false)"]))}
+        ${field("Sort", optionalSelect(`${r}.sort`, ["price", "throughput", "latency"], "default"))}
+        ${field("Data collection", optionalSelect(`${r}.dataCollection`, ["allow", "deny"], "default (allow)"))}
+      </div>
+      ${field("Quantizations", csvInput(`${r}.quantizations`, "e.g. fp16, bf16"))}
+    </details>`;
+  };
+
   const modelFields = (base) => `
     <div class="grid-4">
-      ${field("Provider", select(`${base}.provider`, PROVIDERS.map((p) => [p, p])))}
+      ${field("Provider", select(`${base}.provider`, PROVIDERS.map((p) => [p, p]), { structural: true }))}
       ${field("Model", input(`${base}.model`, "string", `list="stub-models"`), "OpenRouter model id, Azure deployment, or stub script")}
       ${field("Temperature", input(`${base}.temperature`, "optional-number", `step="0.1" min="0" max="2"`), "blank = provider default")}
       ${field("Max output tokens", input(`${base}.maxOutputTokens`, "optional-number", `min="1"`), "blank = no cap")}
     </div>
     <div class="grid-4">
-      ${field("Structured output", select(`${base}.structuredOutput`, [["native", "native (provider-enforced schema)"], ["prompt", "prompt only"]]))}
+      ${field("Structured output", select(`${base}.structuredOutput`, [["native", "native (provider-enforced schema)"], ["prompt", "prompt only"]], { structural: true }))}
       ${field("Seed", input(`${base}.seed`, "optional-number"), "best-effort, recorded only")}
-    </div>`;
+    </div>
+    ${routingFields(base)}`;
 
   const tabBody = {
     general: () => `
@@ -206,6 +253,21 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     }
   }
 
+  /** Sets a value; undefined deletes the key, and an emptied routing object is removed entirely. */
+  function assign(path, value) {
+    if (value === undefined) {
+      const parts = path.split(".");
+      const parentPath = parts.slice(0, -1).join(".");
+      const parent = getPath(state.draft, parentPath);
+      if (parent) delete parent[parts.at(-1)];
+      if (parentPath.endsWith(".routing") && parent && Object.keys(parent).length === 0) {
+        delete getPath(state.draft, parentPath.slice(0, -".routing".length)).routing;
+      }
+    } else {
+      setPath(state.draft, path, value);
+    }
+  }
+
   function applyStructural(path, value) {
     if (path === "scheduler.type") {
       const startAgentId = state.draft.scheduler.startAgentId;
@@ -215,8 +277,12 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       state.draft.scheduler.classifier = value ? { provider: "stub", model: meta.stubModels.find((m) => m.startsWith("router/")) ?? "", structuredOutput: "native" } : null;
     } else if (path === "transport.type") {
       state.draft.transport = { type: value };
-    } else {
+    } else if (path.endsWith(".model.provider") || path === "scheduler.classifier.provider") {
       setPath(state.draft, path, value);
+      // Routing is OpenRouter-specific; the config rejects it for any other provider.
+      if (value !== "openrouter") delete getPath(state.draft, path.slice(0, -".provider".length)).routing;
+    } else {
+      assign(path, value);
     }
   }
 
@@ -227,6 +293,12 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     if (kind === "number") return raw === "" ? { ok: false } : { ok: true, value: Number(raw) };
     if (kind === "nullable-number") return { ok: true, value: raw === "" ? null : Number(raw) };
     if (kind === "optional-number") return { ok: true, value: raw === "" ? undefined : Number(raw) };
+    if (kind === "optional-string") return { ok: true, value: raw === "" ? undefined : raw };
+    if (kind === "optional-bool") return { ok: true, value: raw === "" ? undefined : raw === "true" };
+    if (kind === "csv-optional") {
+      const items = raw.split(",").map((x) => x.trim()).filter(Boolean);
+      return { ok: true, value: items.length ? items : undefined };
+    }
     if (kind === "json") {
       try {
         return { ok: true, value: JSON.parse(raw) };
@@ -261,20 +333,15 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       const result = coerce(el);
       el.classList.toggle("invalid", !result.ok);
       if (!result.ok) return;
-      if (result.value === undefined) {
-        const parts = el.dataset.path.split(".");
-        const parent = getPath(state.draft, parts.slice(0, -1).join("."));
-        if (parent) delete parent[parts.at(-1)];
-      } else {
-        setPath(state.draft, el.dataset.path, result.value);
-      }
+      assign(el.dataset.path, result.value);
       markDirty();
     });
 
     body.addEventListener("change", (e) => {
       const el = e.target;
       if (!el.dataset.path) return;
-      const structural = el.dataset.structural !== undefined || el.dataset.path.includes("__");
+      // Routing selects re-render too: the requireParameters warning depends on them.
+      const structural = el.dataset.structural !== undefined || el.dataset.path.includes("__") || el.dataset.path.includes(".routing.");
       if (el.tagName === "SELECT" || el.type === "checkbox") {
         const { value } = coerce(el);
         applyStructural(el.dataset.path, value);

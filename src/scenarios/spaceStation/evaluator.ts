@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { ConstraintCheck, EvaluationResult, ScenarioEvaluator } from "../../evaluation/types.js";
 
 /**
- * Space Station Emergency — deterministic evaluator.
+ * Space Station emergency task — deterministic evaluator (shared by every
+ * scenario built on this task, e.g. the neutral benchmark).
  *
  * The proposal schema below is STRUCTURE ONLY (which fields, which values
  * are expressible). It deliberately allows every unsafe plan — shedding life

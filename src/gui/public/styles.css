@@ -448,3 +448,7 @@ tr.payload-row td { background: var(--bg); }
 .progress-bar { height: 100%; background: var(--accent); transition: width 0.3s ease; }
 tfoot td { font-weight: 600; border-top: 2px solid var(--border); }
 code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+
+details.advanced { margin: 4px 0 12px; border: 1px dashed var(--border); border-radius: 6px; padding: 8px 12px; }
+details.advanced summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+details.advanced[open] summary { margin-bottom: 8px; }

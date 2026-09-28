@@ -52,7 +52,7 @@ describe("HTTP basics", () => {
     expect(body.evaluators[0]).toMatchObject({ id: "space-station", version: "1" });
     expect(body.evaluators[0].proposalSchema.properties).toHaveProperty("coolant_loop");
     expect(body.schedulers).toEqual(["round_robin", "hybrid"]);
-    expect(body.builtinScenarios).toEqual([{ id: "space-station", name: "Space Station Emergency" }]);
+    expect(body.builtinScenarios).toEqual([{ id: "space-station", name: "Space Station Benchmark" }]);
   });
 
   it("serves the SPA shell and JSON 404s for unknown API routes", async () => {
@@ -125,7 +125,7 @@ describe("experiments API", () => {
 
     const exported = await call("GET", `/api/experiments/${id}/export`);
     expect(exported.body.events).toHaveLength(all.length);
-    expect(exported.body.experiment.config.name).toBe("Space Station Emergency");
+    expect(exported.body.experiment.config.name).toBe("Space Station Benchmark");
 
     const rerun = await call("POST", `/api/experiments/${id}/rerun`, {});
     await service.settle();
@@ -208,7 +208,7 @@ describe("batches API", () => {
     expect((await csv.text()).trim().split("\n")).toHaveLength(5);
     const json = (await call("GET", `/api/batches/${id}/export`)).body;
     expect(json.runs).toHaveLength(4);
-    expect(json.batch.resolved.baseConfig.name).toBe("Space Station Emergency");
+    expect(json.batch.resolved.baseConfig.name).toBe("Space Station Benchmark");
 
     expect((await call("POST", `/api/batches/${id}/cancel`, {})).status).toBe(409);
     expect((await call("GET", `/api/batches/nope`)).status).toBe(404);

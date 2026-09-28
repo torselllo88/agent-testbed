@@ -10,6 +10,41 @@ import { z } from "zod";
 
 const idPattern = /^[a-z0-9][a-z0-9_-]*$/;
 
+const slugList = z.array(z.string().trim().min(1)).min(1);
+
+/**
+ * OpenRouter upstream-provider routing (OpenRouter-specific; rejected for any
+ * other provider). A typed subset of OpenRouter's request `provider` object:
+ * the same nominal model can behave materially differently depending on the
+ * backend that serves it, so controlled runs may want to constrain it. Omitted
+ * = OpenRouter chooses automatically. Values are provider slugs as OpenRouter
+ * expects them (e.g. "deepinfra", "together").
+ */
+export const OpenRouterRoutingSchema = z
+  .object({
+    /** Try these providers first, in this order. */
+    order: slugList.optional(),
+    /** Only ever use these providers. */
+    only: slugList.optional(),
+    /** Never use these providers. */
+    ignore: slugList.optional(),
+    /** Whether OpenRouter may fall back to other providers when the preferred ones are unavailable (OpenRouter default: true). */
+    allowFallbacks: z.boolean().optional(),
+    /**
+     * Only route to providers supporting every request parameter. Effective
+     * default: true when structuredOutput is "native" (routing to a backend
+     * without response_format support contradicts that mode), otherwise
+     * OpenRouter's own default.
+     */
+    requireParameters: z.boolean().optional(),
+    sort: z.enum(["price", "throughput", "latency"]).optional(),
+    /** e.g. ["fp16", "bf16"] */
+    quantizations: slugList.optional(),
+    dataCollection: z.enum(["allow", "deny"]).optional(),
+  })
+  .strict();
+export type OpenRouterRouting = z.infer<typeof OpenRouterRoutingSchema>;
+
 export const ModelRefSchema = z.object({
   provider: z.enum(["openrouter", "azure", "stub"]),
   /** OpenRouter model id, Azure deployment name, or stub script name. */
@@ -25,8 +60,26 @@ export const ModelRefSchema = z.object({
    * and validated by the runtime.
    */
   structuredOutput: z.enum(["native", "prompt"]).default("native"),
+  /** OpenRouter only: upstream-provider routing. Omit for automatic routing. */
+  routing: OpenRouterRoutingSchema.optional(),
+}).superRefine((ref, ctx) => {
+  if (ref.routing && ref.provider !== "openrouter") {
+    ctx.addIssue({ code: "custom", path: ["routing"], message: `routing is OpenRouter-specific and has no meaning for provider "${ref.provider}"` });
+  }
 });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
+
+/**
+ * The routing actually sent to OpenRouter: the configured routing plus the
+ * one effective default — requireParameters: true for native structured
+ * output, unless explicitly overridden. Null when there is nothing to send.
+ */
+export function effectiveOpenRouterRouting(ref: ModelRef): OpenRouterRouting | null {
+  if (ref.provider !== "openrouter") return null;
+  const routing: OpenRouterRouting = { ...(ref.routing ?? {}) };
+  if (routing.requireParameters === undefined && ref.structuredOutput === "native") routing.requireParameters = true;
+  return Object.keys(routing).length ? routing : null;
+}
 
 export const AgentConfigSchema = z.object({
   id: z.string().regex(idPattern, "agent id must be a lowercase slug"),

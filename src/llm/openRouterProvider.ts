@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
-import { ProviderError, toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider } from "./provider.js";
+import { ProviderError, toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider, type ProviderRouting } from "./provider.js";
 
 export interface OpenRouterProviderConfig {
   apiKey: string;
@@ -28,6 +28,23 @@ function extractOpenRouterErrorDetail(err: unknown): string {
   return `${base} (upstream provider${provider ? ` "${provider}"` : ""} said: ${raw})`;
 }
 
+/** Maps our typed routing onto OpenRouter's request `provider` object (snake_case field names). */
+export function toOpenRouterProviderObject(routing: ProviderRouting | undefined): Record<string, unknown> | null {
+  if (!routing) return null;
+  const mapped: Record<string, unknown> = {
+    order: routing.order,
+    only: routing.only,
+    ignore: routing.ignore,
+    allow_fallbacks: routing.allowFallbacks,
+    require_parameters: routing.requireParameters,
+    sort: routing.sort,
+    quantizations: routing.quantizations,
+    data_collection: routing.dataCollection,
+  };
+  const defined = Object.fromEntries(Object.entries(mapped).filter(([, v]) => v !== undefined));
+  return Object.keys(defined).length ? defined : null;
+}
+
 /** Fields OpenRouter adds on top of the OpenAI chat-completion response shape. */
 interface OpenRouterExtras {
   provider?: string;
@@ -53,7 +70,8 @@ export class OpenRouterProvider implements LlmProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const body: ChatCompletionCreateParamsNonStreaming & { usage?: { include: boolean } } = {
+    const provider = toOpenRouterProviderObject(request.routing);
+    const body: ChatCompletionCreateParamsNonStreaming & { usage?: { include: boolean }; provider?: Record<string, unknown> } = {
       model: request.model,
       messages: request.messages,
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
@@ -67,6 +85,7 @@ export class OpenRouterProvider implements LlmProvider {
             },
           }
         : {}),
+      ...(provider ? { provider } : {}),
       // OpenRouter usage accounting: makes the response carry the real billed cost.
       usage: { include: true },
     };

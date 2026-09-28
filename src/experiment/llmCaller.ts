@@ -3,7 +3,7 @@ import { estimateCostUsd } from "../llm/pricing.js";
 import { ProviderError, type ChatMessage, type CompletionResult } from "../llm/provider.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { BudgetTracker, UsageCategory } from "./budget.js";
-import type { ModelRef, RuntimeConfig } from "./config.js";
+import { effectiveOpenRouterRouting, type ModelRef, type RuntimeConfig } from "./config.js";
 import { EventType, type EventLog } from "./events.js";
 import { termination, TerminateRun } from "./outcome.js";
 import { parseWithSchema } from "./parseJson.js";
@@ -101,6 +101,7 @@ export class LlmCaller {
   ): Promise<{ result: CompletionResult; providerAttempts: number; eventPayload: Record<string, unknown> }> {
     const provider = this.providers.get(spec.modelRef.provider);
     const native = spec.modelRef.structuredOutput === "native";
+    const routing = effectiveOpenRouterRouting(spec.modelRef);
 
     for (let providerAttempt = 0; ; providerAttempt++) {
       this.throwIfStopped();
@@ -127,6 +128,10 @@ export class LlmCaller {
         parseAttempt,
         providerAttempt,
         queueWaitMs,
+        // Requested (as configured) and effective (with defaults applied) routing; the backend
+        // that actually served the call is in providerMeta.upstreamProvider (a display name,
+        // not a slug — never compared to these by string).
+        routing: routing ? { requested: spec.modelRef.routing ?? null, effective: routing } : null,
         messages,
       };
 
@@ -138,6 +143,7 @@ export class LlmCaller {
           seed: spec.modelRef.seed,
           maxOutputTokens: spec.modelRef.maxOutputTokens,
           responseFormat: native ? { name: spec.response.name, schema: spec.response.jsonSchema } : undefined,
+          routing: routing ?? undefined,
           signal: this.callSignal(),
           context: spec.context,
         });

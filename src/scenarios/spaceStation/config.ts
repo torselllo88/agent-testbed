@@ -31,7 +31,7 @@ Shared known facts:
 export function spaceStationConfig(agentModel = "space-station/cooperative"): ExperimentConfig {
   return {
     schemaVersion: 1,
-    name: "Space Station Emergency",
+    name: "Space Station Benchmark",
     description:
       "Four station officers each hold part of the information needed to recover from a reactor-cooling failure. They must share it, agree on one recovery plan, and commit to it; the plan is then checked against the station's physical constraints.",
     task: {
@@ -85,6 +85,9 @@ Emergency venting should be used only if no normal cooling procedure remains pos
 - External communications: 8 kW
 - Other essential systems: fixed
 - Unallocated reserve: 10 kW
+
+The 40 kW life-support allocation is already part of the current station load and must remain unchanged; it is not additional demand that has to be covered during the recovery.
+The 10 kW reserve is currently unallocated capacity, available for the coolant system.
 
 Additional facts:
 1. Backup coolant loop B can be powered from electrical bus B.

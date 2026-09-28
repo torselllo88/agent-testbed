@@ -13,8 +13,9 @@ function aggregateRow(a, total) {
     .join(" ");
   return `<tr>
     <td><code>${escapeHtml(a.key)}</code></td>
-    <td>${a.finished}${total !== undefined ? ` / ${total}` : ""}${a.aborted ? ` <span class="muted small">(${a.aborted} aborted)</span>` : ""}</td>
-    <td><strong>${pct(a.successRate)}</strong>${ci}</td>
+    <td>${a.finished}${total !== undefined ? ` / ${total}` : ""}</td>
+    <td>${a.excluded.total ? Object.entries(a.excluded.byOutcome).map(([o, n]) => `${outcomeBadge(o)} ${n}`).join(" ") : "0"}</td>
+    <td><strong>${pct(a.successRate)}</strong>${ci}<div class="muted small">of ${a.evaluable}</div></td>
     <td>${pct(a.consensusRate)}</td>
     <td>${outcomes || "—"}</td>
     <td>${med(a.tokens.total)} <span class="muted small">(${med(a.tokens.agent)} + ${med(a.tokens.orchestration)})</span></td>
@@ -73,9 +74,14 @@ export async function renderBatch(batchId) {
       </div>
       <div class="card overflow-x">
         <h2>Results by condition</h2>
-        <p class="muted small">Success and consensus rates exclude aborted runs (provider errors, interruptions, operator stops). Brackets: 95% Wilson interval. Tokens: median total (agent + orchestration).</p>
+        ${
+          overall.providerErrors
+            ? `<div class="warning-banner">${overall.providerErrors} run(s) ended in PROVIDER_ERROR and are excluded from the success and consensus rates — this reflects provider instability, not coordination. Check it before comparing conditions.</div>`
+            : ""
+        }
+        <p class="muted small">Success and consensus rates are computed over evaluable runs only; excluded runs (provider errors, internal errors, interruptions, operator stops) are listed in their own column. Brackets: 95% Wilson interval. Tokens: median total (agent + orchestration).</p>
         <table>
-          <thead><tr><th>Condition</th><th>Runs</th><th>Success</th><th>Consensus</th><th>Outcomes</th><th>Tokens (median)</th><th>Turns (median)</th><th>Duration (median)</th><th>Cost</th></tr></thead>
+          <thead><tr><th>Condition</th><th>Runs</th><th>Excluded</th><th>Success</th><th>Consensus</th><th>Outcomes</th><th>Tokens (median)</th><th>Turns (median)</th><th>Duration (median)</th><th>Cost</th></tr></thead>
           <tbody>${aggregates.map((a) => aggregateRow(a, perCondition)).join("")}</tbody>
           <tfoot>${aggregateRow(overall, progress.total)}</tfoot>
         </table>

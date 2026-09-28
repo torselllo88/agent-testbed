@@ -120,7 +120,7 @@ describe("batch execution", () => {
     expect(csv[1]).toContain("space-station/cooperative");
 
     const started = new EventRepository(db).list(runs[0]!.id).find((e) => e.type === "experiment_started")!;
-    expect(started.payload.environment).toEqual({ stubLatencyMs: 0, origin: "batch" });
+    expect(started.payload.environment).toMatchObject({ stubLatencyMs: 0, origin: "batch" });
   });
 
   it("never inherits the interactive stub latency; latency only changes when the spec sets it", async () => {
@@ -134,7 +134,7 @@ describe("batch execution", () => {
     await batches.settle(slow.id);
     const run = batches.runs(slow.id)[0]!;
     const started = new EventRepository(db).list(run.id).find((e) => e.type === "experiment_started")!;
-    expect(started.payload.environment).toEqual({ stubLatencyMs: 5, origin: "batch" });
+    expect(started.payload.environment).toMatchObject({ stubLatencyMs: 5, origin: "batch" });
   });
 
   it("cancel stops in-flight runs, starts no more, and excludes the aborted runs from rates", async () => {
@@ -152,7 +152,13 @@ describe("batch execution", () => {
     expect(view.batch.status).toBe("cancelled");
     expect(view.progress.finished).toBe(2); // only the two in flight ever started
     expect(view.progress.pending).toBe(3);
-    expect(view.overall).toMatchObject({ aborted: 2, evaluable: 0, successRate: null, outcomes: { STOPPED_BY_OPERATOR: 2 } });
+    expect(view.overall).toMatchObject({
+      excluded: { total: 2, byOutcome: { STOPPED_BY_OPERATOR: 2 } },
+      providerErrors: 0,
+      evaluable: 0,
+      successRate: null,
+      outcomes: { STOPPED_BY_OPERATOR: 2 },
+    });
   });
 
   it("marks a batch cut off by a restart as interrupted", () => {

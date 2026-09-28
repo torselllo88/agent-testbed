@@ -138,6 +138,10 @@ describe("helpers", () => {
     expect(extractJsonObject('Sure! {"a":1} Hope that helps')).toEqual({ ok: true, value: { a: 1 } });
     expect(extractJsonObject('{"a":').ok).toBe(false);
     expect(extractJsonObject("[1,2]").ok).toBe(false);
+    // Seen live (gpt-4.1-nano): a valid object followed by a stray extra brace.
+    expect(extractJsonObject('{"a":{"b":1}}}')).toEqual({ ok: true, value: { a: { b: 1 } } });
+    // Braces inside strings do not confuse the balance scan.
+    expect(extractJsonObject('{"t":"x } y {"} trailing }')).toEqual({ ok: true, value: { t: "x } y {" } });
   });
 
   it("redacts secrets anywhere in a serialized payload", () => {

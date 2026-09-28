@@ -32,11 +32,13 @@ export interface Harness {
   record(experimentId: string): ReturnType<ExperimentRepository["getOrThrow"]>;
 }
 
-export function createHarness(opts: { providers?: LlmProvider[]; secrets?: string[]; scripts?: Record<string, StubResponder> } = {}): Harness {
+export function createHarness(
+  opts: { providers?: LlmProvider[]; secrets?: string[]; scripts?: Record<string, StubResponder>; maxConcurrentRequests?: number } = {}
+): Harness {
   const db = createInMemoryDb();
   const stub = registerBuiltinStubs(new StubProvider());
   for (const [model, responder] of Object.entries(opts.scripts ?? {})) stub.register(model, responder);
-  const providers = new ProviderRegistry(opts.providers ?? [], stub, opts.secrets ?? []);
+  const providers = new ProviderRegistry(opts.providers ?? [], stub, { secrets: opts.secrets, maxConcurrentRequests: opts.maxConcurrentRequests });
   const evaluators = createEvaluatorRegistry();
   return {
     db,

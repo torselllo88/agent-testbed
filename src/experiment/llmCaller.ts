@@ -105,6 +105,14 @@ export class LlmCaller {
     for (let providerAttempt = 0; ; providerAttempt++) {
       this.throwIfStopped();
       this.throwIfOutOfTime();
+
+      // Process-wide provider request gate. The slot is taken BEFORE the
+      // call's own timeout starts, so queueing never eats into it; the wait
+      // is recorded separately so provider latency stays measurable.
+      const queuedAt = Date.now();
+      const release = await this.acquireSlot(spec.modelRef.provider);
+      const queueWaitMs = Date.now() - queuedAt;
+
       const startedAt = Date.now();
       const base = {
         category: spec.category,
@@ -118,6 +126,7 @@ export class LlmCaller {
         responseFormat: spec.response.name,
         parseAttempt,
         providerAttempt,
+        queueWaitMs,
         messages,
       };
 
@@ -132,6 +141,7 @@ export class LlmCaller {
           signal: this.callSignal(),
           context: spec.context,
         });
+        release();
         const { costUsd, costSource } = resolveCost(result);
         this.budget.recordCall(spec.category, result.usage, costUsd);
         return {
@@ -150,6 +160,7 @@ export class LlmCaller {
           },
         };
       } catch (err) {
+        release(); // before any retry backoff
         // Every attempt is logged — including one cut short by operator stop
         // or the time limit, which a real provider may still have billed.
         const stopped = this.runSignal.aborted;
@@ -200,6 +211,21 @@ export class LlmCaller {
         }
         await sleep(this.runtime.providerRetryDelayMs * 2 ** providerAttempt);
       }
+    }
+  }
+
+  /** Waits for a request slot; a stop or the experiment time limit ends the wait (queued time counts as experiment time). */
+  private async acquireSlot(providerId: ModelRef["provider"]): Promise<() => void> {
+    const gate = this.providers.gate(providerId);
+    if (!gate) return () => {};
+    const remaining = this.budget.remainingMs();
+    const signal = remaining === null ? this.runSignal : AbortSignal.any([this.runSignal, AbortSignal.timeout(Math.max(1, remaining))]);
+    try {
+      return await gate.acquire(signal);
+    } catch {
+      this.throwIfStopped();
+      this.throwIfOutOfTime();
+      throw new TerminateRun(termination("TIMEOUT", "Time limit reached while waiting for a provider request slot"));
     }
   }
 

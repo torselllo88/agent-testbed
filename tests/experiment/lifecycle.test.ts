@@ -170,3 +170,31 @@ describe("readiness", () => {
     expect(lastEngineeringReady).toBeLessThan(decisionSeq);
   });
 });
+
+describe("readiness re-check prompt", () => {
+  it("tells a re-checked agent why it is asked and which messages arrived since its declaration", async () => {
+    const prompts: Array<{ agentId: string; recheck: boolean; text: string }> = [];
+    const h = createHarness({
+      scripts: {
+        "test/stale-note": script({
+          discussion: (agentId, n, req) => {
+            prompts.push({ agentId, recheck: req.context?.readinessRecheck === true, text: req.messages.at(-1)!.content });
+            if (agentId === "operations" && n === 0) return turnJson({ message: "Status?", target: "engineering" });
+            if (agentId === "engineering" && n === 0) return turnJson({ message: "Loop B works; I am ready.", target: "power", ready: true });
+            if (agentId === "power" && n === 0) return turnJson({ message: "Only 10 kW is free.", target: "life_support", ready: true });
+            return turnJson({ pass: true, ready: true });
+          },
+        }),
+      },
+    });
+    const config = testConfig();
+    useModel(config, "test/stale-note");
+    await h.runner(config).run();
+
+    const recheck = prompts.find((p) => p.recheck);
+    expect(recheck?.agentId).toBe("engineering");
+    expect(recheck?.text).toContain("re-confirm your readiness");
+    expect(recheck?.text).toMatch(/#3/); // power's message arrived after engineering declared at #2
+    expect(prompts.filter((p) => !p.recheck).every((p) => !p.text.includes("re-confirm your readiness"))).toBe(true);
+  });
+});

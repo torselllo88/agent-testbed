@@ -120,7 +120,9 @@ export function renderDiscussionPrompt(
   config: ExperimentConfig,
   agent: AgentConfig,
   transcript: RoomMessage[],
-  progress: ProgressInfo
+  progress: ProgressInfo,
+  /** Runtime lifecycle note for this specific turn (e.g. a readiness re-check). */
+  note?: string
 ): string {
   const budget = config.agentVisibility.discussionBudget
     ? ` (discussion turns used: ${progress.discussionTurnsUsed} of ${progress.discussionTurnLimit}; proposal attempt ${progress.proposalAttempt} of ${progress.maxProposalAttempts})`
@@ -128,6 +130,7 @@ export function renderDiscussionPrompt(
   return [
     ...contextSections(config, agent, transcript),
     `It is your turn in the DISCUSSION phase${budget}.`,
+    note ?? "",
     'Fields: "message" = what you post to the room (empty when passing); "pass" = true to skip your turn; "target" = id of the participant you address, or null; "intent" = a few words on the purpose of your message, or null; "readyToCommit" = whether you are ready for the decision phase.',
     jsonInstruction(TURN_JSON_SCHEMA),
   ]

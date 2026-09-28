@@ -43,6 +43,24 @@ export const env = {
     const parsed = Number.parseInt(process.env.STUB_LATENCY_MS ?? "", 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 300;
   })(),
+  /**
+   * SQLite durability. NORMAL (default) in WAL mode survives process crashes
+   * and restarts; only an OS crash / power loss can drop the latest commits.
+   * FULL fsyncs every write (~25x slower per trace event on a typical disk).
+   */
+  sqliteSynchronous: (() => {
+    const value = (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase();
+    if (!["OFF", "NORMAL", "FULL", "EXTRA"].includes(value)) {
+      throw new Error(`SQLITE_SYNCHRONOUS must be OFF, NORMAL, FULL or EXTRA (got "${process.env.SQLITE_SYNCHRONOUS}")`);
+    }
+    return value as "OFF" | "NORMAL" | "FULL" | "EXTRA";
+  })(),
+  /**
+   * Maximum simultaneous in-flight requests per real LLM provider, across
+   * every experiment and batch in this process. Independent of batch
+   * concurrency: one experiment's voting step alone issues one request per agent.
+   */
+  llmMaxConcurrentRequests: parseIntEnv(process.env.LLM_MAX_CONCURRENT_REQUESTS, 8),
   /** PORT is what most PaaS platforms inject; GUI_PORT is the local-dev override. */
   port: parseIntEnv(process.env.PORT ?? process.env.GUI_PORT, 3939),
   /** Loopback by default — a plain `npm start` should never be reachable from the network. */

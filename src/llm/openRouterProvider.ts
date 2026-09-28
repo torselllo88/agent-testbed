@@ -1,12 +1,14 @@
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
-import { toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider } from "./provider.js";
+import { ProviderError, toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider } from "./provider.js";
 
 export interface OpenRouterProviderConfig {
   apiKey: string;
   baseUrl: string;
   siteUrl?: string;
   siteName?: string;
+  /** Test seam: replaces the HTTP client's fetch. */
+  fetch?: typeof fetch;
 }
 
 /**
@@ -42,6 +44,7 @@ export class OpenRouterProvider implements LlmProvider {
       baseURL: config.baseUrl,
       // Retries are the agent runtime's job, so each attempt is traced individually.
       maxRetries: 0,
+      ...(config.fetch ? { fetch: config.fetch } : {}),
       defaultHeaders: {
         ...(config.siteUrl ? { "HTTP-Referer": config.siteUrl } : {}),
         ...(config.siteName ? { "X-Title": config.siteName } : {}),
@@ -79,6 +82,17 @@ export class OpenRouterProvider implements LlmProvider {
 
     const extras = completion as unknown as OpenRouterExtras;
     const choice = completion.choices[0];
+    // OpenRouter can answer HTTP 200 with finish_reason "error" when the
+    // upstream provider failed mid-response (truncated text, zero usage).
+    // That is an infrastructure failure, not the model's output — surface it
+    // as a retryable provider error so it is never recorded as a protocol
+    // (parse) failure of the agent.
+    if ((choice?.finish_reason as string | undefined) === "error") {
+      throw new ProviderError(
+        `OpenRouter (model: ${request.model}) upstream${extras.provider ? ` "${extras.provider}"` : ""} failed mid-response (finish_reason "error", generation ${completion.id})`,
+        true
+      );
+    }
     return {
       text: choice?.message.content ?? "",
       requestedModel: request.model,

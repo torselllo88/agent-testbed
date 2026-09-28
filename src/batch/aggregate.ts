@@ -15,7 +15,14 @@ export interface ConditionAggregate {
   finished: number;
   /** Finished runs that were not ABORTED (infrastructure/operator) — the denominator of successRate. */
   evaluable: number;
-  aborted: number;
+  /**
+   * Finished runs left out of successRate/consensusRate, by outcome
+   * (PROVIDER_ERROR, ERROR, INTERRUPTED, STOPPED_BY_OPERATOR). Always reported
+   * next to the rates so provider instability is never hidden by the denominator.
+   */
+  excluded: { total: number; byOutcome: Record<string, number> };
+  /** Shorthand for excluded.byOutcome.PROVIDER_ERROR. */
+  providerErrors: number;
   success: number;
   successRate: number | null;
   /** Wilson score interval, 95%. */
@@ -67,6 +74,8 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
   const evaluable = finished.filter((r) => r.status !== "ABORTED");
   const evaluableMetrics = evaluable.map((r) => r.summary as unknown as ExperimentMetrics);
   const success = evaluable.filter((r) => r.outcome === "SUCCESS").length;
+  const excludedByOutcome: Record<string, number> = {};
+  for (const r of finished) if (r.status === "ABORTED") inc(excludedByOutcome, r.outcome ?? "UNKNOWN");
 
   const outcomes: Record<string, number> = {};
   const categories: Record<string, number> = {};
@@ -82,7 +91,8 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     runs: runs.length,
     finished: finished.length,
     evaluable: evaluable.length,
-    aborted: finished.length - evaluable.length,
+    excluded: { total: finished.length - evaluable.length, byOutcome: excludedByOutcome },
+    providerErrors: excludedByOutcome.PROVIDER_ERROR ?? 0,
     success,
     successRate: evaluable.length ? success / evaluable.length : null,
     successRateCI95: wilson(success, evaluable.length),

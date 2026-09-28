@@ -4,7 +4,7 @@ import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import type { ScenarioEvaluator } from "../evaluation/types.js";
 import type { ProviderRegistry } from "../llm/registry.js";
-import type { Db } from "../persistence/db.js";
+import { sqliteSynchronousMode, type Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
 import { createScheduler, type RoutingDecision, type Scheduler } from "../scheduling/index.js";
@@ -54,6 +54,10 @@ export interface RunOptions {
 export interface RunEnvironment {
   stubLatencyMs: number;
   origin: "interactive" | "batch" | "cli";
+  /** Effective SQLite durability mode of the trace database (read back from SQLite). */
+  sqliteSynchronous: string;
+  /** Process-wide cap on simultaneous requests per real provider; null = unlimited. */
+  maxConcurrentRequests: number | null;
 }
 
 export type OperatorCommand =
@@ -172,7 +176,12 @@ export class ExperimentRunner {
     this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
     this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
-    this.environment = { stubLatencyMs: deps.providers.stub.latency, origin: options.origin ?? "interactive" };
+    this.environment = {
+      stubLatencyMs: deps.providers.stub.latency,
+      origin: options.origin ?? "interactive",
+      sqliteSynchronous: sqliteSynchronousMode(deps.db),
+      maxConcurrentRequests: deps.providers.maxConcurrentRequests,
+    };
 
     this.experiments.create({
       id: this.id,
@@ -347,7 +356,7 @@ export class ExperimentRunner {
       this.enforceHardLimits(1);
 
       const decision = await this.route();
-      await this.discussionTurn(decision.agentId);
+      await this.discussionTurn(decision.agentId, decision.source === "readiness_recheck");
       this.discussion.turnsUsed += 1;
     }
     this.pendingNextAgentId = null;
@@ -379,8 +388,12 @@ export class ExperimentRunner {
     return decision;
   }
 
-  private async discussionTurn(agentId: string): Promise<void> {
+  private async discussionTurn(agentId: string, readinessRecheck = false): Promise<void> {
     const agent = this.agents.get(agentId)!;
+    // Why the agent is being asked (lifecycle information, not task content):
+    // without it, models answer a re-check with a restated confirmation, which
+    // is itself a new message that invalidates everyone else — a loop.
+    const declaredAt = this.readiness.get(agentId).declaredAtIndex;
     const turn = this.startTurn(agentId, "discussion");
     const agentTurn = this.discussionTurnsByAgent.get(agentId) ?? 0;
     this.discussionTurnsByAgent.set(agentId, agentTurn + 1);
@@ -400,11 +413,11 @@ export class ExperimentRunner {
             discussionTurnLimit: this.discussion.turnLimit,
             proposalAttempt: this.proposalAttempt,
             maxProposalAttempts: this.config.decision.maxProposalAttempts,
-          }),
+          }, readinessRecheck ? readinessRecheckNote(transcript, agentId, declaredAt) : undefined),
         },
       ],
       response: { name: "agent_turn", schema: TurnResponseSchema, jsonSchema: TURN_JSON_SCHEMA },
-      context: { agentId, purpose: "discussion", agentTurn, turn, segment: this.discussion.segment, proposalAttempt: this.proposalAttempt },
+      context: { agentId, purpose: "discussion", agentTurn, turn, segment: this.discussion.segment, proposalAttempt: this.proposalAttempt, readinessRecheck },
       turn,
     });
 
@@ -695,6 +708,17 @@ export class ExperimentRunner {
       this.budget.resume();
     }
   }
+}
+
+/** Prompt note for a readiness re-check turn: which messages arrived since the agent declared readiness. */
+function readinessRecheckNote(transcript: RoomMessage[], agentId: string, declaredAt: number | null): string {
+  const newer = transcript.filter((m) => m.index > (declaredAt ?? 0) && !(m.sender.kind === "agent" && m.sender.agentId === agentId));
+  const range = newer.length ? (newer.length === 1 ? `#${newer[0]!.index}` : `#${newer[0]!.index}–#${newer.at(-1)!.index}`) : "new messages";
+  return (
+    `You are being asked to re-confirm your readiness: you declared readyToCommit earlier, and ${range} arrived after that. ` +
+    "If those messages do not change your view, PASS (pass=true, empty message) with readyToCommit=true — do not post a restating confirmation. " +
+    "Post a message only if you have new information or an objection."
+  );
 }
 
 /** A schema-valid config that still cannot run here (unknown evaluator, bad params, provider not configured, ...). */

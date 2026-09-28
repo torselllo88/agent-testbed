@@ -17,7 +17,7 @@ export async function renderHome() {
       (p) => `<tr>
         <td>${escapeHtml(p.id)}</td>
         <td>${p.configured ? badge("configured", "ok") : badge("not configured", "neutral")}</td>
-        <td class="muted">${escapeHtml(p.hint ?? "")}</td>
+        <td class="muted">${p.gate ? `max ${p.gate.maxConcurrent} concurrent requests · ${p.gate.inFlight} in flight · ${p.gate.queued} queued` : escapeHtml(p.hint ?? "")}</td>
       </tr>`
     )
     .join("");

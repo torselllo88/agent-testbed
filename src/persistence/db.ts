@@ -31,16 +31,26 @@ function applyMigrations(db: Db): void {
   ensureColumn(db, "experiments", "repetition", "repetition INTEGER");
 }
 
-export function openDb(dataDir: string = env.dataDir): Db {
+const SYNCHRONOUS_NAMES = ["OFF", "NORMAL", "FULL", "EXTRA"] as const;
+
+/** The durability mode actually in effect on this connection (read back from SQLite, not from config). */
+export function sqliteSynchronousMode(db: Db): string {
+  const row = db.prepare("PRAGMA synchronous").get() as { synchronous: number } | undefined;
+  return row ? (SYNCHRONOUS_NAMES[row.synchronous] ?? String(row.synchronous)) : "unknown";
+}
+
+export function openDb(dataDir: string = env.dataDir, synchronous: string = env.sqliteSynchronous): Db {
   const dbDir = path.join(dataDir, "db");
   fs.mkdirSync(dbDir, { recursive: true });
   const db = new DatabaseSync(path.join(dbDir, "testbed.sqlite3"));
   db.exec("PRAGMA journal_mode = WAL;");
-  // Every trace event is its own write. With the default FULL, each one
-  // fsyncs (~2 ms on a typical disk) — the dominant cost of a stub run. In
-  // WAL mode NORMAL stays safe across process crashes and restarts; only an
-  // OS crash / power loss can drop the most recent commits.
-  db.exec("PRAGMA synchronous = NORMAL;");
+  // Every trace event is its own write. With SQLite's own default FULL, each
+  // one fsyncs (~2 ms on a typical disk) — the dominant cost of a stub run.
+  // Our default NORMAL (WAL mode) stays safe across process crashes and
+  // restarts; only an OS crash / power loss can drop the most recent commits.
+  // Configurable via SQLITE_SYNCHRONOUS; the effective value is recorded on
+  // every run (see sqliteSynchronousMode()).
+  db.exec(`PRAGMA synchronous = ${synchronous};`);
   db.exec("PRAGMA foreign_keys = ON;");
   // Default busy_timeout is 0ms — a second writer (e.g. a CLI batch run
   // while the server holds this file open) would otherwise get an immediate

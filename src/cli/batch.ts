@@ -73,6 +73,13 @@ if (values.csv) fs.writeFileSync(values.csv, batches.csv(batchId));
 for (const a of view.aggregates) {
   const rate = a.successRate === null ? "—" : `${(a.successRate * 100).toFixed(0)}%`;
   const ci = a.successRateCI95 ? ` [${(a.successRateCI95[0] * 100).toFixed(0)}–${(a.successRateCI95[1] * 100).toFixed(0)}%]` : "";
-  console.error(`${a.key}: success ${rate}${ci} of ${a.evaluable}, median tokens ${a.tokens.total.median ?? "—"}, outcomes ${JSON.stringify(a.outcomes)}`);
+  const excluded = a.excluded.total ? `, EXCLUDED ${a.excluded.total} ${JSON.stringify(a.excluded.byOutcome)}` : "";
+  console.error(`${a.key}: success ${rate}${ci} of ${a.evaluable}${excluded}, median tokens ${a.tokens.total.median ?? "—"}, outcomes ${JSON.stringify(a.outcomes)}`);
+}
+if (view.overall.excluded.total) {
+  console.error(
+    `WARNING: ${view.overall.excluded.total} run(s) excluded from success rates ${JSON.stringify(view.overall.excluded.byOutcome)}` +
+      (view.overall.providerErrors ? " — provider instability, not coordination" : "")
+  );
 }
 if (!values.out) console.log(JSON.stringify(result, null, 2));

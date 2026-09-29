@@ -196,7 +196,7 @@ use all of them:
 | `agents[].persona` | Personality, tendencies, interpersonal priors. Behavior layer. |
 | `conversation.language` | Language of everything participants and viewers read: messages, proposal rationale, vote reasons, moderator notices, narration. JSON field names, ids and enum values are never translated. A run can override it without editing the scenario. |
 | `presentation.narrator` | `{ displayName }`, or `null` for no narration. |
-| `presentation.strings.<lang>` | Authored per language: `title`, `narratorName`, `opening`, `outcomes.<OUTCOME>` (plus `default`), `missionFailure.<check>`. |
+| `presentation.strings.<lang>` | Authored per language: `title`, `narratorName`, `opening`, `outcomes.<OUTCOME>` (plus `default`), `missionFailure.<check>`; for viewers only, `agents.<id>` (`{ name, role }` display labels) and `proposal` (`{ template, values }`, a human-readable rendering of the submitted proposal). Agents and the protocol notices they read keep the config's names and the raw proposal. |
 | `presentation.fallbackLanguage` | Used for any string missing in the conversation language. |
 | `presentation.missionFailurePriority` | Evaluator checks in narrative order; the first violated one picks the `MISSION_FAILURE` ending. All violated checks stay in the technical results. |
 | `presentation.pacing` | `minVisibleIntervalMs`, `perCharMs`, `maxGapMs` (see below). |
@@ -229,8 +229,10 @@ provider reply needs little or no extra wait. The wait is recorded as
 `presentation_delay` and counts neither as provider latency nor as experiment
 time: `wall = active + paused + presentation`, and only `active` drives
 `timeLimitSeconds`. Stop interrupts the wait immediately. The benchmark uses
-0; Kestrel starts at 2.5 s + 20 ms per character, capped at 9 s. Tune these by
-watching real runs.
+0; Kestrel (v2) uses 2 s + 10 ms per character, capped at 6 s, together with
+a 16-turn discussion limit and 300 output tokens per turn. A demo should not
+run long, and v1's 2.5 s / 20 ms / 9 s made a verbose live run take about
+5 minutes. Tune these by watching real runs.
 
 **Two hashes.** `configHash` identifies the exact configuration.
 `taskDefinitionHash` identifies the underlying problem: task text, each

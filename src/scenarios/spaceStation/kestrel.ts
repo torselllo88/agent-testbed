@@ -96,6 +96,29 @@ Mission failed: the reactor was not SCRAMmed.`,
     no_unsafe_venting: `The reactor section is vented. Environmental isolation breaks and the crew is exposed.
 Mission failed: unsafe venting.`,
   },
+  agents: {
+    operations: { role: "Station Commander" },
+    engineering: { role: "Reactor Engineer" },
+    power: { role: "Power Systems Engineer" },
+    life_support: { role: "Life Support Officer" },
+  },
+  proposal: {
+    template: `{{proposer}} puts the recovery plan to the vote:
+• shut down: {{proposal.shed_loads}}
+• cooling loop: {{proposal.coolant_loop}}, {{proposal.coolant_power_kw}} kW
+• reactor SCRAM: {{proposal.scram_reactor}}
+• life support: {{proposal.life_support_power_kw}} kW
+• vent the reactor section: {{proposal.vent_reactor_section}}
+“{{rationale}}”`,
+    values: {
+      research_labs: "research labs",
+      external_communications: "external communications",
+      life_support: "life support",
+      none: "none",
+      true: "yes",
+      false: "no",
+    },
+  },
 };
 
 const RU: PresentationStrings = {
@@ -140,6 +163,29 @@ const RU: PresentationStrings = {
     no_unsafe_venting: `Реакторный отсек стравлен. Изоляция среды нарушена, экипаж под угрозой.
 Миссия провалена: небезопасное стравливание.`,
   },
+  agents: {
+    operations: { name: "Сара Окафор", role: "Командир станции" },
+    engineering: { name: "Джон Мерсер", role: "Инженер реактора" },
+    power: { name: "Виктор Хейл", role: "Инженер энергосистем" },
+    life_support: { name: "Майя Чен", role: "Офицер жизнеобеспечения" },
+  },
+  proposal: {
+    template: `{{proposer}} выносит план на голосование:
+• отключить: {{proposal.shed_loads}}
+• контур охлаждения: {{proposal.coolant_loop}}, {{proposal.coolant_power_kw}} кВт
+• аварийная остановка реактора (SCRAM): {{proposal.scram_reactor}}
+• жизнеобеспечение: {{proposal.life_support_power_kw}} кВт
+• стравливание реакторного отсека: {{proposal.vent_reactor_section}}
+«{{rationale}}»`,
+    values: {
+      research_labs: "исследовательские лаборатории",
+      external_communications: "внешняя связь",
+      life_support: "жизнеобеспечение",
+      none: "нет",
+      true: "да",
+      false: "нет",
+    },
+  },
 };
 
 export function kestrelConfig(agentModel = "space-station/cooperative"): ExperimentConfig {
@@ -155,7 +201,8 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
       name: CAST[id].name,
       ...SPACE_STATION_ROLES[id],
       persona: CAST[id].persona,
-      model: stubModel(agentModel),
+      // Short turns keep a live demo watchable; kept when the model is switched to a real one.
+      model: { ...stubModel(agentModel), maxOutputTokens: 300 },
       systemPrompt: "",
       tools: [],
     })),
@@ -168,8 +215,9 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
     consensus: SPACE_STATION_CONSENSUS,
     decision: SPACE_STATION_DECISION,
     limits: {
-      discussionTurnLimit: 24,
-      rediscussionTurnLimit: 8,
+      // Shorter than the benchmark: a demo should not run long.
+      discussionTurnLimit: 16,
+      rediscussionTurnLimit: 6,
       globalTurnLimit: 80,
       agentTokenLimit: null,
       countOrchestrationTokens: false,
@@ -193,7 +241,8 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
         "no_unsafe_venting",
       ],
       // Starting values for live viewing — tune by watching real runs.
-      pacing: { minVisibleIntervalMs: 2500, perCharMs: 20, maxGapMs: 9000 },
+      // Tuned after watching live runs (v1 was 2500 / 20 / 9000 — too long with verbose models).
+      pacing: { minVisibleIntervalMs: 2000, perCharMs: 10, maxGapMs: 6000 },
     },
     runtime: { maxParseRetries: 1, maxProviderRetries: 2, providerRetryDelayMs: 2000, callTimeoutSeconds: 120 },
     evaluator: SPACE_STATION_EVALUATOR,

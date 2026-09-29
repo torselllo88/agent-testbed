@@ -208,6 +208,19 @@ export const PresentationStringsSchema = z.object({
   outcomes: z.record(z.string()).default({}),
   /** MISSION_FAILURE ending per primary violated evaluator check. */
   missionFailure: z.record(z.string()).default({}),
+  /**
+   * Display labels per agent id for viewers (name, role). Display only: agents,
+   * their prompts and the protocol keep the config's names and roles.
+   */
+  agents: z.record(z.object({ name: z.string().optional(), role: z.string().optional() })).default({}),
+  /**
+   * Human-readable rendering of a submitted proposal for viewers. Placeholders:
+   * {{proposal.<field>}}, {{rationale}}, {{proposer}}, {{attempt}}; `values`
+   * maps raw values ("research_labs", "true") or field-qualified values
+   * ("scram_reactor.true") to display text. The protocol notice agents read
+   * is unchanged.
+   */
+  proposal: z.object({ template: z.string().min(1), values: z.record(z.string()).default({}) }).optional(),
 });
 export type PresentationStrings = z.infer<typeof PresentationStringsSchema>;
 

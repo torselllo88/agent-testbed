@@ -42,7 +42,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     id: "station-kestrel",
     name: "Station Kestrel",
     summary: "Humanized live demo — named officers, narration, paced for viewers (en, ru)",
-    version: 1,
+    // v1: initial. v2: shorter demo (discussion 16 turns, maxOutputTokens 300, pacing 2000/10/6000),
+    //     localized viewer labels for agents, human-readable proposal rendering.
+    version: 2,
     config: () => kestrelConfig(),
   },
 ];

@@ -575,7 +575,9 @@ export class ExperimentRunner {
           proposerName: proposer.name,
           body: JSON.stringify(frozen.body),
           rationale: frozen.rationale,
-        })
+        }),
+        // Machine-readable: which protocol notice this is, so projections (viewer) can recognize it.
+        { notice: { kind: "proposal_submitted", proposalId: frozen.id } }
       );
       return frozen;
     }
@@ -654,7 +656,8 @@ export class ExperimentRunner {
           eligible: consensus.eligible,
           rule: consensus.rule,
           required: consensus.required,
-        })}${reasons ? `\n${reasons}` : ""}`
+        })}${reasons ? `\n${reasons}` : ""}`,
+        { notice: { kind: "proposal_not_approved", proposalId: proposal.id } }
       );
     }
     return consensus;

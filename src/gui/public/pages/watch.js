@@ -37,15 +37,41 @@ function labelsFor(language) {
   return LABELS[lower] ?? LABELS[lower.split("-")[0]] ?? LABELS.en;
 }
 
-/** Scenario title in the run's language, via the same fallback chain as narration. */
-function titleFor(config) {
+/**
+ * The first authored presentation value for the run's language, via the same
+ * fallback chain as narration (requested → base language → fallback).
+ */
+function presentationValue(config, pick) {
   const strings = config.presentation?.strings ?? {};
   const byLang = Object.fromEntries(Object.entries(strings).map(([k, v]) => [k.toLowerCase(), v]));
   const lang = (config.conversation?.language ?? "en").toLowerCase();
   for (const l of [lang, lang.split("-")[0], (config.presentation?.fallbackLanguage ?? "en").toLowerCase()]) {
-    if (byLang[l]?.title) return byLang[l].title;
+    const value = byLang[l] ? pick(byLang[l]) : undefined;
+    if (value) return value;
   }
-  return config.name;
+  return undefined;
+}
+
+function titleFor(config) {
+  return presentationValue(config, (s) => s.title) ?? config.name;
+}
+
+/** Viewer-only rendering of a proposal from the scenario's template; null when the scenario defines none. */
+function renderProposal(config, proposal, proposerName) {
+  const spec = presentationValue(config, (s) => s.proposal);
+  if (!spec) return null;
+  const label = (field, value) => spec.values?.[`${field}.${value}`] ?? spec.values?.[String(value)] ?? String(value);
+  const ctx = { rationale: proposal.rationale, proposer: proposerName, attempt: proposal.attempt };
+  return spec.template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, path) => {
+    if (path.startsWith("proposal.")) {
+      const field = path.slice("proposal.".length);
+      const value = proposal.body?.[field];
+      if (value === undefined) return "";
+      if (Array.isArray(value)) return value.length ? value.map((v) => label(field, v)).join(", ") : label(field, "none");
+      return label(field, value);
+    }
+    return ctx[path] ?? "";
+  });
 }
 
 function initials(name) {
@@ -90,6 +116,14 @@ export async function renderWatch(experimentId) {
   const L = labelsFor(config.conversation?.language);
   const agentIndex = new Map(config.agents.map((a, i) => [a.id, i]));
   const agentOf = (id) => config.agents.find((a) => a.id === id);
+  // Display labels for viewers (presentation.strings.<lang>.agents); agents themselves keep the config names.
+  const labelOf = (id) => {
+    const agent = agentOf(id);
+    return {
+      name: presentationValue(config, (s) => s.agents?.[id]?.name) ?? agent?.name ?? id,
+      role: presentationValue(config, (s) => s.agents?.[id]?.role) ?? agent?.role ?? "",
+    };
+  };
 
   app.innerHTML = `
     <div class="watch">
@@ -107,15 +141,20 @@ export async function renderWatch(experimentId) {
     if (p.sender.kind === "narrator") {
       return `<div class="w-narration"><div class="w-narrator">${escapeHtml(p.sender.name)}</div><div class="w-text">${escapeHtml(p.text)}</div></div>`;
     }
+    if (p.sender.kind === "system" && p.notice?.kind === "proposal_submitted") {
+      const frozen = events.find((e) => e.type === "proposal_frozen" && e.payload.id === p.notice.proposalId);
+      const text = frozen ? renderProposal(config, frozen.payload, labelOf(frozen.payload.proposerId).name) : null;
+      if (text) return `<div class="w-proposal"><div class="w-text">${escapeHtml(text)}</div></div>`;
+    }
     if (p.sender.kind === "system") {
       return `<div class="w-moderator"><span class="w-moderator-label">${escapeHtml(L.moderator)}</span><div class="w-text">${escapeHtml(p.text)}</div></div>`;
     }
-    const agent = agentOf(p.sender.agentId);
+    const who = labelOf(p.sender.agentId);
     const i = (agentIndex.get(p.sender.agentId) ?? 0) % 6;
     return `<div class="w-msg">
-      <div class="w-avatar agent-bg-${i}">${escapeHtml(initials(agent?.name ?? p.sender.agentId))}</div>
+      <div class="w-avatar agent-bg-${i}">${escapeHtml(initials(who.name))}</div>
       <div class="w-body">
-        <div class="w-name">${escapeHtml(agent?.name ?? p.sender.agentId)} <span class="w-role">${escapeHtml(agent?.role ?? "")}</span></div>
+        <div class="w-name">${escapeHtml(who.name)} <span class="w-role">${escapeHtml(who.role)}</span></div>
         <div class="w-text">${escapeHtml(p.text)}</div>
       </div>
     </div>`;
@@ -130,7 +169,7 @@ export async function renderWatch(experimentId) {
       if (e.type === "turn_completed" && open && e.payload.turn === open.turn) open = null;
     }
     if (!open) return "";
-    const name = agentOf(open.agentId)?.name ?? open.agentId;
+    const name = labelOf(open.agentId).name;
     if (open.kind === "vote") return L.voting;
     if (open.kind === "proposal") return L.drafting(name);
     return L.thinking(name);

@@ -120,6 +120,10 @@ describe("Kestrel end-to-end (stub agents)", () => {
     expect(room[0]!.sender.name).toBe("ЦЕНТР УПРАВЛЕНИЯ");
     expect(room[0]!.text).toContain("Станция «Кестрел»");
     expect(room.find((m) => m.sender.kind === "system")!.text).toContain("Итоговое предложение №1");
+    // The protocol notice carries a machine-readable tag so viewers can recognize it; its text is unchanged for agents.
+    const notice = ofType(h.events(runner.id), "message_posted").find((e) => e.payload.sender && (e.payload.sender as { kind: string }).kind === "system")!;
+    const frozen = ofType(h.events(runner.id), "proposal_frozen")[0]!;
+    expect(notice.payload.notice).toEqual({ kind: "proposal_submitted", proposalId: frozen.payload.id });
     expect(room.at(-1)!.text).toContain("Миссия выполнена");
     const votes = ofType(h.events(runner.id), "vote_cast").map((e) => e.payload.vote);
     expect(votes.every((v) => v === "APPROVE")).toBe(true);
@@ -269,14 +273,15 @@ describe("scenario library", () => {
     expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: [], updated: [] });
 
     const kestrel = repo.getBuiltin("station-kestrel")!;
-    expect(kestrel).toMatchObject({ version: 1, builtin: { id: "station-kestrel", version: 1 } });
+    const codeVersion = BUILTIN_SCENARIOS.find((b) => b.id === "station-kestrel")!.version;
+    expect(kestrel).toMatchObject({ version: 1, builtin: { id: "station-kestrel", version: codeVersion } });
     expect(() => repo.update(kestrel.id, kestrel.config)).toThrow(ReadOnlyScenarioError);
     expect(() => repo.delete(kestrel.id)).toThrow(ReadOnlyScenarioError);
     expect(repo.duplicate(kestrel.id)).toMatchObject({ name: "Station Kestrel (copy)", builtin: null });
 
-    const bumped = BUILTIN_SCENARIOS.map((b) => (b.id === "station-kestrel" ? { ...b, version: 2, config: () => ({ ...kestrelConfig(), description: "v2" }) } : b));
+    const bumped = BUILTIN_SCENARIOS.map((b) => (b.id === "station-kestrel" ? { ...b, version: codeVersion + 1, config: () => ({ ...kestrelConfig(), description: "v2" }) } : b));
     expect(repo.syncBuiltins(bumped).updated).toEqual(["station-kestrel"]);
-    expect(repo.getBuiltin("station-kestrel")).toMatchObject({ version: 2, builtin: { version: 2 }, config: { description: "v2" } });
+    expect(repo.getBuiltin("station-kestrel")).toMatchObject({ version: 2, builtin: { version: codeVersion + 1 }, config: { description: "v2" } });
     expect(repo.get(user.id)).toMatchObject({ version: 1, builtin: null });
     expect(repo.list().slice(0, 2).map((s) => s.builtin?.id)).toEqual(["space-station", "station-kestrel"]);
   });

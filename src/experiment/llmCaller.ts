@@ -4,15 +4,27 @@ import { ProviderError, type ChatMessage, type CompletionResult } from "../llm/p
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { BudgetTracker, UsageCategory } from "./budget.js";
 import { effectiveOpenRouterRouting, type ModelRef, type RuntimeConfig } from "./config.js";
-import { EventType, type EventLog } from "./events.js";
+import { EventType } from "./events.js";
 import { termination, TerminateRun } from "./outcome.js";
 import { parseWithSchema } from "./parseJson.js";
 
 export type CallPurpose = "discussion" | "proposal" | "vote" | "router";
 
+/**
+ * Where every call attempt is recorded, and what it is budgeted against. For
+ * a run these are its EventLog and BudgetTracker; a subsystem outside the
+ * experiment (e.g. the post-run debrief) passes its own, so its calls never
+ * enter the experiment's trace or usage.
+ */
+export interface CallLog {
+  append(type: typeof EventType.LLM_CALL, payload: Record<string, unknown>, agentId: string | null): unknown;
+}
+export type CallBudget = Pick<BudgetTracker, "recordCall" | "remainingMs" | "checkTimeLimit">;
+
 export interface LlmCallSpec<T> {
   category: UsageCategory;
-  purpose: CallPurpose;
+  /** A run's calls use CallPurpose; other callers name their own purposes. */
+  purpose: CallPurpose | (string & {});
   /** The agent this call is made for; null for orchestration calls (router). */
   agentId: string | null;
   modelRef: ModelRef;
@@ -48,8 +60,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export class LlmCaller {
   constructor(
     private readonly providers: ProviderRegistry,
-    private readonly log: EventLog,
-    private readonly budget: BudgetTracker,
+    private readonly log: CallLog,
+    private readonly budget: CallBudget,
     private readonly runtime: RuntimeConfig,
     /** Aborted by the runner on operator stop; its reason is a TerminateRun. */
     private readonly runSignal: AbortSignal

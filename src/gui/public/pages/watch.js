@@ -3,32 +3,54 @@ import { api, app, escapeHtml, showError } from "../shared.js";
 /**
  * Viewer mode: a clean, full-screen projection of a run's room for people
  * watching it (rehearsals, screen recordings, live demos). It renders only
- * what the room contains — narration, agent messages, moderator notices —
- * plus a small "who is speaking" hint. No debug metadata, no technical
- * panels, no controls; it reads the same event stream as the control view.
+ * what the room contains — narration, agent messages, moderator notices,
+ * and the people in the room — plus a small "who is speaking" hint. No debug
+ * metadata, no operator controls.
+ *
+ * Two streams make up the room: the experiment's own events, and the
+ * human-interaction log (spectator chat, notices, the post-run debrief).
+ * People can write here too; what that means — spectator chat during the
+ * mission, a question in the debrief — is decided by the server.
  */
 
-const POLL_MS = 1000;
+const POLL_ACTIVE_MS = 1000;
+const POLL_IDLE_MS = 3000;
 
 // The viewer page's own few labels, in the run's conversation language (en fallback).
 const LABELS = {
   en: {
     live: "LIVE",
     ended: "ENDED",
+    debriefOpen: "DEBRIEF — OPEN",
     starting: "Starting…",
     thinking: (n) => `${n} is thinking…`,
     drafting: (n) => `${n} is drafting the final proposal…`,
     voting: "The crew is voting…",
+    responding: (n) => `${n} is responding…`,
     moderator: "Moderator",
+    yourName: "Your name",
+    chat: "Message other viewers…",
+    ask: "Ask a question — address someone by name…",
+    send: "Send",
+    replyTo: (n) => `Reply to ${n}`,
+    needName: "Enter your name first.",
   },
   ru: {
     live: "В ЭФИРЕ",
     ended: "ЗАВЕРШЕНО",
+    debriefOpen: "РАЗБОР — ОТКРЫТ",
     starting: "Начинаем…",
     thinking: (n) => `${n} думает…`,
     drafting: (n) => `${n} готовит итоговое предложение…`,
     voting: "Экипаж голосует…",
+    responding: (n) => `${n} отвечает…`,
     moderator: "Модератор",
+    yourName: "Ваше имя",
+    chat: "Сообщение другим зрителям…",
+    ask: "Задайте вопрос — можно обратиться по имени…",
+    send: "Отправить",
+    replyTo: (n) => `Ответ для: ${n}`,
+    needName: "Сначала введите имя.",
   },
 };
 
@@ -83,25 +105,61 @@ function initials(name) {
     .join("");
 }
 
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // storage unavailable — the value lasts for this page view only
+  }
+}
+
+/** A stable anonymous id for this browser, so the server can tell people apart. Never shown to agents. */
+function viewerId() {
+  let id = storageGet("watch.viewerId");
+  if (!id) {
+    id = `viewer-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
+    storageSet("watch.viewerId", id);
+  }
+  return id;
+}
+
+/** Room items from the human-interaction log. */
+const ROOM_INTERACTION_TYPES = new Set(["human_message", "notice_posted", "debrief_answer_published"]);
+
 export async function renderWatch(experimentId) {
   const route = location.hash;
   app.innerHTML = `<div class="watch"><div class="loading">…</div></div>`;
+  const base = `/api/experiments/${encodeURIComponent(experimentId)}`;
 
   let experiment;
   let running = false;
+  let interaction = { mode: "observe", session: null };
   const events = [];
+  const ievents = [];
   let lastSeq = 0;
+  let lastISeq = 0;
 
   async function refresh() {
-    const [detail, { events: fresh }] = await Promise.all([
-      api(`/api/experiments/${encodeURIComponent(experimentId)}`),
-      api(`/api/experiments/${encodeURIComponent(experimentId)}/events?after=${lastSeq}`),
+    const [detail, { events: fresh }, room] = await Promise.all([
+      api(base),
+      api(`${base}/events?after=${lastSeq}`),
+      api(`${base}/interaction?after=${lastISeq}`),
     ]);
     experiment = detail.experiment;
     running = detail.running;
     events.push(...fresh);
     if (fresh.length) lastSeq = fresh.at(-1).seq;
-    return fresh.length;
+    ievents.push(...room.events);
+    if (room.events.length) lastISeq = room.events.at(-1).seq;
+    interaction = room;
   }
 
   try {
@@ -114,6 +172,7 @@ export async function renderWatch(experimentId) {
 
   const config = experiment.config;
   const L = labelsFor(config.conversation?.language);
+  const me = viewerId();
   const agentIndex = new Map(config.agents.map((a, i) => [a.id, i]));
   const agentOf = (id) => config.agents.find((a) => a.id === id);
   // Display labels for viewers (presentation.strings.<lang>.agents); agents themselves keep the config names.
@@ -124,6 +183,7 @@ export async function renderWatch(experimentId) {
       role: presentationValue(config, (s) => s.agents?.[id]?.role) ?? agent?.role ?? "",
     };
   };
+  let replyTo = null; // { messageId, agentId }
 
   app.innerHTML = `
     <div class="watch">
@@ -134,10 +194,32 @@ export async function renderWatch(experimentId) {
       </header>
       <main class="watch-room" id="watch-room"></main>
       <footer class="watch-footer" id="watch-typing"></footer>
+      <form class="w-composer" id="w-composer" autocomplete="off">
+        <div class="w-reply" id="w-reply" hidden></div>
+        <div class="w-composer-row">
+          <input id="w-name" class="w-name-input" maxlength="60" placeholder="${escapeHtml(L.yourName)}" aria-label="${escapeHtml(L.yourName)}" value="${escapeHtml(storageGet("watch.displayName") ?? "")}" />
+          <input id="w-text" class="w-text-input" maxlength="2000" aria-label="${escapeHtml(L.chat)}" />
+          <button type="submit" class="primary">${escapeHtml(L.send)}</button>
+        </div>
+      </form>
     </div>`;
   const room = document.getElementById("watch-room");
+  const nameInput = document.getElementById("w-name");
+  const textInput = document.getElementById("w-text");
 
-  function messageHtml(p) {
+  function agentMessageHtml(agentId, text, messageId) {
+    const who = labelOf(agentId);
+    const i = (agentIndex.get(agentId) ?? 0) % 6;
+    return `<div class="w-msg" data-mid="${escapeHtml(messageId ?? "")}" data-agent="${escapeHtml(agentId)}">
+      <div class="w-avatar agent-bg-${i}">${escapeHtml(initials(who.name))}</div>
+      <div class="w-body">
+        <div class="w-name">${escapeHtml(who.name)} <span class="w-role">${escapeHtml(who.role)}</span></div>
+        <div class="w-text">${escapeHtml(text)}</div>
+      </div>
+    </div>`;
+  }
+
+  function experimentItemHtml(p) {
     if (p.sender.kind === "narrator") {
       return `<div class="w-narration"><div class="w-narrator">${escapeHtml(p.sender.name)}</div><div class="w-text">${escapeHtml(p.text)}</div></div>`;
     }
@@ -149,20 +231,34 @@ export async function renderWatch(experimentId) {
     if (p.sender.kind === "system") {
       return `<div class="w-moderator"><span class="w-moderator-label">${escapeHtml(L.moderator)}</span><div class="w-text">${escapeHtml(p.text)}</div></div>`;
     }
-    const who = labelOf(p.sender.agentId);
-    const i = (agentIndex.get(p.sender.agentId) ?? 0) % 6;
-    return `<div class="w-msg">
-      <div class="w-avatar agent-bg-${i}">${escapeHtml(initials(who.name))}</div>
-      <div class="w-body">
-        <div class="w-name">${escapeHtml(who.name)} <span class="w-role">${escapeHtml(who.role)}</span></div>
-        <div class="w-text">${escapeHtml(p.text)}</div>
-      </div>
-    </div>`;
+    return agentMessageHtml(p.sender.agentId, p.text, p.messageId);
   }
 
-  /** Who the room is waiting for: an open turn with no visible message yet. */
+  function interactionItemHtml(e) {
+    const p = e.payload;
+    if (e.type === "notice_posted") {
+      return `<div class="w-notice"><span class="w-notice-label">${escapeHtml(p.sender?.name ?? "")}</span><div class="w-text">${escapeHtml(p.text)}</div></div>`;
+    }
+    if (e.type === "debrief_answer_published") return agentMessageHtml(p.agentId, p.text, p.messageId);
+    const mine = p.senderId === me;
+    return `<div class="w-human${mine ? " mine" : ""}"><div class="w-name">${escapeHtml(p.displayName)}</div><div class="w-text">${escapeHtml(p.text)}</div></div>`;
+  }
+
+  /** Both streams, in the order things appeared in the room. */
+  function roomItems() {
+    const items = [
+      ...events.filter((e) => e.type === "message_posted").map((e) => ({ ts: e.ts, order: 0, seq: e.seq, html: () => experimentItemHtml(e.payload) })),
+      ...ievents.filter((e) => ROOM_INTERACTION_TYPES.has(e.type)).map((e) => ({ ts: e.ts, order: 1, seq: e.seq, html: () => interactionItemHtml(e) })),
+    ];
+    return items.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.order - b.order || a.seq - b.seq));
+  }
+
+  /** Who the room is waiting for: an open turn with no visible message yet, or a debrief answer being written. */
   function typingText() {
-    if (!running) return "";
+    if (!running) {
+      const agentId = interaction.session?.processing?.agentId;
+      return agentId ? L.responding(labelOf(agentId).name) : "";
+    }
     let open = null;
     for (const e of events) {
       if (e.type === "turn_started") open = { kind: e.payload.kind, agentId: e.agentId, turn: e.payload.turn };
@@ -175,26 +271,77 @@ export async function renderWatch(experimentId) {
     return L.thinking(name);
   }
 
-  let rendered = 0;
+  function renderReply() {
+    const el = document.getElementById("w-reply");
+    if (!replyTo || interaction.mode !== "debrief") {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML = `${escapeHtml(L.replyTo(labelOf(replyTo.agentId).name))} <button type="button" class="w-reply-cancel" aria-label="×">×</button>`;
+    el.querySelector("button").addEventListener("click", () => {
+      replyTo = null;
+      renderReply();
+    });
+  }
+
+  let rendered = -1;
   function render() {
-    const posted = events.filter((e) => e.type === "message_posted");
-    const atBottom = room.scrollHeight - room.scrollTop - room.clientHeight < 80;
-    if (posted.length === 0) {
-      room.innerHTML = `<div class="muted w-starting">${escapeHtml(L.starting)}</div>`;
-    } else if (rendered === 0) {
-      room.innerHTML = "";
-    }
-    if (posted.length > rendered) {
-      room.insertAdjacentHTML("beforeend", posted.slice(rendered).map((e) => messageHtml(e.payload)).join(""));
-      rendered = posted.length;
+    const items = roomItems();
+    if (items.length !== rendered) {
+      const atBottom = room.scrollHeight - room.scrollTop - room.clientHeight < 80;
+      room.innerHTML = items.length ? items.map((i) => i.html()).join("") : `<div class="muted w-starting">${escapeHtml(L.starting)}</div>`;
       if (atBottom || rendered <= 2) room.scrollTop = room.scrollHeight;
+      rendered = items.length;
     }
-    document.getElementById("watch-status").innerHTML = running
+    const status = document.getElementById("watch-status");
+    status.innerHTML = running
       ? `<span class="w-live-dot"></span>${escapeHtml(L.live)}`
-      : escapeHtml(L.ended);
+      : interaction.mode === "debrief"
+        ? `<span class="w-debrief-dot"></span>${escapeHtml(L.debriefOpen)}`
+        : escapeHtml(L.ended);
     document.getElementById("watch-typing").textContent = typingText();
+    textInput.placeholder = interaction.mode === "debrief" ? L.ask : L.chat;
+    room.classList.toggle("debrief", interaction.mode === "debrief");
+    renderReply();
   }
   render();
+
+  // Replying to a character's message addresses the question to them.
+  room.addEventListener("click", (ev) => {
+    const msg = ev.target.closest(".w-msg[data-mid]");
+    if (!msg || interaction.mode !== "debrief" || !msg.dataset.mid) return;
+    replyTo = { messageId: msg.dataset.mid, agentId: msg.dataset.agent };
+    renderReply();
+    textInput.focus();
+  });
+
+  document.getElementById("w-composer").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const displayName = nameInput.value.trim();
+    const text = textInput.value.trim();
+    if (!text) return;
+    if (!displayName) {
+      nameInput.focus();
+      nameInput.placeholder = L.needName;
+      return;
+    }
+    storageSet("watch.displayName", displayName);
+    textInput.value = "";
+    try {
+      await api(`${base}/room/messages`, {
+        method: "POST",
+        body: JSON.stringify({ senderId: me, displayName, text, replyTo: replyTo?.messageId ?? null }),
+      });
+      replyTo = null;
+      await refresh();
+      render();
+    } catch (err) {
+      textInput.value = text;
+      showError(err.message);
+    }
+  });
 
   async function poll() {
     if (location.hash !== route) return;
@@ -206,7 +353,7 @@ export async function renderWatch(experimentId) {
     } catch {
       // transient — try again on the next tick
     }
-    if (running) setTimeout(poll, POLL_MS);
+    setTimeout(poll, running || interaction.mode === "debrief" ? POLL_ACTIVE_MS : POLL_IDLE_MS);
   }
-  if (running) setTimeout(poll, POLL_MS);
+  setTimeout(poll, running ? POLL_ACTIVE_MS : POLL_IDLE_MS);
 }

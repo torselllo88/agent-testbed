@@ -21,6 +21,7 @@ export class ExperimentService {
   private readonly running = new Map<string, { runner: ExperimentRunner; done: Promise<ExperimentMetrics> }>();
   private readonly experiments: ExperimentRepository;
   private readonly events: EventRepository;
+  private readonly finishedListeners = new Set<(experimentId: string) => void>();
 
   constructor(private readonly deps: RunnerDeps) {
     this.experiments = new ExperimentRepository(deps.db);
@@ -32,10 +33,31 @@ export class ExperimentService {
     const { config, providers, ...options } = input;
     const runner = new ExperimentRunner(providers ? { ...this.deps, providers } : this.deps, config, options);
     const done = runner.run().finally(() => this.running.delete(runner.id));
+    void done.then(() => this.notifyFinished(runner.id), () => undefined);
     done.catch((err: unknown) => console.error(`Experiment ${runner.id} crashed while finishing:`, err));
     const entry = { runner, done };
     this.running.set(runner.id, entry);
     return entry;
+  }
+
+  /**
+   * Called after a run has fully finished — outcome, final events and ending
+   * narration all persisted. For subsystems that act on a finished run (e.g.
+   * the debrief); nothing they do can reach the run itself.
+   */
+  onRunFinished(listener: (experimentId: string) => void): () => void {
+    this.finishedListeners.add(listener);
+    return () => this.finishedListeners.delete(listener);
+  }
+
+  private notifyFinished(id: string): void {
+    for (const listener of this.finishedListeners) {
+      try {
+        listener(id);
+      } catch (err) {
+        console.error(`run-finished listener failed for experiment ${id}:`, err);
+      }
+    }
   }
 
   isRunning(id: string): boolean {

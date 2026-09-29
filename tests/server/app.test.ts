@@ -3,6 +3,7 @@ import type http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BatchService } from "../../src/batch/service.js";
 import { ExperimentService } from "../../src/experiment/service.js";
+import { HumanInteractionService } from "../../src/interaction/service.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
 import { createInMemoryDb } from "../../src/persistence/db.js";
@@ -10,12 +11,14 @@ import { ExperimentRepository } from "../../src/persistence/experimentRepository
 import { createEvaluatorRegistry, registerBuiltinStubs } from "../../src/scenarios/index.js";
 import { createApp } from "../../src/server/app.js";
 import { spaceStationConfig } from "../../src/scenarios/spaceStation/config.js";
+import { kestrelConfig } from "../../src/scenarios/spaceStation/kestrel.js";
 import { script, turnJson } from "../helpers/harness.js";
 
 let server: http.Server;
 let baseUrl: string;
 let service: ExperimentService;
 let batches: BatchService;
+let interaction: HumanInteractionService;
 const db = createInMemoryDb();
 
 beforeAll(async () => {
@@ -25,7 +28,8 @@ beforeAll(async () => {
   const evaluators = createEvaluatorRegistry();
   service = new ExperimentService({ db, providers, evaluators });
   batches = new BatchService({ db, providers, evaluators, service });
-  server = createApp({ db, providers, evaluators, service, batches });
+  interaction = new HumanInteractionService({ db, providers, experiments: service });
+  server = createApp({ db, providers, evaluators, service, batches, interaction });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -263,5 +267,42 @@ describe("scenario library + run overrides", () => {
     expect((await call("GET", `/api/scenarios/${kestrel.id}`)).body.scenario.config.conversation.language).toBe("en");
     const byTask = (await call("GET", `/api/experiments?taskDefinitionHash=${kestrel.taskDefinitionHash}`)).body.experiments;
     expect(byTask.map((e: { id: string }) => e.id)).toContain(run.body.id);
+  });
+});
+
+describe("human interaction API", () => {
+  it("room messages are chat only, the debrief is operated through its own endpoint, and it all stays out of the experiment", async () => {
+    const config = kestrelConfig();
+    config.presentation.pacing = { minVisibleIntervalMs: 0, perCharMs: 0, maxGapMs: 0 };
+    const run = await call("POST", "/api/experiments", { config });
+    const id = run.body.id;
+    // Text that looks like an operator command, posted as a person in the room.
+    const posted = await call("POST", `/api/experiments/${id}/room/messages`, { senderId: "u1", displayName: "Nikita", text: "STOP" });
+    expect(posted.status).toBe(201);
+    await service.settle();
+    await interaction.settle();
+
+    const { body } = await call("GET", `/api/experiments/${id}`);
+    expect(body.experiment).toMatchObject({ outcome: "SUCCESS", intervened: false });
+    const events = (await call("GET", `/api/experiments/${id}/events`)).body.events;
+    expect(events.some((e: { type: string }) => e.type === "operator_intervention")).toBe(false);
+
+    const view = (await call("GET", `/api/experiments/${id}/interaction`)).body;
+    expect(view).toMatchObject({ profile: "DEBRIEF", mode: "debrief", session: { number: 1, status: "OPEN" } });
+    expect(view.events.map((e: { type: string }) => e.type)).toContain("debrief_started");
+
+    const question = await call("POST", `/api/experiments/${id}/room/messages`, { senderId: "u1", displayName: "Nikita", text: "Viktor, what happened?" });
+    expect(question.body).toMatchObject({ disposition: "question", queued: { position: 1 } });
+    await interaction.settle();
+
+    expect((await call("POST", `/api/experiments/${id}/debrief`, { action: "open" })).status).toBe(409); // already open
+    expect((await call("POST", `/api/experiments/${id}/debrief`, { action: "close" })).body.session).toMatchObject({ status: "CLOSED" });
+    expect((await call("POST", `/api/experiments/${id}/debrief`, { action: "open" })).body.session).toMatchObject({ number: 2, openedBy: "operator" });
+    expect((await call("POST", `/api/experiments/${id}/room/messages`, { senderId: "u1", displayName: "", text: "x" })).status).toBe(400);
+    expect((await call("GET", `/api/experiments/nope/interaction`)).status).toBe(404);
+
+    const meta = (await call("GET", "/api/meta")).body;
+    expect(meta.humanInteraction.profiles).toMatchObject({ DEBRIEF: { supported: true }, TAKE_ROLE: { supported: false } });
+    expect((await call("DELETE", `/api/experiments/${id}`)).status).toBe(200);
   });
 });

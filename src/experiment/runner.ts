@@ -15,7 +15,9 @@ import {
   applyRunOverrides,
   canonicalJson,
   configHash,
+  HUMAN_INTERACTION_PROFILES,
   parseExperimentConfig,
+  supportedProfiles,
   RunOverridesSchema,
   sha256,
   taskDefinitionHash,
@@ -172,6 +174,8 @@ export class ExperimentRunner {
   private readonly discussionTurnsByAgent = new Map<string, number>();
   private discussion = { segment: 1, turnsUsed: 0, turnLimit: 0 };
   private proposalAttempt = 1;
+  /** Agent-visible messages published so far (the experiment transcript). */
+  private transcriptLength = 0;
   private readonly environment: RunEnvironment;
   private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
@@ -748,9 +752,13 @@ export class ExperimentRunner {
     this.log.append(EventType.TURN_COMPLETED, { turn, ...payload }, agentId);
   }
 
-  /** The room as agents and schedulers see it — narration is for observers only. */
+  /**
+   * The room as agents and schedulers see it — narration is for observers
+   * only — numbered by position in the experiment transcript, so what agents
+   * read never depends on what else the room shows (narration, humans, ...).
+   */
   private async agentHistory(): Promise<RoomMessage[]> {
-    return agentVisible(await this.transport.history());
+    return agentVisible(await this.transport.history()).map((m, i) => ({ ...m, index: i + 1 }));
   }
 
   /** Runs one lifecycle hook on every extension; an extension failure is logged and never changes the run. */
@@ -764,14 +772,19 @@ export class ExperimentRunner {
     }
   }
 
+  /**
+   * Returns the message with its experiment-transcript index (see
+   * agentHistory); narration has none — `index` is null in its event.
+   */
   private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
-    const message = await this.transport.publish({ sender, text });
+    const posted = await this.transport.publish({ sender, text });
+    const index = sender.kind === "narrator" ? null : ++this.transcriptLength;
     this.log.append(
       EventType.MESSAGE_POSTED,
-      { index: message.index, messageId: message.id, sender: message.sender, text: message.text, ...extra },
+      { index, messageId: posted.id, sender: posted.sender, text: posted.text, ...extra },
       sender.kind === "agent" ? sender.agentId : null
     );
-    return message;
+    return index === null ? posted : { ...posted, index };
   }
 
   private logReadinessChanges(changes: ReadinessChange[], cause: "declared" | "invalidated", atIndex: number): void {
@@ -859,6 +872,11 @@ export function checkRunnable(
     }
   }
   if (config.transport.type !== "local") problems.push(`transport "${config.transport.type}" is not implemented yet`);
+  // A profile that would change experiment semantics must not silently run as something else.
+  const profile = config.humanInteraction?.profile;
+  if (profile && !HUMAN_INTERACTION_PROFILES[profile].supported) {
+    problems.push(`humanInteraction.profile "${profile}" is not supported yet (supported: ${supportedProfiles().join(", ")})`);
+  }
 
   if (problems.length > 0 || !evaluator) throw new ConfigNotRunnableError(problems);
   return { evaluator, evaluatorParams };

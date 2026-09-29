@@ -62,6 +62,8 @@ export async function renderExperiment(experimentId) {
     debug: readDebugPref(),
     traceFilter: "",
     timer: null,
+    // The room's human side (spectators, debrief) — a separate log, never part of the experiment.
+    interaction: null,
   };
 
   try {
@@ -76,10 +78,12 @@ export async function renderExperiment(experimentId) {
   const agentName = (id) => state.experiment.config.agents.find((a) => a.id === id)?.name ?? id ?? "";
 
   async function refresh() {
-    const [{ experiment, running, live }, { events }] = await Promise.all([
+    const [{ experiment, running, live }, { events }, interaction] = await Promise.all([
       api(`/api/experiments/${encodeURIComponent(experimentId)}`),
       api(`/api/experiments/${encodeURIComponent(experimentId)}/events?after=${state.lastSeq}`),
+      api(`/api/experiments/${encodeURIComponent(experimentId)}/interaction`),
     ]);
+    state.interaction = interaction;
     state.experiment = experiment;
     state.running = running;
     state.live = live;
@@ -326,6 +330,72 @@ export async function renderExperiment(experimentId) {
       </div>`;
   }
 
+  // ------------------------------------------------------------------ people in the room (outside the experiment)
+
+  function renderInteraction() {
+    const el = document.getElementById("interaction");
+    const view = state.interaction;
+    if (!el || !view) return;
+    const { summary, sessions } = view;
+    if (!view.debriefEnabled && !summary.spectatorMessages && !sessions.length) {
+      el.innerHTML = "";
+      return;
+    }
+    const open = sessions.find((s) => s.status === "OPEN");
+    const canOpen = view.debriefEnabled && !state.running && !open;
+    const rows = sessions
+      .map(
+        (s) => `<tr><td>#${s.number}</td><td>${badge(s.status, s.status === "OPEN" ? "ok" : s.status === "INTERRUPTED" ? "warn" : "neutral")}</td>
+          <td>${escapeHtml(s.openedBy)}</td><td class="small">${escapeHtml(new Date(s.openedAt).toLocaleString())}</td>
+          <td class="small">${s.closedAt ? `${escapeHtml(new Date(s.closedAt).toLocaleString())} · ${escapeHtml(s.closeReason ?? "")}` : "—"}</td>
+          <td>${s.usage.answered} / ${s.usage.failed} / ${s.usage.rejected}</td><td>${formatNumber(s.usage.totalTokens)}</td>
+          <td>${formatCost(s.usage.costUsd)}${s.usage.callsWithUnknownCost ? ` <span class="muted small">(${s.usage.callsWithUnknownCost} unknown)</span>` : ""}</td></tr>`
+      )
+      .join("");
+    const byQuestion = new Map();
+    for (const e of view.events) {
+      const p = e.payload;
+      if (e.type === "human_message" && p.disposition === "question") byQuestion.set(p.messageId, { q: p, answer: null, failed: null, route: null });
+      else if (e.type === "debrief_route_decided" && byQuestion.has(p.questionId)) byQuestion.get(p.questionId).route = p;
+      else if (e.type === "debrief_answer_published" && byQuestion.has(p.questionId)) byQuestion.get(p.questionId).answer = p;
+      else if ((e.type === "debrief_question_failed" || e.type === "debrief_question_rejected") && byQuestion.has(p.questionId)) byQuestion.get(p.questionId).failed = p.reason ?? p.error;
+    }
+    const exchanges = [...byQuestion.values()]
+      .map(({ q, answer, failed, route }) => `<div class="qa">
+          <div><strong>${escapeHtml(q.displayName)}</strong>: ${escapeHtml(q.text)}</div>
+          ${answer ? `<div class="qa-answer"><strong>${escapeHtml(agentName(answer.agentId))}</strong> <span class="muted small">via ${escapeHtml(route?.source ?? "?")}</span>: ${escapeHtml(answer.text)}</div>` : failed ? `<div class="muted small">not answered: ${escapeHtml(String(failed))}</div>` : `<div class="muted small">pending…</div>`}
+        </div>`)
+      .join("");
+    el.innerHTML = `
+      <div class="card">
+        <div class="row"><h2>People in the room</h2>
+          ${canOpen ? `<button id="btn-debrief-open">Open a new debrief session</button>` : ""}
+          ${open ? `<button id="btn-debrief-close">Close debrief</button>` : ""}
+        </div>
+        <p class="muted small">Kept outside the experiment: none of this reaches the agents during the run, nor its metrics, cost or trace. Profile ${escapeHtml(view.profile)}.</p>
+        <dl class="kv">
+          <dt>Spectators</dt><dd>${summary.spectatorMessagesDuringMission} message(s) during the run, ${summary.spectatorMessages} in total, from ${summary.spectators} person(s) — human assistance: none</dd>
+          <dt>Debrief</dt><dd>${summary.questions} question(s), ${summary.answers} answer(s)</dd>
+        </dl>
+        ${rows ? `<div class="overflow-x"><table><thead><tr><th>Session</th><th>Status</th><th>Opened by</th><th>Opened</th><th>Closed</th><th>Answered / failed / rejected</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+        ${exchanges ? `<details id="qa-details" ${el.dataset.qaOpen === "1" ? "open" : ""}><summary>Debrief conversation</summary><div class="qa-list">${exchanges}</div></details>` : ""}
+      </div>`;
+    const act = (action) => async () => {
+      try {
+        await api(`/api/experiments/${encodeURIComponent(experimentId)}/debrief`, { method: "POST", body: JSON.stringify({ action }) });
+        await refresh();
+        renderInteraction();
+        schedulePoll();
+      } catch (err) {
+        showError(err.message);
+      }
+    };
+    const qa = document.getElementById("qa-details");
+    qa?.addEventListener("toggle", () => (el.dataset.qaOpen = qa.open ? "1" : "0"));
+    document.getElementById("btn-debrief-open")?.addEventListener("click", act("open"));
+    document.getElementById("btn-debrief-close")?.addEventListener("click", act("close"));
+  }
+
   // ------------------------------------------------------------------ trace
 
   function renderTrace() {
@@ -423,6 +493,7 @@ export async function renderExperiment(experimentId) {
       <div class="card"><h2>Runtime state</h2><div id="state-panel"></div></div>
     </div>
     <div id="results"></div>
+    <div id="interaction"></div>
     <div id="trace"></div>`;
 
   document.getElementById("debug-toggle").addEventListener("change", (ev) => {
@@ -437,6 +508,7 @@ export async function renderExperiment(experimentId) {
     renderRoom();
     renderStatePanel();
     renderResults();
+    renderInteraction();
     renderTrace();
   }
   renderAll();
@@ -456,11 +528,18 @@ export async function renderExperiment(experimentId) {
         }
         renderStatePanel();
         renderControls();
+        renderInteraction();
       }
     } catch (err) {
       showError(err.message);
     }
-    if (state.running) state.timer = setTimeout(poll, POLL_MS);
+    state.timer = null;
+    schedulePoll();
   }
-  if (state.running) state.timer = setTimeout(poll, POLL_MS);
+  /** Poll while the run is live, and afterwards while a debrief is open. */
+  function schedulePoll() {
+    if (state.timer || !(state.running || state.interaction?.mode === "debrief")) return;
+    state.timer = setTimeout(poll, POLL_MS);
+  }
+  schedulePoll();
 }

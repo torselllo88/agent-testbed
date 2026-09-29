@@ -44,7 +44,8 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     summary: "Humanized live demo — named officers, narration, paced for viewers (en, ru)",
     // v1: initial. v2: shorter demo (discussion 16 turns, maxOutputTokens 300, pacing 2000/10/6000),
     //     localized viewer labels for agents, human-readable proposal rendering.
-    version: 2,
+    // v3: human interaction profile DEBRIEF (crew debrief after the mission), crew-voiced room notices.
+    version: 3,
     config: () => kestrelConfig(),
   },
 ];

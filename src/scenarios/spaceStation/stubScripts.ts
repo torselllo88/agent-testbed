@@ -114,6 +114,18 @@ function vote(variant: SpaceStationVariant, agentId: string, proposal: SpaceStat
   return JSON.stringify({ vote: "APPROVE", reason: "Consistent with my information." });
 }
 
+/** Post-mission debrief: one canned reflection per officer, addressed to whoever asked. */
+const DEBRIEF_LINES: Record<string, string> = {
+  operations: "my job was to turn what each of you knew into one plan; I put it to the vote once every constraint had been stated in the room.",
+  engineering: "from the reactor side the facts were simple: loop B needed 30 kW and we had to SCRAM. I said so as early as I could.",
+  power: "I only knew my own budget: 10 kW free, 12 from the labs, 8 from communications. Everything else I learned from the others.",
+  life_support: "I held the line at 40 kW for life support. That was not negotiable, and I said so before the vote.",
+};
+
+function debriefAnswer(agentId: string, askerName: string): string {
+  return JSON.stringify({ message: `${askerName}, ${DEBRIEF_LINES[agentId] ?? "I can only speak for my own part of the mission."}` });
+}
+
 export function spaceStationScript(variant: SpaceStationVariant) {
   return (request: CompletionRequest): string => {
     const ctx = request.context ?? {};
@@ -125,6 +137,8 @@ export function spaceStationScript(variant: SpaceStationVariant) {
         return JSON.stringify({ rationale: "Recovery procedure as discussed.", proposal: PROPOSAL[variant] });
       case "vote":
         return vote(variant, agentId, ctx.proposal as SpaceStationProposal);
+      case "debrief_answer":
+        return debriefAnswer(agentId, String(ctx.askerName ?? "Hello"));
       default:
         throw new Error(`space-station stub: unexpected purpose "${String(ctx.purpose)}"`);
     }
@@ -134,6 +148,7 @@ export function spaceStationScript(variant: SpaceStationVariant) {
 /** Deterministic stand-in for an LLM router: the next agent after the last speaker, in config order. */
 export function nextInOrderRouter(request: CompletionRequest): string {
   const ctx = request.context ?? {};
+  if (ctx.purpose === "debrief_router") return debriefRouter(String(ctx.question ?? ""));
   const order = (ctx.order as string[] | undefined) ?? [];
   const candidates = (ctx.candidates as string[] | undefined) ?? [];
   const last = ctx.lastSpeakerId as string | null;
@@ -143,6 +158,20 @@ export function nextInOrderRouter(request: CompletionRequest): string {
     if (candidates.includes(id)) return JSON.stringify({ nextAgentId: id, reason: `next after ${last ?? "start"} in room order` });
   }
   return JSON.stringify({ nextAgentId: candidates[0] ?? "", reason: "first candidate" });
+}
+
+/** Stand-in debrief router: routes by subject keywords (en, ru); otherwise not confident. */
+function debriefRouter(question: string): string {
+  const q = question.toLowerCase();
+  const rules: Array<[RegExp, string]> = [
+    [/reactor|coolant|scram|реактор|охлажд/, "engineering"],
+    [/power|kw|budget|мощност|квт|энерг/, "power"],
+    [/life support|air|жизнеобеспеч|воздух/, "life_support"],
+  ];
+  const hit = rules.find(([re]) => re.test(q));
+  return JSON.stringify(
+    hit ? { agentId: hit[1], confident: true, reason: "question is about their subsystem" } : { agentId: null, confident: false, reason: "no clear addressee" }
+  );
 }
 
 export function registerSpaceStationStubs(stub: StubProvider): void {

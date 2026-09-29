@@ -89,7 +89,9 @@ describe("Kestrel end-to-end (stub agents)", () => {
 
     expect(metrics.termination?.outcome).toBe("SUCCESS");
     const room = messages(h, runner.id);
-    expect(room[0]).toMatchObject({ index: 1, sender: { kind: "narrator", name: "MISSION CONTROL" }, narration: { source: "opening", language: "en" } });
+    // Narration has no place in the experiment transcript: the first agent message is #1.
+    expect(room[0]).toMatchObject({ index: null, sender: { kind: "narrator", name: "MISSION CONTROL" }, narration: { source: "opening", language: "en" } });
+    expect(room[1]).toMatchObject({ index: 1, sender: { kind: "agent" } });
     expect(room[0]!.text).toContain("Station Kestrel has lost its primary reactor cooling loop");
     expect(room.at(-1)).toMatchObject({ sender: { kind: "narrator" }, narration: { source: "outcomes.SUCCESS" } });
     expect(room.at(-1)!.text).toContain("Mission successful");

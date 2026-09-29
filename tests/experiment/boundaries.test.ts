@@ -7,8 +7,10 @@ import { createHarness, ofType } from "../helpers/harness.js";
 
 /**
  * Architectural invariant: the experiment core contains only experiment
- * semantics. Product / demo features (narration, viewer pacing, ...) live in
- * src/presentation and attach through the core's extension interface.
+ * semantics. Product / demo features live outside it: narration and viewer
+ * pacing in src/presentation (attached through the core's extension
+ * interface), spectators and the post-run debrief in src/interaction (around
+ * finished runs, with their own persistence).
  */
 
 const CORE_DIRS = ["experiment", "scheduling", "consensus", "transport", "evaluation", "llm", "persistence", "batch", "scenarios"];
@@ -21,9 +23,9 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("experiment core boundary", () => {
-  it("no core module imports the presentation layer", () => {
+  it("no core module imports an add-on layer (presentation, human interaction)", () => {
     const offenders = CORE_DIRS.flatMap((d) => sourceFiles(path.resolve("src", d))).filter((file) =>
-      /from\s+["'][./]*\/presentation\//.test(fs.readFileSync(file, "utf8"))
+      /from\s+["'][./]*\/(presentation|interaction)\//.test(fs.readFileSync(file, "utf8"))
     );
     expect(offenders).toEqual([]);
   });

@@ -119,6 +119,13 @@ Mission failed: unsafe venting.`,
       false: "no",
     },
   },
+  interaction: {
+    spectatorNotice: "The crew is handling the emergency and cannot respond right now. You can speak with them after the mission, during the debrief.",
+    debriefOpened: "Mission complete. The crew debrief is now open — you can talk directly to the officers.",
+    debriefClosed: "The crew debrief is closed.",
+    debriefUnavailable: "The crew debrief is closed — the officers are off the channel.",
+    answerFailed: "{{agent}} is not on the channel right now (technical problem).",
+  },
 };
 
 const RU: PresentationStrings = {
@@ -186,6 +193,13 @@ const RU: PresentationStrings = {
       false: "нет",
     },
   },
+  interaction: {
+    spectatorNotice: "Экипаж занят аварийной ситуацией и сейчас не может ответить. Поговорить с офицерами можно будет после миссии, на разборе.",
+    debriefOpened: "Миссия завершена. Разбор с экипажем открыт — можно обращаться к офицерам напрямую.",
+    debriefClosed: "Разбор с экипажем закрыт.",
+    debriefUnavailable: "Разбор с экипажем закрыт — офицеры вне связи.",
+    answerFailed: "{{agent}} сейчас вне связи (техническая проблема).",
+  },
 };
 
 export function kestrelConfig(agentModel = "space-station/cooperative"): ExperimentConfig {
@@ -247,5 +261,20 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
     runtime: { maxParseRetries: 1, maxProviderRetries: 2, providerRetryDelayMs: 2000, callTimeoutSeconds: 120 },
     evaluator: SPACE_STATION_EVALUATOR,
     transport: { type: "local" },
+    // Spectators during the mission; a crew debrief once the outcome is final.
+    humanInteraction: {
+      profile: "DEBRIEF",
+      debrief: {
+        // Sarah answers questions put to "the crew" in general.
+        defaultAgentId: "operations",
+        maxOutputTokens: 250,
+        maxPendingPerUser: 3,
+        maxPendingTotal: 20,
+        costCapUsd: null,
+        idleTimeoutMinutes: 15,
+        revealEvaluation: false,
+        spectatorNoticeCooldownSeconds: 30,
+      },
+    },
   } satisfies ExperimentConfig);
 }

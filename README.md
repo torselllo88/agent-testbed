@@ -27,6 +27,7 @@ shows the whole transformation.
 - [Core ideas](#core-ideas)
 - [The reference scenario: Space Station Benchmark](#the-reference-scenario-space-station-benchmark)
 - [Scenarios: task, behavior and presentation](#scenarios-task-behavior-and-presentation)
+- [People in the room: spectators and debrief](#people-in-the-room-spectators-and-debrief)
 - [Using the web UI](#using-the-web-ui)
 - [Command line](#command-line)
 - [Experiment configuration](#experiment-configuration)
@@ -244,6 +245,76 @@ behavior.
 
 ---
 
+## People in the room: spectators and debrief
+
+A room can have people in it: in a live demo they type while the agents work.
+The testbed's answer is conservative. **Humans never take part in an active
+experiment.** What they can do is set by `humanInteraction.profile`:
+
+| Profile | During the run | After the outcome |
+| --- | --- | --- |
+| `OBSERVE` (default when absent) | spectator chat | spectator chat |
+| `DEBRIEF` (Station Kestrel) | spectator chat | a separate **debrief session**: people question the characters |
+| `ADVISORY`, `TAKE_ROLE` | *not implemented*; refused before a run exists | |
+
+**During the run** a human message is recorded and shown to other people in the
+room, and nothing else. It never enters an agent's prompt, readiness,
+routing, turns, proposal, votes, evaluator, budget or the experiment trace.
+Text that looks like a command ("STOP", "/force-decision") is just chat:
+operator controls exist only as API/UI actions. So that nobody thinks the
+system is broken, one localized notice explains that the crew will be
+available after the mission. It goes out at most once per person, and not
+within 30 s of the previous one: that one is on screen for everyone.
+Messages written during the mission are **not** queued for the debrief.
+
+**The debrief** opens automatically after the ending narration, as its own
+event (`debrief_started`) and a visible notice. It is never a continuation of
+the runner: the outcome, metrics, proposal, votes and evaluation are frozen.
+
+- **Queue.** Several people may ask. Questions form one FIFO queue and are
+  answered **strictly one at a time**, one character per question, with at
+  most one LLM call in flight. When something is already in progress, the
+  asker is told their question is queued (with position).
+- **Who answers.** In order: an explicit reply to a character's message; an
+  explicit mention; a character's name in the text (either language,
+  including Russian case forms: *Виктору*, *Саре*); the scenario's router
+  model (hybrid scheduler classifier), if confident; the scenario's
+  `debrief.defaultAgentId` (Kestrel: Sarah), else the proposer.
+- **Perspective.** A character answers with its own mission model
+  (`debrief.maxOutputTokens` caps the answer). It gets its persona and role,
+  **its own** private information and votes, the public transcript, the
+  committed decision, the outcome as announced, and the debrief so far. It
+  does **not** get another character's unrevealed private context. The
+  evaluator's check results are included only with `debrief.revealEvaluation`,
+  because they can reveal facts only another character knew. The prompt states
+  that the mission is recorded history that cannot be rewritten, and that
+  hindsight should be marked as hindsight.
+- **Limits.** `maxPendingPerUser` (default 3) and `maxPendingTotal` (20)
+  reject extra questions with a deterministic notice, rate-limited per
+  person. `costCapUsd` closes the session once reached. It is idle-closed
+  after `idleTimeoutMinutes` (15).
+- **Separate accounting.** Debrief tokens, cost and LLM calls are counted per
+  session, never in experiment metrics: a run still says "17 turns, $0.18,
+  SUCCESS" however long people talk to the crew afterwards.
+- **Lifecycle.** An operator can close a session, and can open a **new** one.
+  Closed and interrupted sessions are immutable history. On server restart an
+  open session becomes `INTERRUPTED`, and its unanswered questions are marked
+  failed. Nothing is replayed. Batch runs never open a debrief. Only new text
+  messages count: edits, reactions and attachments are ignored.
+
+Everything is persisted outside the experiment, cross-referenced by
+experiment id: `debrief_sessions` holds status, usage and who opened each
+session; `interaction_events` holds human messages, notices, queueing, routing
+decisions, every debrief LLM call with its prompt, answers and failures. The
+experiment page shows these derived counts separately, under *People in the
+room*: spectator messages (with "human assistance: none"), sessions with
+their usage, and the debrief conversation.
+
+Notice texts have built-in en/ru defaults. A scenario can override any of them
+in `presentation.strings.<lang>.interaction`; Kestrel's are crew-voiced.
+
+---
+
 ## Using the web UI
 
 `npm run gui` serves a vanilla-JS single-page app with no build step.
@@ -280,9 +351,12 @@ Actions: **Save** (the version goes up only when something changed),
 experiment page) is for people watching a run rather than controlling it: a
 clean full-screen room with the narrator, agent names and roles, moderator
 notices, auto-scroll, a subtle "… is thinking" hint and a live/ended status.
-It has no debug metadata, technical panels or controls. It is another
-projection of the same event stream, useful for rehearsals, screen recordings
-and live demos.
+It has no debug metadata, technical panels or operator controls. It is a
+projection of the run's event stream plus the room's human side (the
+interaction log), useful for rehearsals, screen recordings and live demos.
+People can type into it (name + message): spectator chat during the run,
+questions once the debrief is open. Clicking a character's message replies to
+that character. Several browser tabs act as several people.
 
 **Experiment view.** The live room plus a runtime-state panel:
 
@@ -633,9 +707,10 @@ src/
   evaluation/   ScenarioEvaluator interface · registry
   scenarios/    scenario packages (config + evaluator + stub scripts) · registries
   presentation/ run extensions: narrator (opening / grounded endings) · PacedTransport (viewer pacing)
+  interaction/  HumanInteractionService (people in the room) · DebriefSession (FIFO queue) · addressing · debrief prompts
   batch/        spec & condition expansion · BatchService · aggregates
   llm/          provider interface · OpenRouter · Azure OpenAI · stub · registry · concurrency gate · pricing
-  persistence/  SQLite (node:sqlite) · scenarios · experiments · events · batches
+  persistence/  SQLite (node:sqlite) · scenarios · experiments · events · batches · debrief sessions · interaction events
   server/       HTTP API on node:http (no framework)
   gui/public/   vanilla-JS SPA (no build step)
   cli/          run.ts · batch.ts
@@ -679,10 +754,28 @@ failing extension is logged and changes nothing. The composition roots
 runner is the bare core.
 
 Viewer-only features (viewer mode, localized agent labels, the readable
-proposal card, and any future post-run debrief) do not even need an
-extension. They are projections of the event log.
+proposal card) do not even need an extension. They are projections of the
+event log.
 
-A test enforces the boundary: no core module imports `src/presentation/`.
+**People in the room** (`src/interaction/`) sit *around* runs, not inside
+them. The layer consists of:
+
+- `HumanInteractionService`, which receives new human text messages from any
+  source (the local viewer over HTTP now, a Chums adapter later);
+- a `RoomOutlet` for posting;
+- `ExperimentService.onRunFinished`, which starts the debrief.
+
+The runner never receives a human message; `Transport.history()` holds only
+the experiment's own messages. Agents see a transcript numbered over those
+messages alone, so narration or human chat cannot shift what they read. The
+debrief reuses `LlmCaller` with its own log and budget (`CallLog`,
+`CallBudget`), so its calls never enter the experiment's trace or usage.
+Future profiles that *would* change experiment semantics (advisory input,
+a human taking a role) must come in through an explicit core interface, not
+through branches in the runner.
+
+A test enforces the boundary: no core module imports `src/presentation/` or
+`src/interaction/`.
 
 ---
 
@@ -721,6 +814,13 @@ refuses `"transport": { "type": "chums" }` up front. To implement it, fill in
 moderator) and `history` (the ordered room history), and drop the up-front
 refusal in `checkRunnable()` ([src/experiment/runner.ts](src/experiment/runner.ts)).
 Agents, scheduling and the runner only ever talk to the `Transport` interface.
+People's messages in a Chums room are not the transport's business. The
+adapter hands each new text message
+([`HumanRoomMessage`](src/transport/humans.ts)) to
+`HumanInteractionService.receive()`, and implements a `RoomOutlet` so notices
+and debrief answers are posted to the real room. The adapter must keep its own
+bots' messages out of the human stream, and humans' messages out of
+`history()`.
 
 **A new LLM provider:** implement `LlmProvider.complete()` in [src/llm/](src/llm/)
 and register it in `createProviderRegistryFromEnv`.
@@ -747,7 +847,10 @@ The UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST` and
 | `POST /api/experiments/:id/control` | `{type: pause \| resume \| step \| select_next (agentId) \| force_decision \| stop}` |
 | `POST /api/experiments/:id/rerun` | same config snapshot, new run |
 | `GET /api/experiments/:id/export` | record + every event |
-| `DELETE /api/experiments/:id` | delete a finished run |
+| `DELETE /api/experiments/:id` | delete a finished run (and its debrief data) |
+| `GET /api/experiments/:id/interaction?after=N` | the room's human side: profile, mode (mission / debrief / closed / observe), open session with queue state, all sessions, derived counts, interaction events |
+| `POST /api/experiments/:id/room/messages` | a person's text message `{senderId, displayName, text, replyTo?, mentions?}`; chat only, never a command |
+| `POST /api/experiments/:id/debrief` | operator: `{action: open}` (always a new session) or `{action: close}` |
 | `POST /api/batches/preview` | expand and validate a spec without running |
 | `GET/POST /api/batches` | list / start (`{spec}`) |
 | `GET /api/batches/:id` | progress + aggregates |
@@ -812,7 +915,13 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs
   that still fail end as `PROVIDER_ERROR` (reported separately in batches).
-- **No authentication.** The server binds to loopback by default.
+- **No authentication.** The server binds to loopback by default. In the
+  viewer, a person is whatever display name they type; operator actions
+  (including opening and closing a debrief) are unauthenticated API calls
+  like every other control.
+- **Human interaction:** only `OBSERVE` and `DEBRIEF` exist. One question gets
+  one character's answer; there are no multi-character debrief exchanges. The
+  stub characters' debrief answers are canned, one line per officer.
 - **Tools** are reserved in the agent config but not implemented.
 - **Live view and viewer mode** poll every second rather than streaming.
 - **Stub agents speak English only.** The conversation language only takes

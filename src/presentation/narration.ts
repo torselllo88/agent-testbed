@@ -49,7 +49,7 @@ function candidates(language: string, fallback: string): string[] {
 }
 
 /** The first language (requested → base language → fallback) whose strings define `pick`. */
-function pickString(
+export function pickString(
   config: ExperimentConfig,
   language: string,
   pick: (s: PresentationStrings) => string | undefined

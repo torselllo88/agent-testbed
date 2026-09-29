@@ -7,7 +7,7 @@ describe("db", () => {
     const tables = (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`).all() as Array<{ name: string }>)
       .map((r) => r.name)
       .filter((name) => !name.startsWith("sqlite_"));
-    expect(tables).toEqual(["batches", "events", "experiments", "scenarios"]);
+    expect(tables).toEqual(["batches", "debrief_sessions", "events", "experiments", "interaction_events", "scenarios"]);
   });
 
   it("rolls back a failed transaction", () => {

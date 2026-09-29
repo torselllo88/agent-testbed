@@ -522,3 +522,29 @@ body.watch-mode .app { max-width: none; padding: 0; }
 
 .w-proposal { align-self: center; width: min(100%, 620px); border: 1px dashed var(--border); border-radius: 8px; padding: 12px 16px; background: var(--surface); }
 .w-proposal .w-text { font-size: 15px; }
+
+/* Viewer mode: people in the room (spectators, debrief) and the composer. */
+.w-human { align-self: flex-end; max-width: 75%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px 12px 2px 12px; padding: 8px 12px; }
+.w-human.mine { background: var(--sidebar-active-bg); }
+.w-human .w-name { font-size: 13px; color: var(--muted); }
+.w-human .w-text { font-size: 15px; }
+.w-notice { align-self: center; max-width: 90%; text-align: center; color: var(--accent-ink); font-size: 14px; }
+.w-notice .w-text { font-size: 14px; }
+.w-notice-label { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; }
+.watch-room.debrief .w-msg[data-mid]:not([data-mid=""]) { cursor: pointer; }
+.watch-room.debrief .w-msg[data-mid]:not([data-mid=""]):hover .w-body { text-decoration: underline dotted var(--muted); }
+.w-debrief-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.w-composer { border-top: 1px solid var(--border); padding: 10px 24px 16px; display: flex; flex-direction: column; gap: 6px; }
+.w-composer-row { display: flex; gap: 8px; }
+.w-name-input { flex: 0 0 140px; min-width: 0; }
+.w-text-input { flex: 1; min-width: 0; }
+.w-reply { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.w-reply-cancel { padding: 0 6px; line-height: 1.4; }
+@media (max-width: 720px) {
+  .w-composer { padding-left: 16px; padding-right: 16px; }
+  .w-name-input { flex-basis: 96px; }
+  .w-human { max-width: 90%; }
+}
+.qa-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.qa { border-left: 3px solid var(--border); padding-left: 10px; }
+.qa-answer { margin-top: 2px; }

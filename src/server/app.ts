@@ -6,13 +6,14 @@ import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
-import { ConfigValidationError, parseExperimentConfig, RunOverridesSchema, type RunOverrides } from "../experiment/config.js";
+import { ConfigValidationError, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, type RunOverrides } from "../experiment/config.js";
 import { COMMON_LANGUAGES } from "../experiment/languages.js";
 import { AUTHORED_PROTOCOL_LANGUAGES } from "../experiment/protocolStrings.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
 import { OUTCOMES } from "../experiment/outcome.js";
 import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
+import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
@@ -30,6 +31,7 @@ export interface AppDeps {
   evaluators: EvaluatorRegistry;
   service: ExperimentService;
   batches: BatchService;
+  interaction: HumanInteractionService;
 }
 
 interface RouteContext {
@@ -56,6 +58,15 @@ const CreateScenarioBody = z.union([z.object({ builtin: z.string() }), ConfigBod
 const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional(), overrides: RunOverridesSchema.optional() });
 const RunScenarioBody = z.object({ overrides: RunOverridesSchema.optional() });
 const BatchBody = z.object({ spec: z.unknown() });
+/** A person's text message in the room — chat only; it can never carry an operator command. */
+const HumanMessageBody = z.object({
+  senderId: z.string().trim().min(1).max(100),
+  displayName: z.string().trim().min(1).max(60),
+  text: z.string().trim().min(1).max(2000),
+  replyTo: z.string().max(200).nullable().optional(),
+  mentions: z.array(z.string().max(100)).max(10).optional(),
+});
+const DebriefBody = z.object({ action: z.enum(["open", "close"]) });
 const ControlBody = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pause") }),
   z.object({ type: z.literal("resume") }),
@@ -148,6 +159,7 @@ const ROUTES: Route[] = [
         outcomes: OUTCOMES,
         builtinScenarios: BUILTIN_SCENARIOS.map((s) => ({ id: s.id, name: s.name, version: s.version, summary: s.summary })),
         languages: { suggested: COMMON_LANGUAGES, authoredProtocol: AUTHORED_PROTOCOL_LANGUAGES },
+        humanInteraction: { profiles: HUMAN_INTERACTION_PROFILES },
         runningExperiments: deps.service.runningIds(),
       }),
   },
@@ -267,6 +279,7 @@ const ROUTES: Route[] = [
       const id = decodeRouteParam(params[0]!);
       experiments.getOrThrow(id);
       if (deps.service.isRunning(id)) throw new HttpError(409, "Stop the experiment before deleting it");
+      deps.interaction.forget(id);
       experiments.delete(id);
       sendJson(res, 200, { ok: true });
     },
@@ -289,6 +302,38 @@ const ROUTES: Route[] = [
       experiments.getOrThrow(id);
       const command = (await body(req, ControlBody)) as OperatorCommand;
       sendJson(res, 200, { live: deps.service.control(id, command) });
+    },
+  },
+  // ------------------------------------------------------------ human interaction (outside the experiment)
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/experiments/${ID}/interaction$`),
+    handle: ({ res, params, url, deps }) => {
+      const after = Number(url.searchParams.get("after")) || 0;
+      sendJson(res, 200, deps.interaction.view(decodeRouteParam(params[0]!), after));
+    },
+  },
+  {
+    method: "POST",
+    pattern: new RegExp(`^/api/experiments/${ID}/room/messages$`),
+    handle: async ({ req, res, params, deps }) => {
+      const input = await body(req, HumanMessageBody);
+      const result = await deps.interaction.receive(decodeRouteParam(params[0]!), {
+        ...input,
+        replyTo: input.replyTo ?? null,
+        mentions: input.mentions ?? [],
+      });
+      sendJson(res, 201, result);
+    },
+  },
+  {
+    method: "POST",
+    pattern: new RegExp(`^/api/experiments/${ID}/debrief$`),
+    handle: async ({ req, res, params, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      const { action } = await body(req, DebriefBody);
+      const session = action === "open" ? await deps.interaction.openDebrief(id, "operator") : deps.interaction.closeDebrief(id);
+      sendJson(res, 200, { session });
     },
   },
   {
@@ -403,6 +448,7 @@ const ROUTES: Route[] = [
 
 function errorStatusAndMessage(err: unknown): { status: number; body: Record<string, unknown> } {
   if (err instanceof HttpError) return { status: err.status, body: { error: err.message } };
+  if (err instanceof InteractionError) return { status: err.status, body: { error: err.message } };
   if (err instanceof ConfigValidationError) {
     return { status: 400, body: { error: err.message, problems: err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`) } };
   }

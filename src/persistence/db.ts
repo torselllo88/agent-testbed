@@ -4,6 +4,7 @@ import path from "node:path";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { env } from "../config/env.js";
 import { INIT_SQL } from "./migrations/001_init.js";
+import { INTERACTION_SQL } from "./migrations/002_interaction.js";
 
 // node:sqlite is a prefix-only builtin (isBuiltin("sqlite") is false, only
 // isBuiltin("node:sqlite") is true). Vite/vite-node's ESM externalization
@@ -33,6 +34,7 @@ function applyMigrations(db: Db): void {
   // At most one row per builtin_id — enforced by ScenarioRepository.syncBuiltins (the only writer).
   ensureColumn(db, "scenarios", "builtin_id", "builtin_id TEXT");
   ensureColumn(db, "scenarios", "builtin_version", "builtin_version INTEGER");
+  db.exec(INTERACTION_SQL);
 }
 
 const SYNCHRONOUS_NAMES = ["OFF", "NORMAL", "FULL", "EXTRA"] as const;

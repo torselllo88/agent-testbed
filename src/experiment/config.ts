@@ -221,6 +221,26 @@ export const PresentationStringsSchema = z.object({
    * is unchanged.
    */
   proposal: z.object({ template: z.string().min(1), values: z.record(z.string()).default({}) }).optional(),
+  /**
+   * Room notices of the human-interaction layer (spectators, debrief) —
+   * overrides of its built-in defaults. Placeholders: {{name}} (the person
+   * addressed), {{position}}, {{limit}}, {{agent}}.
+   */
+  interaction: z
+    .object({
+      spectatorNotice: z.string(),
+      observeNotice: z.string(),
+      debriefOpened: z.string(),
+      debriefClosed: z.string(),
+      debriefUnavailable: z.string(),
+      questionQueued: z.string(),
+      userLimit: z.string(),
+      queueFull: z.string(),
+      budgetReached: z.string(),
+      answerFailed: z.string(),
+    })
+    .partial()
+    .optional(),
 });
 export type PresentationStrings = z.infer<typeof PresentationStringsSchema>;
 
@@ -257,6 +277,60 @@ export const PresentationConfigSchema = z.object({
 });
 export type PresentationConfig = z.infer<typeof PresentationConfigSchema>;
 
+/**
+ * What people in the room may do around a run. Humans never take part in an
+ * active experiment in the supported profiles:
+ *   OBSERVE     humans are spectators, before and after the outcome;
+ *   DEBRIEF     spectators during the mission; once the outcome is final, a
+ *               separate debrief session lets them question the characters.
+ * Future profiles — recognized, but refused by checkRunnable until they exist,
+ * because they would change experiment semantics (and must then do so through
+ * an explicit core interface, never by special-casing the runner):
+ *   ADVISORY    authorized human messages become shared context in safe phases;
+ *   TAKE_ROLE   a human supplies one participant's turns.
+ *
+ * Handled entirely outside the experiment core (src/interaction). Absent =
+ * OBSERVE; optional so configs without it keep their configHash.
+ */
+export const HUMAN_INTERACTION_PROFILES = {
+  OBSERVE: { supported: true },
+  DEBRIEF: { supported: true },
+  ADVISORY: { supported: false },
+  TAKE_ROLE: { supported: false },
+} as const;
+export type HumanInteractionProfile = keyof typeof HUMAN_INTERACTION_PROFILES;
+
+export function supportedProfiles(): HumanInteractionProfile[] {
+  return (Object.keys(HUMAN_INTERACTION_PROFILES) as HumanInteractionProfile[]).filter((p) => HUMAN_INTERACTION_PROFILES[p].supported);
+}
+
+export const DebriefConfigSchema = z.object({
+  /** Who answers a question addressed to nobody in particular when routing is inconclusive. Default: the proposer. */
+  defaultAgentId: z.string().optional(),
+  /** Per-answer output cap; answers use each character's own mission model. */
+  maxOutputTokens: z.number().int().positive().default(250),
+  maxPendingPerUser: z.number().int().positive().default(3),
+  maxPendingTotal: z.number().int().positive().default(20),
+  /** Debrief spend cap per session (separate from every experiment limit); null = none. */
+  costCapUsd: z.number().positive().nullable().default(null),
+  idleTimeoutMinutes: z.number().positive().default(15),
+  /**
+   * false: characters learn the outcome as announced (status + the ending
+   * narration). true: they also get the evaluator's check results — which can
+   * reveal facts only another character knew.
+   */
+  revealEvaluation: z.boolean().default(false),
+  /** Room-wide minimum gap between "the crew cannot answer now" notices. */
+  spectatorNoticeCooldownSeconds: z.number().min(0).default(30),
+});
+export type DebriefConfig = z.infer<typeof DebriefConfigSchema>;
+
+export const HumanInteractionConfigSchema = z.object({
+  profile: z.enum(["OBSERVE", "DEBRIEF", "ADVISORY", "TAKE_ROLE"]).default("OBSERVE"),
+  debrief: DebriefConfigSchema.default({}),
+});
+export type HumanInteractionConfig = z.infer<typeof HumanInteractionConfigSchema>;
+
 export const TransportConfigSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("local") }),
   z.object({ type: z.literal("chums"), room: z.string().optional() }),
@@ -287,6 +361,7 @@ export const ExperimentConfigSchema = z
       params: z.record(z.unknown()).default({}),
     }),
     transport: TransportConfigSchema.default({ type: "local" }),
+    humanInteraction: HumanInteractionConfigSchema.optional(),
   })
   .superRefine((cfg, ctx) => {
     const ids = new Set<string>();
@@ -300,6 +375,10 @@ export const ExperimentConfigSchema = z
     const start = cfg.scheduler.startAgentId;
     if (start !== undefined && !ids.has(start)) {
       ctx.addIssue({ code: "custom", path: ["scheduler", "startAgentId"], message: `unknown agent "${start}"` });
+    }
+    const debriefDefault = cfg.humanInteraction?.debrief.defaultAgentId;
+    if (debriefDefault !== undefined && !ids.has(debriefDefault)) {
+      ctx.addIssue({ code: "custom", path: ["humanInteraction", "debrief", "defaultAgentId"], message: `unknown agent "${debriefDefault}"` });
     }
   });
 export type ExperimentConfig = z.infer<typeof ExperimentConfigSchema>;

@@ -2,6 +2,7 @@
 import { BatchService } from "../batch/service.js";
 import { env } from "../config/env.js";
 import { ExperimentService } from "../experiment/service.js";
+import { HumanInteractionService } from "../interaction/service.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
@@ -17,11 +18,15 @@ const evaluators = createEvaluatorRegistry();
 const service = new ExperimentService({ db, providers, evaluators, extensions: presentationExtensions });
 
 const batches = new BatchService({ db, providers, evaluators, service });
+// People in a run's room (spectators, post-run debrief) — around the experiment, never inside it.
+const interaction = new HumanInteractionService({ db, providers, experiments: service });
 
 const interrupted = service.recoverInterrupted();
 if (interrupted.length > 0) console.log(`Marked ${interrupted.length} experiment(s) cut off by the last shutdown as INTERRUPTED.`);
 const interruptedBatches = batches.recoverInterrupted();
 if (interruptedBatches.length > 0) console.log(`Marked ${interruptedBatches.length} batch(es) cut off by the last shutdown as interrupted.`);
+const interruptedDebriefs = interaction.recoverInterrupted();
+if (interruptedDebriefs > 0) console.log(`Marked ${interruptedDebriefs} debrief session(s) cut off by the last shutdown as INTERRUPTED.`);
 
 // Built-in scenarios live in the library as read-only rows kept in sync with the code.
 const synced = new ScenarioRepository(db).syncBuiltins(BUILTIN_SCENARIOS);
@@ -29,7 +34,7 @@ if (synced.added.length || synced.updated.length) {
   console.log(`Built-in scenarios: added [${synced.added.join(", ")}], updated [${synced.updated.join(", ")}]`);
 }
 
-const server = createApp({ db, providers, evaluators, service, batches });
+const server = createApp({ db, providers, evaluators, service, batches, interaction });
 
 server.listen(env.port, env.host, () => {
   console.log(`Agent testbed running at http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`);

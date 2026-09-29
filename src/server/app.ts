@@ -6,7 +6,9 @@ import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
-import { ConfigValidationError, parseExperimentConfig } from "../experiment/config.js";
+import { ConfigValidationError, parseExperimentConfig, RunOverridesSchema, type RunOverrides } from "../experiment/config.js";
+import { AUTHORED_RUNTIME_LANGUAGES } from "../presentation/runtimeStrings.js";
+import { COMMON_LANGUAGES } from "../presentation/languages.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
 import { OUTCOMES } from "../experiment/outcome.js";
 import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
@@ -15,7 +17,7 @@ import type { ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
-import { ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
+import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
 import { decodeRouteParam, HttpError, readJsonBody, requireJsonContentType, sendJson, serveStatic } from "./http.js";
@@ -51,7 +53,8 @@ const ID = "([^/]+)";
 
 const ConfigBody = z.object({ config: z.unknown() });
 const CreateScenarioBody = z.union([z.object({ builtin: z.string() }), ConfigBody]);
-const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional() });
+const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional(), overrides: RunOverridesSchema.optional() });
+const RunScenarioBody = z.object({ overrides: RunOverridesSchema.optional() });
 const BatchBody = z.object({ spec: z.unknown() });
 const ControlBody = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pause") }),
@@ -69,14 +72,24 @@ async function body<T>(req: http.IncomingMessage, schema: z.ZodType<T>): Promise
 }
 
 function scenarioSummary(s: ScenarioRecord) {
+  const builtin = s.builtin ? BUILTIN_SCENARIOS.find((b) => b.id === s.builtin!.id) : undefined;
   return {
     id: s.id,
     name: s.name,
     version: s.version,
+    builtin: s.builtin,
+    readOnly: Boolean(s.builtin),
+    summary: builtin?.summary ?? s.config.description ?? "",
     configHash: s.configHash,
-    agents: s.config.agents.length,
-    scheduler: s.config.scheduler.type,
-    consensus: s.config.consensus.rule,
+    taskDefinitionHash: s.taskDefinitionHash,
+    agents: s.config.agents?.length ?? 0,
+    agentNames: (s.config.agents ?? []).map((a) => a.name),
+    scheduler: s.config.scheduler?.type,
+    consensus: s.config.consensus?.rule,
+    language: s.config.conversation?.language ?? "en",
+    presentationLanguages: Object.keys(s.config.presentation?.strings ?? {}),
+    narrated: Boolean(s.config.presentation?.narrator),
+    paced: Boolean(s.config.presentation?.pacing && (s.config.presentation.pacing.minVisibleIntervalMs > 0 || s.config.presentation.pacing.perCharMs > 0)),
     updatedAt: s.updatedAt,
   };
 }
@@ -105,11 +118,12 @@ function experimentSummary(e: ExperimentRecord, running: boolean) {
 }
 
 /** Starting a run and validating a config report the same problems in the same shape. */
-function startExperiment(ctx: RouteContext, config: unknown, scenario?: ScenarioRecord) {
+function startExperiment(ctx: RouteContext, config: unknown, scenario?: ScenarioRecord, overrides?: RunOverrides) {
   const { runner } = ctx.deps.service.start({
     config,
     scenarioId: scenario?.id ?? null,
     scenarioVersion: scenario?.version ?? null,
+    overrides,
   });
   sendJson(ctx.res, 201, { id: runner.id, state: runner.state() });
 }
@@ -132,7 +146,8 @@ const ROUTES: Route[] = [
         schedulers: SCHEDULER_TYPES,
         consensusRules: Object.keys(CONSENSUS_RULES),
         outcomes: OUTCOMES,
-        builtinScenarios: BUILTIN_SCENARIOS.map((s) => ({ id: s.id, name: s.name })),
+        builtinScenarios: BUILTIN_SCENARIOS.map((s) => ({ id: s.id, name: s.name, version: s.version, summary: s.summary })),
+        languages: { suggested: COMMON_LANGUAGES, authoredRuntime: AUTHORED_RUNTIME_LANGUAGES },
         runningExperiments: deps.service.runningIds(),
       }),
   },
@@ -206,9 +221,10 @@ const ROUTES: Route[] = [
   {
     method: "POST",
     pattern: new RegExp(`^/api/scenarios/${ID}/run$`),
-    handle: (ctx) => {
+    handle: async (ctx) => {
       const scenario = ctx.scenarios.getOrThrow(decodeRouteParam(ctx.params[0]!));
-      startExperiment(ctx, scenario.config, scenario);
+      const { overrides } = await body(ctx.req, RunScenarioBody);
+      startExperiment(ctx, scenario.config, scenario, overrides);
     },
   },
 
@@ -220,6 +236,7 @@ const ROUTES: Route[] = [
       const list = experiments.list({
         scenarioId: url.searchParams.get("scenarioId") ?? undefined,
         batchId: url.searchParams.get("batchId") ?? undefined,
+        taskDefinitionHash: url.searchParams.get("taskDefinitionHash") ?? undefined,
         excludeBatches: url.searchParams.get("batches") === "exclude",
         limit: Number(url.searchParams.get("limit")) || undefined,
       });
@@ -232,7 +249,7 @@ const ROUTES: Route[] = [
     handle: async (ctx) => {
       const input = await body(ctx.req, StartExperimentBody);
       const scenario = input.scenarioId ? ctx.scenarios.getOrThrow(input.scenarioId) : undefined;
-      startExperiment(ctx, input.config, scenario);
+      startExperiment(ctx, input.config, scenario, input.overrides);
     },
   },
   {
@@ -391,7 +408,7 @@ function errorStatusAndMessage(err: unknown): { status: number; body: Record<str
   }
   if (err instanceof ConfigNotRunnableError) return { status: 400, body: { error: err.message, problems: err.problems } };
   if (err instanceof BatchValidationError) return { status: 400, body: { error: err.message, problems: err.problems } };
-  if (err instanceof InvalidCommandError) return { status: 409, body: { error: err.message } };
+  if (err instanceof InvalidCommandError || err instanceof ReadOnlyScenarioError) return { status: 409, body: { error: err.message } };
   if (err instanceof Error && /^(Scenario|Experiment|Batch) not found:/.test(err.message)) return { status: 404, body: { error: err.message } };
   return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } };
 }

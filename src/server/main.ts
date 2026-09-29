@@ -21,10 +21,10 @@ if (interrupted.length > 0) console.log(`Marked ${interrupted.length} experiment
 const interruptedBatches = batches.recoverInterrupted();
 if (interruptedBatches.length > 0) console.log(`Marked ${interruptedBatches.length} batch(es) cut off by the last shutdown as interrupted.`);
 
-// First start on an empty database: make the reference scenario available to edit and run.
-const scenarios = new ScenarioRepository(db);
-if (scenarios.count() === 0) {
-  for (const builtin of BUILTIN_SCENARIOS) scenarios.create(builtin.config());
+// Built-in scenarios live in the library as read-only rows kept in sync with the code.
+const synced = new ScenarioRepository(db).syncBuiltins(BUILTIN_SCENARIOS);
+if (synced.added.length || synced.updated.length) {
+  console.log(`Built-in scenarios: added [${synced.added.join(", ")}], updated [${synced.updated.join(", ")}]`);
 }
 
 const server = createApp({ db, providers, evaluators, service, batches });

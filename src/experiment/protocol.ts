@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RoomMessage } from "../transport/transport.js";
 import type { AgentConfig, ExperimentConfig } from "./config.js";
+import { languageName } from "../presentation/languages.js";
 import { toJsonSchema } from "./jsonSchema.js";
 
 /**
@@ -77,6 +78,7 @@ export function renderTranscript(
   return messages
     .map((m) => {
       if (m.sender.kind === "system") return `[${m.index}] [moderator] ${m.text}`;
+      if (m.sender.kind === "narrator") return `[${m.index}] [narrator] ${m.text}`;
       const id = m.sender.agentId;
       return `[${m.index}] ${names.get(id) ?? id} (${id})${id === selfId ? " (you)" : ""}: ${m.text}`;
     })
@@ -87,11 +89,24 @@ function jsonInstruction(schema: Record<string, unknown>): string {
   return `Respond with ONLY a single JSON object matching this JSON Schema — no other text:\n${JSON.stringify(schema)}`;
 }
 
+/** Participant-visible text follows the conversation language; the protocol itself never changes. */
+function languageInstruction(code: string): string {
+  return (
+    `Language: write everything other participants can read — your room messages, proposal rationale and vote reasons — in ${languageName(code)} (${code}). ` +
+    "JSON field names, participant ids and enum values (e.g. APPROVE, REJECT, research_labs) stay exactly as specified; never translate them."
+  );
+}
+
 export function renderSystemPrompt(config: ExperimentConfig, agent: AgentConfig): string {
   return [
     `You are ${agent.name} (id "${agent.id}"), role: ${agent.role}.`,
     `You are one of ${config.agents.length} participants in a shared discussion room:`,
     roster(config, agent),
+    agent.objective.trim() ? `Your objective: ${agent.objective.trim()}` : "",
+    agent.persona.trim()
+      ? `Your character — let it shape how you communicate and react, never what facts you report:
+${agent.persona.trim()}`
+      : "",
     agent.systemPrompt.trim(),
     [
       "How the room works:",
@@ -102,6 +117,7 @@ export function renderSystemPrompt(config: ExperimentConfig, agent: AgentConfig)
       "- When the discussion ends, one participant is asked to submit a formal proposal, and then every participant votes on exactly that proposal.",
       "- Be concise. Do not repeat information that has already been established.",
     ].join("\n"),
+    languageInstruction(config.conversation.language),
   ]
     .filter(Boolean)
     .join("\n\n");

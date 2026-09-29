@@ -96,6 +96,7 @@ export async function renderExperiment(experimentId) {
     switch (e.type) {
       case "message_posted":
         if (p.sender.kind === "system") return `<div class="msg system"><span class="msg-author">Moderator</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
+        if (p.sender.kind === "narrator") return `<div class="msg narrator"><span class="msg-author">${escapeHtml(p.sender.name)}</span><span class="msg-index">narration · not shown to agents</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
         return `<div class="msg ${color(p.sender.agentId)}"><span class="msg-author">${escapeHtml(agentName(p.sender.agentId))}</span><span class="msg-index">#${p.index}</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
       case "phase_changed":
         return `<div class="phase-divider">${escapeHtml(p.to)}${p.discussionEnd ? ` · ${escapeHtml(p.discussionEnd)}` : ""}</div>`;
@@ -286,7 +287,9 @@ export async function renderExperiment(experimentId) {
           <dt>Tokens</dt><dd>${formatNumber(s.tokens.agent)} agent + ${formatNumber(s.tokens.orchestration)} orchestration = <strong>${formatNumber(s.tokens.total)}</strong></dd>
           <dt>Cost (est.)</dt><dd>${formatCost(s.costUsd.total)} (agent ${formatCost(s.costUsd.agent)}, orchestration ${formatCost(s.costUsd.orchestration)})${s.costUsd.callsWithUnknownCost ? ` — ${s.costUsd.callsWithUnknownCost} call(s) of unknown cost` : ""}</dd>
           <dt>LLM calls</dt><dd>${s.llmCalls.total} (${s.llmCalls.failed} failed, ${s.llmCalls.parseFailures} unparseable)</dd>
-          <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall</dd>
+          <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall${s.durationMs.presentation ? `, ${formatDuration(s.durationMs.presentation)} presentation pacing` : ""}${s.durationMs.paused ? `, ${formatDuration(s.durationMs.paused)} paused` : ""}</dd>
+          <dt>Language</dt><dd>${escapeHtml(state.experiment.config.conversation?.language ?? "en")}</dd>
+          <dt>Task definition</dt><dd class="muted small">${escapeHtml((state.experiment.taskDefinitionHash ?? "—").slice(0, 16))}</dd>
           <dt>Routing</dt><dd>${routing || "—"}${s.routing.invalidExplicitTargets ? ` · ${s.routing.invalidExplicitTargets} invalid target(s)` : ""}${s.routing.classifierFailures ? ` · ${s.routing.classifierFailures} classifier failure(s)` : ""}</dd>
           <dt>Readiness invalidations</dt><dd>${s.readiness.invalidations}</dd>
           ${incidents.length ? `<dt>Protocol incidents</dt><dd>${incidents.map(([k, n]) => `${escapeHtml(k)} ${n}`).join(", ")}</dd>` : ""}
@@ -386,6 +389,7 @@ export async function renderExperiment(experimentId) {
     el.innerHTML = `
       <h1>${escapeHtml(e.config.name)} ${outcomeBadge(e.outcome, state.running)} ${e.intervened ? badge("manual intervention", "warn") : ""}</h1>
       <div class="actions">
+        <a class="button-like" href="#/watch/${encodeURIComponent(experimentId)}">Viewer mode</a>
         <button id="btn-rerun">Rerun same config</button>
         <button id="btn-export">Export JSON</button>
         ${e.scenarioId ? `<a class="button-like" href="#/scenarios/${encodeURIComponent(e.scenarioId)}">Open scenario</a>` : ""}

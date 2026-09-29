@@ -26,6 +26,7 @@ shows the whole transformation.
 - [Quick start](#quick-start)
 - [Core ideas](#core-ideas)
 - [The reference scenario: Space Station Benchmark](#the-reference-scenario-space-station-benchmark)
+- [Scenarios: task, behavior and presentation](#scenarios-task-behavior-and-presentation)
 - [Using the web UI](#using-the-web-ui)
 - [Command line](#command-line)
 - [Experiment configuration](#experiment-configuration)
@@ -53,18 +54,22 @@ npm run gui          # → http://localhost:3939
 
 That is all that is needed for a first look. Without any API key, every agent
 runs on the built-in **stub provider**: scripted, deterministic stand-ins for
-the Space Station officers. The whole scenario then runs end-to-end, free and
-offline. The first start saves a copy of the built-in Space Station Benchmark scenario in the database.
+the Space Station officers. The scenarios then run end-to-end, free and
+offline (stub agents always speak English). The **Scenarios** library already
+contains two built-ins: the neutral **Space Station Benchmark** and the
+humanized live demo **Station Kestrel**.
 
 To run real LLM agents:
 
 1. `cp .env.example .env` and set `OPENROUTER_API_KEY` (or the Azure OpenAI variables).
 2. Restart `npm run gui`. The Overview page shows which providers are configured.
-3. Open **Scenarios → Space Station Benchmark → Agents**. For each agent set
-   provider `openrouter` and a model, e.g. `anthropic/claude-sonnet-5`.
-   Different agents can use different models. Point the router classifier
-   (**Protocol** tab) at a real model too, or turn it off.
-4. **Save**, then **Run**.
+3. Built-ins are read-only: open **Scenarios**, press **Duplicate** on a
+   built-in, and in the copy's **Agents** tab set provider `openrouter` and a
+   model for each agent, e.g. `anthropic/claude-sonnet-5`. Different agents can
+   use different models. Point the router classifier (**Protocol** tab) at a
+   real model too, or turn it off.
+4. **Save**, then **Run**. Pick a conversation language, then **Start** (control
+   view) or **Start & watch** (viewer mode).
 
 Real LLM calls cost money. Every run reports its token usage and cost; batches
 can be capped (`limits.totalCostCapUsd`, `limits.totalTokenCap`).
@@ -151,24 +156,131 @@ API key:
 
 ---
 
+## Scenarios: task, behavior and presentation
+
+A scenario is one saved, reusable config. It holds two separate concerns:
+
+```
+                    Scenario
+                       │
+          ┌────────────┴─────────────┐
+   Task / protocol              Behavior & presentation
+   shared facts, roles,         names, personas,
+   objectives, private info,    conversation language,
+   decision rules, evaluator    narration, viewer pacing
+```
+
+The presentation side never changes protocol semantics: consensus, proposal
+immutability, voting, evaluation, routing, budgets and the event log behave
+identically with or without it.
+
+**Station Kestrel** runs the same Space Station task as the benchmark: the
+same shared facts, roles, objectives, private information, decision rules and
+evaluator, and therefore the same `taskDefinitionHash`. On top it adds:
+
+- **Named officers with personas:** Sarah Okafor (commander, the proposer),
+  John Mercer (reactor, impatient under pressure), Viktor Hale (power, fast and
+  overconfident), Maya Chen (life support, protective of the crew), with light
+  interpersonal priors. A persona shapes how an agent talks, never what it
+  knows. Nothing steers the room toward success: a believable coordination
+  failure is as valid an ending as a rescue.
+- **A narrator** (MISSION CONTROL) that posts an opening and an ending in the room.
+- **Viewer pacing**, so a live audience can follow the conversation.
+
+The building blocks are generic, and Kestrel is simply the first scenario to
+use all of them:
+
+| Config | What it does |
+|---|---|
+| `agents[].objective` | What the agent is responsible for. Part of the task definition. |
+| `agents[].persona` | Personality, tendencies, interpersonal priors. Behavior layer. |
+| `conversation.language` | Language of everything participants and viewers read: messages, proposal rationale, vote reasons, moderator notices, narration. JSON field names, ids and enum values are never translated. A run can override it without editing the scenario. |
+| `presentation.narrator` | `{ displayName }`, or `null` for no narration. |
+| `presentation.strings.<lang>` | Authored per language: `title`, `narratorName`, `opening`, `outcomes.<OUTCOME>` (plus `default`), `missionFailure.<check>`. |
+| `presentation.fallbackLanguage` | Used for any string missing in the conversation language. |
+| `presentation.missionFailurePriority` | Evaluator checks in narrative order; the first violated one picks the `MISSION_FAILURE` ending. All violated checks stay in the technical results. |
+| `presentation.pacing` | `minVisibleIntervalMs`, `perCharMs`, `maxGapMs` (see below). |
+
+**Narration is for observers only.** Narrator messages are published to the
+room, but they are filtered out of every agent's and the router's context.
+Everything agents need comes from the task, their role, objective, persona and
+private information, so the literary text can never become an extra
+information channel.
+
+**Endings are deterministic.** No model is called to write them. The ending
+is chosen by outcome (and, for `MISSION_FAILURE`, by the primary violated
+check), then filled from real values: `{{derived.availableKw}}`,
+`{{params.coolantRequiredKw}}`, `{{checks.<name>.detail}}`, `{{reason}}`, …
+A plan with 22 kW of 30 therefore yields "22 kW available, 30 kW required".
+Technical outcomes (`PROVIDER_ERROR`, `ERROR`, `INTERRUPTED`,
+`STOPPED_BY_OPERATOR`) get a short neutral message instead of an in-universe
+disaster.
+
+**Languages.** Kestrel's narration is authored in `en` and `ru`, and the
+runtime's own moderator notices exist in the same two. For any other code
+(e.g. `sr-Latn`), agents still write in that language, while narration and
+notices fall back to English. Machine values stay unchanged: the trace keeps
+`APPROVE`/`REJECT` even when the room shows «за» / «против».
+
+**Pacing** holds each visible message until the previous one has been on
+screen for `min(maxGapMs, minVisibleIntervalMs + previousLength × perCharMs)`.
+The interval is measured from when the previous message appeared, so a slow
+provider reply needs little or no extra wait. The wait is recorded as
+`presentation_delay` and counts neither as provider latency nor as experiment
+time: `wall = active + paused + presentation`, and only `active` drives
+`timeLimitSeconds`. Stop interrupts the wait immediately. The benchmark uses
+0; Kestrel starts at 2.5 s + 20 ms per character, capped at 9 s. Tune these by
+watching real runs.
+
+**Two hashes.** `configHash` identifies the exact configuration.
+`taskDefinitionHash` identifies the underlying problem: task text, each
+agent's id, role, objective and private context, the decision protocol and
+the evaluator with its parameters. Runs of Kestrel in English, Kestrel in
+Russian and the benchmark share a `taskDefinitionHash`, but they are **not**
+the same experimental condition: persona, models and language change
+behavior.
+
+---
+
 ## Using the web UI
 
 `npm run gui` serves a vanilla-JS single-page app with no build step.
 
-**Scenarios.** Create a scenario from a template or import a JSON config (a
-bare config, a scenario export or an experiment export). The editor tabs:
+**Scenario library.** Built-in scenarios come first, then your own. Each card
+has **Run**, **Edit** (**View** for built-ins) and **Duplicate**. Built-ins
+are read-only and kept in sync with the code: when a built-in's version is
+bumped, its library entry is updated in place; your own scenarios are never
+touched. **+ Create scenario** copies a built-in; **Import JSON** accepts a
+bare config, a scenario export or an experiment export.
+
+**Run dialog.** Choose the conversation language for this run only; the saved
+scenario is neither edited nor versioned. Then **Start** opens the control
+view, **Start & watch** opens viewer mode.
+
+**Editor tabs:**
 
 - **Task:** name, description, task text, shared context.
-- **Agents:** id, name, role, provider/model/temperature/seed/max tokens,
-  structured-output mode, system prompt, private context.
+- **Agents:** id, name, role, objective, persona, provider/model/temperature/seed/max
+  tokens, structured-output mode, OpenRouter routing (advanced), extra system
+  prompt, private context.
 - **Protocol:** scheduler, start agent, router classifier, consensus rule,
   proposer, attempts, agent visibility, transport.
 - **Limits:** soft discussion limits, hard limits, runtime retries and timeouts.
 - **Evaluator:** evaluator and its parameters; the proposal schema for reference.
+- **Presentation:** default conversation language, narration (narrator,
+  per-language strings, mission-failure priority), pacing.
 - **Raw JSON:** the complete config, editable.
 
 Actions: **Save** (the version goes up only when something changed),
 **Validate**, **Run**, **Duplicate**, **Export**, **Delete**.
+
+**Viewer mode** (`#/watch/<experiment-id>`, or **Viewer mode** on an
+experiment page) is for people watching a run rather than controlling it: a
+clean full-screen room with the narrator, agent names and roles, moderator
+notices, auto-scroll, a subtle "… is thinking" hint and a live/ended status.
+It has no debug metadata, technical panels or controls. It is another
+projection of the same event stream, useful for rehearsals, screen recordings
+and live demos.
 
 **Experiment view.** The live room plus a runtime-state panel:
 
@@ -204,12 +316,13 @@ a toggle shows them.
 ## Command line
 
 ```bash
-npm run experiment -- [space-station | path/to/config.json] [--db <dataDir>]
+npm run experiment -- [space-station | station-kestrel | path/to/config.json] [--db <dataDir>] [--language ru]
 npm run batch -- path/to/batch-spec.json [--db <dataDir>] [--out results.json] [--csv runs.csv]
 ```
 
 Both use the same engine and database as the UI, so CLI runs appear in the UI
-as well. `Ctrl+C` stops the experiment, or cancels the batch. The summary JSON
+as well. `--language` overrides the conversation language for that run. CLI
+runs are headless, so viewer pacing is off unless you pass `--pacing scenario`. `Ctrl+C` stops the experiment, or cancels the batch. The summary JSON
 goes to stdout and progress to stderr; add `-s` (`npm run -s experiment …`) so
 npm's own banner does not mix into the JSON.
 
@@ -237,7 +350,9 @@ with all defaults filled in, and hashed canonically. The complete reference is
                "temperature": 0.7, "seed": 1, "maxOutputTokens": 800,
                "structuredOutput": "native",              // or "prompt"
                "routing": { "only": ["together"] } },      // optional, OpenRouter only (see below)
-    "systemPrompt": "…",
+    "objective": "…",                                      // task definition
+    "persona": "…",                                        // behavior layer
+    "systemPrompt": "…",                                   // optional extra instructions
     "privateContext": "…",                                 // only this agent sees it
     "tools": []                                            // reserved
   }],
@@ -257,6 +372,8 @@ with all defaults filled in, and hashed canonically. The complete reference is
     "timeLimitSeconds": 900           // hard; active time, operator pauses excluded
   },
   "agentVisibility": { "discussionBudget": false },
+  "conversation": { "language": "en" },                    // a run may override it
+  "presentation": { "narrator": null, "strings": {}, "pacing": { "minVisibleIntervalMs": 0 } },  // see Scenarios section
   "runtime": { "maxParseRetries": 1, "maxProviderRetries": 2, "providerRetryDelayMs": 2000, "callTimeoutSeconds": 120 },
   "evaluator": { "id": "space-station", "params": { "baseReserveKw": 10, "…": "…" } },
   "transport": { "type": "local" }
@@ -415,6 +532,10 @@ tagged with its batch, condition and repetition.
   across conditions.
 - **`stubLatencyMs`** defaults to 0. Batches never inherit the web demo's
   `STUB_LATENCY_MS`.
+- **`pacing`** is `"off"` by default: batch runs are headless, so a scenario's
+  viewer pacing (e.g. Kestrel's) is disabled for them and recorded as
+  `pacingDisabled` in the run environment. Use `"scenario"` to keep it.
+  Narration is still posted and traced either way.
 - **`concurrency`** limits simultaneous *experiments*. What limits simultaneous
   *provider requests* is the process-wide `LLM_MAX_CONCURRENT_REQUESTS`,
   because one experiment's voting step alone issues one request per agent.
@@ -446,12 +567,15 @@ A runnable example: [examples/space-station-batch.json](examples/space-station-b
 
 Every run stores:
 
-- **the config snapshot** (fully resolved) and its canonical sha256 hash, plus
-  the scenario id and version it came from;
+- **the config snapshot** (fully resolved, with per-run overrides applied), its
+  canonical `configHash`, the `taskDefinitionHash`, and the scenario id and
+  version it came from;
 - **the testbed version:** package version, git commit and a dirty-working-tree
   flag (a dirty run cannot be reproduced from the commit alone), Node version;
 - **the run environment:** origin (`interactive` / `batch` / `cli`), stub
-  latency, the effective SQLite durability mode, the provider request limit;
+  latency, the effective SQLite durability mode, the provider request limit,
+  the effective conversation language, the scenario's default language and
+  whether the language was overridden for this run;
 - **the evaluator id and version.**
 
 Event types, in the order they typically appear:
@@ -463,7 +587,8 @@ Event types, in the order they typically appear:
 | `routing_decision` | chosen agent, source, reason, details (invalid target, classifier failure) |
 | `turn_started` / `turn_completed` | turn number, kind, result |
 | `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown), duration, request-queue wait, parse result, temperature, seed |
-| `message_posted` | a public room message (agent or moderator) |
+| `message_posted` | a public room message: agent, moderator notice, or narration (with its source template and language; never shown to agents) |
+| `presentation_delay` | a viewer-pacing wait before a visible message: waited, target gap, time since the previous message |
 | `agent_meta` | the hidden control metadata of a turn |
 | `readiness_changed` / `readiness_invalidated` | readiness transitions |
 | `proposal_requested` / `proposal_rejected_format` / `proposal_declined` / `proposal_frozen` | the proposal sequence; `proposal_frozen` is the immutable artifact with its hash |
@@ -504,6 +629,7 @@ src/
   transport/    Transport interface · LocalTransport · ChumsTransport (extension point)
   evaluation/   ScenarioEvaluator interface · registry
   scenarios/    scenario packages (config + evaluator + stub scripts) · registries
+  presentation/ narration (opening / grounded endings) · runtime moderator strings (en, ru) · language names
   batch/        spec & condition expansion · BatchService · aggregates
   llm/          provider interface · OpenRouter · Azure OpenAI · stub · registry · concurrency gate · pricing
   persistence/  SQLite (node:sqlite) · scenarios · experiments · events · batches
@@ -537,11 +663,17 @@ and every decision point is an interface: `Scheduler`, `ConsensusRule`,
 1. `evaluator.ts` — a `ScenarioEvaluator` with a `proposalSchema` (zod; *structure
    only*, so that unsafe plans remain expressible), a `paramsSchema` and a
    deterministic `evaluate()` that returns per-check results.
-2. `config.ts` — the default experiment config (pure data).
-3. Optionally, stub scripts for keyless runs and tests.
-4. Register the three in [src/scenarios/index.ts](src/scenarios/index.ts).
+2. `config.ts` — the default experiment config (pure data). Keep the task
+   definition in shared constants (see `spaceStation/task.ts`) if several
+   scenarios should share one underlying task, as the benchmark and Kestrel do.
+3. Optionally, personas and `presentation` (narrator, per-language strings,
+   mission-failure priority, pacing) for a viewer-oriented variant.
+4. Optionally, stub scripts for keyless runs and tests.
+5. Register them in [src/scenarios/index.ts](src/scenarios/index.ts) with an id,
+   a one-line summary and a version. Bump the version whenever the definition
+   changes in a way that affects runs.
 
-Nothing in `experiment/`, `scheduling/` or `transport/` changes.
+Nothing in `experiment/`, `scheduling/`, `presentation/` or `transport/` changes.
 
 **A new scheduling strategy** (leader-based, expertise-based, random, …):
 implement `Scheduler.next(ctx)` in [src/scheduling/](src/scheduling/) and add
@@ -573,12 +705,13 @@ The UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST` and
 | Method & path | Purpose |
 |---|---|
 | `GET /api/meta` | versions, providers (with request-gate state), stub models, evaluators (with proposal schemas), schedulers, consensus rules, outcomes, builtin scenarios |
-| `GET/POST /api/scenarios` | list / create (`{config}` or `{builtin}`) |
+| `GET/POST /api/scenarios` | library (built-ins first, read-only) / create a user scenario (`{config}` or `{builtin}`) |
 | `POST /api/scenarios/validate` | schema and runnability check, without saving |
 | `GET/PUT/DELETE /api/scenarios/:id` | read / update (version bump on change) / delete |
-| `POST /api/scenarios/:id/duplicate`, `…/run` | copy / start a run |
-| `GET /api/experiments?scenarioId=&batchId=&batches=exclude` | list |
-| `POST /api/experiments` | start an ad-hoc run from `{config}` |
+| `POST /api/scenarios/:id/duplicate` | copy (the way to edit a built-in) |
+| `POST /api/scenarios/:id/run` | start a run; optional `{overrides: {language}}` applies to this run only |
+| `GET /api/experiments?scenarioId=&batchId=&taskDefinitionHash=&batches=exclude` | list |
+| `POST /api/experiments` | start an ad-hoc run from `{config, overrides?}` |
 | `GET /api/experiments/:id` | record + live state |
 | `GET /api/experiments/:id/events?after=N` | incremental event stream (the UI polls it) |
 | `POST /api/experiments/:id/control` | `{type: pause \| resume \| step \| select_next (agentId) \| force_decision \| stop}` |
@@ -593,7 +726,10 @@ The UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST` and
 
 Status codes: 400 for an invalid or non-runnable config or spec (with a
 `problems` list), 404 for an unknown id, 409 for an action that is invalid in
-the current state.
+the current state (including editing or deleting a built-in scenario).
+
+In a batch, the conversation language is an ordinary variable:
+`{ "path": "conversation.language", "values": ["en", "ru"] }`.
 
 ---
 
@@ -648,7 +784,13 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
   that still fail end as `PROVIDER_ERROR` (reported separately in batches).
 - **No authentication.** The server binds to loopback by default.
 - **Tools** are reserved in the agent config but not implemented.
-- **Live view** polls every second rather than streaming.
+- **Live view and viewer mode** poll every second rather than streaming.
+- **Stub agents speak English only.** The conversation language only takes
+  effect with real models.
+- **Authored presentation languages:** Kestrel's narration and the runtime's
+  moderator notices exist in `en` and `ru`; other languages fall back to
+  English for those texts (agents still use the requested language). The
+  viewer page's own few labels exist in the same two languages.
 - **Cost** comes from OpenRouter's reported per-call cost when available,
   otherwise from a small built-in pricing table; for other models it is unknown
   and counted as such.

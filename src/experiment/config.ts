@@ -83,9 +83,21 @@ export function effectiveOpenRouterRouting(ref: ModelRef): OpenRouterRouting | n
 
 export const AgentConfigSchema = z.object({
   id: z.string().regex(idPattern, "agent id must be a lowercase slug"),
+  /** Identity: the display name other participants and viewers see. */
   name: z.string().min(1),
+  /** Operational role — part of the task definition. */
   role: z.string().min(1),
   model: ModelRefSchema,
+  /** What this agent is responsible for achieving — part of the task definition. */
+  objective: z.string().default(""),
+  /**
+   * Behavioral layer: personality, tendencies, interpersonal priors. Shapes
+   * how the agent communicates, never what it knows — task facts belong in
+   * privateContext / task. Not part of the task definition hash, but it does
+   * change behavior, so runs differing only in persona are different conditions.
+   */
+  persona: z.string().default(""),
+  /** Free-form extra instructions (behavioral layer, like persona). */
   systemPrompt: z.string().default(""),
   /** Visible only to this agent — never published to the room by the runtime. */
   privateContext: z.string().default(""),
@@ -164,6 +176,74 @@ export const RuntimeConfigSchema = z.object({
 });
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
 
+/** A language code as models understand it, e.g. "en", "ru", "sr-Latn", "pt-BR". */
+const LanguageCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, "expected a language code such as en, ru, sr-Latn");
+
+/**
+ * The language of everything participants and viewers read: room messages,
+ * proposal rationale, vote reasons, moderator notices, narration. Distinct
+ * from the UI locale and from the protocol (JSON field names, ids and enum
+ * values are never translated). A run may override the scenario default
+ * without editing the scenario (see applyRunOverrides).
+ */
+export const ConversationConfigSchema = z.object({
+  language: LanguageCodeSchema.default("en"),
+});
+export type ConversationConfig = z.infer<typeof ConversationConfigSchema>;
+
+/**
+ * Viewer-facing strings for one language. Templates may reference
+ * {{outcome}}, {{reason}}, {{derived.<name>}}, {{params.<name>}},
+ * {{checks.<name>.detail}} — deterministic values from the runtime and the
+ * evaluator, so endings stay grounded in what actually happened.
+ */
+export const PresentationStringsSchema = z.object({
+  title: z.string().optional(),
+  narratorName: z.string().optional(),
+  opening: z.string().optional(),
+  /** Ending per terminal outcome (SUCCESS, CONSENSUS_FAILURE, TIMEOUT, ...), plus optional "default". */
+  outcomes: z.record(z.string()).default({}),
+  /** MISSION_FAILURE ending per primary violated evaluator check. */
+  missionFailure: z.record(z.string()).default({}),
+});
+export type PresentationStrings = z.infer<typeof PresentationStringsSchema>;
+
+/**
+ * Viewer pacing: before a visible message is published, wait until the
+ * viewer has had time to read the previous one —
+ *   gap = min(maxGapMs, minVisibleIntervalMs + previousMessageLength × perCharMs)
+ * measured from when the previous message appeared, so a slow provider
+ * reply needs little or no extra delay. The wait is recorded separately
+ * (presentation_delay) and excluded from provider latency and from the
+ * experiment's active time.
+ */
+export const PacingConfigSchema = z.object({
+  minVisibleIntervalMs: z.number().int().min(0).default(0),
+  perCharMs: z.number().min(0).default(0),
+  maxGapMs: z.number().int().min(0).default(10000),
+});
+export type PacingConfig = z.infer<typeof PacingConfigSchema>;
+
+/**
+ * How a run is presented to a human observer. Presentation never changes
+ * protocol semantics: agents never see narration, and endings are rendered
+ * from evaluator/runtime state, not generated.
+ */
+export const PresentationConfigSchema = z.object({
+  /** Visible narrator posting the opening and the ending; null = no narration. */
+  narrator: z.object({ displayName: z.string().min(1) }).nullable().default(null),
+  /** Used for any string missing in the conversation language. */
+  fallbackLanguage: LanguageCodeSchema.default("en"),
+  strings: z.record(PresentationStringsSchema).default({}),
+  /** Evaluator checks in narrative priority: the first violated one picks the MISSION_FAILURE ending. */
+  missionFailurePriority: z.array(z.string()).default([]),
+  pacing: PacingConfigSchema.default({}),
+});
+export type PresentationConfig = z.infer<typeof PresentationConfigSchema>;
+
 export const TransportConfigSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("local") }),
   z.object({ type: z.literal("chums"), room: z.string().optional() }),
@@ -186,6 +266,8 @@ export const ExperimentConfigSchema = z
     decision: DecisionConfigSchema,
     limits: LimitsConfigSchema.default({}),
     agentVisibility: AgentVisibilityConfigSchema.default({}),
+    conversation: ConversationConfigSchema.default({}),
+    presentation: PresentationConfigSchema.default({}),
     runtime: RuntimeConfigSchema.default({}),
     evaluator: z.object({
       id: z.string().min(1),
@@ -247,4 +329,55 @@ export function sha256(text: string): string {
 /** Hash of the fully-resolved (defaults filled) config, so two configs that differ only in omitted defaults hash equal. */
 export function configHash(config: ExperimentConfig): string {
   return sha256(canonicalJson(config));
+}
+
+/**
+ * The part of a config that defines the underlying coordination task: shared
+ * task facts, each agent's operational role, objective and private
+ * information, the decision protocol, and the evaluator with its
+ * environment parameters. Excludes identity (display names), persona and
+ * free-form system prompts, models, language, presentation, scheduling,
+ * limits and runtime settings.
+ *
+ * Two runs with equal taskDefinitionHash attempt the same problem. They are
+ * NOT necessarily the same experimental condition — persona, models and
+ * language change behavior; configHash identifies the exact configuration.
+ */
+export function taskDefinition(config: ExperimentConfig): unknown {
+  return {
+    task: config.task,
+    agents: [...config.agents]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((a) => ({ id: a.id, role: a.role, objective: a.objective, privateContext: a.privateContext })),
+    decision: config.decision,
+    consensus: config.consensus,
+    evaluator: config.evaluator,
+  };
+}
+
+export function taskDefinitionHash(config: ExperimentConfig): string {
+  return sha256(canonicalJson(taskDefinition(config)));
+}
+
+/** Per-run settings that override the saved scenario without editing or versioning it. */
+export const RunOverridesSchema = z
+  .object({
+    /** Conversation language for this run only. */
+    language: LanguageCodeSchema.optional(),
+    /**
+     * "off" disables viewer pacing for this run (headless CLI and batch runs
+     * default to it: nobody is watching, and pacing would only add wall time).
+     */
+    pacing: z.enum(["scenario", "off"]).optional(),
+  })
+  .strict();
+export type RunOverrides = z.infer<typeof RunOverridesSchema>;
+
+/** Applies overrides to a copy of the config; the result is what the run snapshots and executes. */
+export function applyRunOverrides(config: ExperimentConfig, overrides: RunOverrides | undefined): ExperimentConfig {
+  if (!overrides || Object.keys(overrides).length === 0) return config;
+  const next = structuredClone(config);
+  if (overrides.language) next.conversation = { ...next.conversation, language: overrides.language };
+  if (overrides.pacing === "off") next.presentation = { ...next.presentation, pacing: { ...next.presentation.pacing, minVisibleIntervalMs: 0, perCharMs: 0 } };
+  return next;
 }

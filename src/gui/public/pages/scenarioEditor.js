@@ -1,3 +1,4 @@
+import { openRunDialog } from "../runDialog.js";
 import { api, apiDetailed, app, badge, downloadJson, escapeHtml, getPath, jsonBlock, setPath, showError } from "../shared.js";
 
 // Form <-> config binding: every input carries data-path (dotted path into
@@ -11,6 +12,7 @@ const TABS = [
   ["protocol", "Protocol"],
   ["limits", "Limits"],
   ["evaluator", "Evaluator"],
+  ["presentation", "Presentation"],
   ["raw", "Raw JSON"],
 ];
 
@@ -140,7 +142,9 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
             ${field("Role", input(`agents.${i}.role`))}
           </div>
           ${modelFields(`agents.${i}.model`)}
-          ${field("System prompt", textarea(`agents.${i}.systemPrompt`, 3))}
+          ${field("Objective", textarea(`agents.${i}.objective`, 2), "What this agent is responsible for — part of the task definition")}
+          ${field("Persona", textarea(`agents.${i}.persona`, 4), "Personality and interpersonal tendencies — shapes how it talks, never what it knows")}
+          ${field("Extra system prompt", textarea(`agents.${i}.systemPrompt`, 2), "Optional free-form instructions")}
           ${field("Private context", textarea(`agents.${i}.privateContext`, 8), "Visible only to this agent")}
         </div>`
         )
@@ -211,32 +215,69 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       ${evaluator ? `<details class="card"><summary><h2>Proposal schema (structure only)</h2></summary>${jsonBlock(evaluator.proposalSchema)}</details>` : ""}`;
     },
 
+    presentation: () => {
+      const p = state.draft.presentation ?? {};
+      const narrated = Boolean(p.narrator);
+      return `
+      <p class="muted">How a run is presented to viewers. None of this changes protocol semantics: agents never see narration, and endings are rendered from evaluator state.</p>
+      <h3>Conversation</h3>
+      <div class="grid-3">
+        ${field("Default conversation language", input("conversation.language", "string", `list="language-suggestions"`), "Language code; a run can override it")}
+        ${field("Fallback language for narration", input("presentation.fallbackLanguage", "string", `list="language-suggestions"`))}
+      </div>
+      <h3>Narration</h3>
+      ${checkbox("presentation.__narratorEnabled", "Post an opening and an ending narration in the room")}
+      ${narrated ? field("Narrator display name", input("presentation.narrator.displayName"), "Default; a language's strings may override it (narratorName)") : ""}
+      ${field(
+        "Presentation strings (JSON, keyed by language)",
+        `<textarea class="code" data-path="presentation.strings" data-kind="json" rows="16">${escapeHtml(JSON.stringify(p.strings ?? {}, null, 2))}</textarea>`,
+        "Per language: title, narratorName, opening, outcomes.{OUTCOME|default}, missionFailure.{check}. Placeholders: {{derived.x}}, {{params.x}}, {{checks.x.detail}}, {{reason}}"
+      )}
+      ${field("Mission-failure priority", csvInput("presentation.missionFailurePriority", "e.g. power_feasible, life_support_preserved"), "Evaluator checks in narrative priority; the first violated one picks the ending")}
+      <h3>Pacing</h3>
+      <div class="grid-3">
+        ${field("Minimum visible interval (ms)", input("presentation.pacing.minVisibleIntervalMs", "number", `min="0"`), "0 = no pacing (research runs)")}
+        ${field("Per character of previous message (ms)", input("presentation.pacing.perCharMs", "number", `min="0" step="1"`))}
+        ${field("Maximum gap (ms)", input("presentation.pacing.maxGapMs", "number", `min="0"`))}
+      </div>
+      <p class="muted small">Pacing is excluded from provider latency and from the experiment's time limit; it is recorded separately.</p>`;
+    },
+
     raw: () => `
       <p class="muted">The complete config. Edits here replace the form state; invalid JSON is not applied.</p>
       <div id="raw-error">${state.rawError ? `<div class="error-banner">${escapeHtml(state.rawError)}</div>` : ""}</div>
       <textarea id="raw-json" class="code" spellcheck="false">${escapeHtml(state.rawText ?? JSON.stringify(state.draft, null, 2))}</textarea>`,
   };
 
+  const readOnly = Boolean(scenario.builtin);
+
   function render() {
     const s = state.scenario;
     app.innerHTML = `
       <div class="breadcrumb"><a href="#/scenarios">Scenarios</a> / ${escapeHtml(s.name)}</div>
       <div class="page-header">
-        <h1>${escapeHtml(state.draft.name || s.name)} ${badge(`v${s.version}`, "neutral")} ${state.dirty ? badge("unsaved changes", "warn") : ""}</h1>
+        <h1>${escapeHtml(state.draft.name || s.name)} ${readOnly ? badge("built-in", "info") : badge(`v${s.version}`, "neutral")} ${state.dirty ? badge("unsaved changes", "warn") : ""}</h1>
         <div class="actions">
-          <button id="btn-save" class="primary" ${state.dirty ? "" : "disabled"}>Save</button>
+          ${readOnly ? "" : `<button id="btn-save" class="primary" ${state.dirty ? "" : "disabled"}>Save</button>`}
           <button id="btn-validate">Validate</button>
           <button id="btn-run" class="primary">Run</button>
           <button id="btn-duplicate">Duplicate</button>
           <button id="btn-export">Export</button>
-          <button id="btn-delete" class="danger">Delete</button>
+          ${readOnly ? "" : `<button id="btn-delete" class="danger">Delete</button>`}
         </div>
       </div>
+      ${readOnly ? `<div class="warning-banner">Built-in scenario — read-only. Duplicate it to make an editable copy.</div>` : ""}
       <div id="editor-messages">${state.notice ?? ""}</div>
       <div class="tabs">${TABS.map(([key, label]) => `<button type="button" class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">${label}</button>`).join("")}</div>
       <div class="card editor-body" id="editor-body">${tabBody[state.tab]()}</div>
       <datalist id="stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
+      <datalist id="language-suggestions">${meta.languages.suggested.map((l) => `<option value="${escapeHtml(l)}">`).join("")}</datalist>
     `;
+    const narratorToggle = app.querySelector('[data-path="presentation.__narratorEnabled"]');
+    if (narratorToggle) narratorToggle.checked = Boolean(state.draft.presentation?.narrator);
+    if (readOnly) {
+      app.querySelectorAll("#editor-body input, #editor-body select, #editor-body textarea, #editor-body button").forEach((el) => (el.disabled = true));
+    }
     // Synthetic checkbox: the classifier toggle maps to classifier null vs. a model ref.
     const toggle = app.querySelector('[data-path="scheduler.__classifierEnabled"]');
     if (toggle) toggle.checked = Boolean(state.draft.scheduler.classifier);
@@ -275,6 +316,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         value === "hybrid" ? { type: "hybrid", startAgentId, classifier: null, classifierWindow: 12 } : { type: "round_robin", startAgentId };
     } else if (path === "scheduler.__classifierEnabled") {
       state.draft.scheduler.classifier = value ? { provider: "stub", model: meta.stubModels.find((m) => m.startsWith("router/")) ?? "", structuredOutput: "native" } : null;
+    } else if (path === "presentation.__narratorEnabled") {
+      state.draft.presentation = { ...(state.draft.presentation ?? {}), narrator: value ? { displayName: "NARRATOR" } : null };
     } else if (path === "transport.type") {
       state.draft.transport = { type: value };
     } else if (path.endsWith(".model.provider") || path === "scheduler.classifier.provider") {
@@ -377,14 +420,14 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       })
     );
 
-    document.getElementById("btn-save").addEventListener("click", save);
+    document.getElementById("btn-save")?.addEventListener("click", save);
     document.getElementById("btn-validate").addEventListener("click", validate);
     document.getElementById("btn-run").addEventListener("click", run);
     document.getElementById("btn-duplicate").addEventListener("click", duplicate);
     document.getElementById("btn-export").addEventListener("click", () =>
       downloadJson(`${(state.draft.name || "scenario").replace(/[^\w-]+/g, "_")}.json`, state.draft)
     );
-    document.getElementById("btn-delete").addEventListener("click", remove);
+    document.getElementById("btn-delete")?.addEventListener("click", remove);
   }
 
   function setNotice(html) {
@@ -426,13 +469,18 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
   }
 
   async function run() {
-    if (state.dirty && !(await save())) return;
-    try {
-      const { id } = await apiDetailed(`/api/scenarios/${encodeURIComponent(state.scenario.id)}/run`, { method: "POST", body: "{}" });
-      location.hash = `#/experiments/${encodeURIComponent(id)}`;
-    } catch (err) {
-      setNotice(problemsHtml(err.message, err.problems));
-    }
+    if (!readOnly && state.dirty && !(await save())) return;
+    const c = state.scenario.config;
+    await openRunDialog(
+      {
+        id: state.scenario.id,
+        name: state.scenario.name,
+        language: c.conversation?.language ?? "en",
+        presentationLanguages: Object.keys(c.presentation?.strings ?? {}),
+        narrated: Boolean(c.presentation?.narrator),
+      },
+      meta
+    );
   }
 
   async function duplicate() {

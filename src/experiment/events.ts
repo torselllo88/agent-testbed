@@ -13,8 +13,10 @@ export const EventType = {
   TURN_COMPLETED: "turn_completed",
   /** Every provider call, including parse retries and failed attempts, with the full rendered prompt. */
   LLM_CALL: "llm_call",
-  /** A public room message (agent or system notice) — the participant-facing conversation. */
+  /** A public room message (agent, moderator notice, or narration) — the participant-facing conversation. */
   MESSAGE_POSTED: "message_posted",
+  /** Viewer pacing wait before a visible message — excluded from provider latency and active experiment time. */
+  PRESENTATION_DELAY: "presentation_delay",
   /** An agent's internal control metadata for a turn (target, intent, pass, readiness) — never shown in the room. */
   AGENT_META: "agent_meta",
   ROUTING_DECISION: "routing_decision",

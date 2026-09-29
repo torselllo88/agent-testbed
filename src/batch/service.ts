@@ -83,7 +83,11 @@ export class BatchService {
       const builtinId = spec.base.builtin;
       const builtin = BUILTIN_SCENARIOS.find((s) => s.id === builtinId);
       if (!builtin) throw new BatchValidationError([`Unknown builtin scenario "${builtinId}"`]);
-      rawBase = builtin.config();
+      // Prefer the library row, so runs record which scenario (and version) they came from.
+      const managed = this.scenarios.getBuiltin(builtinId);
+      rawBase = managed?.config ?? builtin.config();
+      scenarioId = managed?.id ?? null;
+      scenarioVersion = managed?.version ?? null;
     } else {
       rawBase = spec.base.config;
     }
@@ -154,6 +158,7 @@ export class BatchService {
           conditionKey: next.condition.key,
           repetition: next.repetition,
           origin: "batch",
+          overrides: spec.pacing === "off" ? { pacing: "off" } : undefined,
         });
         state.running.add(runner.id);
         await done.catch(() => undefined);

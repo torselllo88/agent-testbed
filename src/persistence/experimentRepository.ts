@@ -10,6 +10,8 @@ export interface ExperimentRecord {
   scenarioVersion: number | null;
   config: ExperimentConfig;
   configHash: string;
+  /** null for runs recorded before task-definition hashing existed. */
+  taskDefinitionHash: string | null;
   batchId: string | null;
   conditionKey: string | null;
   repetition: number | null;
@@ -31,6 +33,7 @@ interface ExperimentRow {
   scenario_version: number | null;
   config_snapshot_json: string;
   config_hash: string;
+  task_definition_hash: string | null;
   batch_id: string | null;
   condition_key: string | null;
   repetition: number | null;
@@ -53,6 +56,7 @@ function rowToRecord(row: ExperimentRow): ExperimentRecord {
     scenarioVersion: row.scenario_version,
     config: JSON.parse(row.config_snapshot_json) as ExperimentConfig,
     configHash: row.config_hash,
+    taskDefinitionHash: row.task_definition_hash,
     batchId: row.batch_id,
     conditionKey: row.condition_key,
     repetition: row.repetition,
@@ -75,6 +79,7 @@ export interface NewExperiment {
   scenarioVersion?: number | null;
   config: ExperimentConfig;
   configHash: string;
+  taskDefinitionHash?: string | null;
   batchId?: string | null;
   conditionKey?: string | null;
   repetition?: number | null;
@@ -110,9 +115,9 @@ export class ExperimentRepository {
     this.db
       .prepare(
         `INSERT INTO experiments
-          (id, scenario_id, scenario_version, config_snapshot_json, config_hash, batch_id, condition_key, repetition,
-           phase, intervened, testbed_version_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?)`
+          (id, scenario_id, scenario_version, config_snapshot_json, config_hash, task_definition_hash, batch_id, condition_key,
+           repetition, phase, intervened, testbed_version_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?)`
       )
       .run(
         input.id,
@@ -120,6 +125,7 @@ export class ExperimentRepository {
         input.scenarioVersion ?? null,
         JSON.stringify(input.config),
         input.configHash,
+        input.taskDefinitionHash ?? null,
         input.batchId ?? null,
         input.conditionKey ?? null,
         input.repetition ?? null,
@@ -140,7 +146,9 @@ export class ExperimentRepository {
     return record;
   }
 
-  list(filter: { batchId?: string; scenarioId?: string; excludeBatches?: boolean; limit?: number } = {}): ExperimentRecord[] {
+  list(
+    filter: { batchId?: string; scenarioId?: string; taskDefinitionHash?: string; excludeBatches?: boolean; limit?: number } = {}
+  ): ExperimentRecord[] {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
     if (filter.batchId) {
@@ -150,6 +158,10 @@ export class ExperimentRepository {
     if (filter.scenarioId) {
       clauses.push("scenario_id = ?");
       params.push(filter.scenarioId);
+    }
+    if (filter.taskDefinitionHash) {
+      clauses.push("task_definition_hash = ?");
+      params.push(filter.taskDefinitionHash);
     }
     if (filter.excludeBatches) clauses.push("batch_id IS NULL");
     const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";

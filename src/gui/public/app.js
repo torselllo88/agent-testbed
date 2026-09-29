@@ -5,9 +5,12 @@ import { renderExperiments } from "./pages/experiments.js";
 import { renderHome } from "./pages/home.js";
 import { renderScenarioEditor } from "./pages/scenarioEditor.js";
 import { renderScenarios } from "./pages/scenarios.js";
+import { renderWatch } from "./pages/watch.js";
 import { initShell, setActiveRoute } from "./shell.js";
 
 const ROUTES = [
+  // Viewer mode: full screen, no sidebar (see styles.css body.watch-mode).
+  { pattern: /^#\/watch\/([^/]+)$/, routeKey: "watch", render: (m) => renderWatch(decodeURIComponent(m[1])) },
   {
     pattern: /^#\/scenarios\/([^/?]+)(?:\?tab=(\w+))?$/,
     routeKey: "scenarios",
@@ -22,6 +25,7 @@ const ROUTES = [
 
 function router() {
   const hash = location.hash || "#/";
+  document.body.classList.toggle("watch-mode", hash.startsWith("#/watch/"));
   for (const route of ROUTES) {
     const match = route.pattern.exec(hash);
     if (match) {

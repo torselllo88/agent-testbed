@@ -9,7 +9,17 @@
  * metadata (targets, readiness, votes-in-progress) stays in the event log.
  */
 
-export type RoomSender = { kind: "agent"; agentId: string } | { kind: "system" };
+/**
+ * "system" is the runtime's moderator (protocol notices agents do read);
+ * "narrator" is scenario presentation for human observers — published to
+ * the room, but never part of any agent's (or the router's) context.
+ */
+export type RoomSender = { kind: "agent"; agentId: string } | { kind: "system" } | { kind: "narrator"; name: string };
+
+/** The conversation as agents and schedulers see it: narration removed. */
+export function agentVisible(messages: RoomMessage[]): RoomMessage[] {
+  return messages.filter((m) => m.sender.kind !== "narrator");
+}
 
 export interface RoomMessage {
   /** Transport-assigned id (opaque; a Chums message id for the Chums adapter). */

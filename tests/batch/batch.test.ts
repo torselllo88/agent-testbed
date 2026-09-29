@@ -185,3 +185,30 @@ describe("aggregate statistics", () => {
     expect(aggregate("none", [])).toMatchObject({ runs: 0, successRate: null, consensusRate: null });
   });
 });
+
+describe("batch with a presentation-oriented scenario", () => {
+  it("varies the conversation language like any field and runs without viewer pacing by default", async () => {
+    const { db, batches } = setup();
+    const t0 = Date.now();
+    const batch = batches.start({
+      name: "kestrel languages",
+      base: { builtin: "station-kestrel" },
+      repetitions: 1,
+      variables: [{ path: "conversation.language", label: "lang", values: ["en", "ru"] }],
+    });
+    await batches.settle(batch.id);
+    expect(Date.now() - t0).toBeLessThan(3000); // Kestrel's own pacing would take far longer
+
+    const runs = batches.runs(batch.id);
+    expect(runs.map((r) => r.config.conversation.language).sort()).toEqual(["en", "ru"]);
+    expect(new Set(runs.map((r) => r.taskDefinitionHash)).size).toBe(1);
+    for (const run of runs) {
+      const started = new EventRepository(db).list(run.id).find((e) => e.type === "experiment_started")!;
+      expect(started.payload.environment).toMatchObject({ pacingDisabled: true, origin: "batch" });
+      expect(run.config.presentation.pacing.minVisibleIntervalMs).toBe(0);
+    }
+    const ru = runs.find((r) => r.config.conversation.language === "ru")!;
+    const ending = new EventRepository(db).list(ru.id).filter((e) => e.type === "message_posted").at(-1)!;
+    expect(String(ending.payload.text)).toContain("Миссия выполнена");
+  });
+});

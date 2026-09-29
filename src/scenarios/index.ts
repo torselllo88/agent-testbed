@@ -3,6 +3,7 @@ import { EvaluatorRegistry } from "../evaluation/registry.js";
 import type { StubProvider } from "../llm/stubProvider.js";
 import { spaceStationConfig } from "./spaceStation/config.js";
 import { spaceStationEvaluator } from "./spaceStation/evaluator.js";
+import { kestrelConfig } from "./spaceStation/kestrel.js";
 import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 
 /**
@@ -15,6 +16,8 @@ import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 export interface BuiltinScenario {
   id: string;
   name: string;
+  /** One line for the scenario library card. */
+  summary: string;
   /**
    * Bumped whenever the built-in definition changes in a way that affects
    * runs. Saved copies in a database are never updated automatically — they
@@ -28,7 +31,20 @@ export interface BuiltinScenario {
 }
 
 export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
-  { id: "space-station", name: "Space Station Benchmark", version: 2, config: () => spaceStationConfig() },
+  {
+    id: "space-station",
+    name: "Space Station Benchmark",
+    summary: "Neutral coordination scenario — functional roles, no narration, no pacing",
+    version: 2,
+    config: () => spaceStationConfig(),
+  },
+  {
+    id: "station-kestrel",
+    name: "Station Kestrel",
+    summary: "Humanized live demo — named officers, narration, paced for viewers (en, ru)",
+    version: 1,
+    config: () => kestrelConfig(),
+  },
 ];
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {

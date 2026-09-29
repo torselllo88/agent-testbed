@@ -12,9 +12,10 @@ export interface ExperimentMetrics {
   termination: Termination | null;
   intervened: boolean;
   interventions: Array<{ seq: number; command: unknown; flowAltering: boolean }>;
-  durationMs: { active: number | null; wall: number | null };
+  /** wall = active + paused + presentation (viewer pacing); only active time drives the time limit. */
+  durationMs: { active: number | null; wall: number | null; paused: number | null; presentation: number | null };
   turns: { total: number; byKind: Record<string, number>; byAgent: Record<string, number> };
-  messages: { public: number; system: number; byAgent: Record<string, number> };
+  messages: { public: number; system: number; narrator: number; byAgent: Record<string, number> };
   passes: { total: number; byAgent: Record<string, number> };
   tokens: {
     agent: number;
@@ -57,9 +58,9 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     termination: null,
     intervened: opts.intervened ?? false,
     interventions: [],
-    durationMs: { active: null, wall: null },
+    durationMs: { active: null, wall: null, paused: null, presentation: null },
     turns: { total: 0, byKind: {}, byAgent: {} },
-    messages: { public: 0, system: 0, byAgent: {} },
+    messages: { public: 0, system: 0, narrator: 0, byAgent: {} },
     passes: { total: 0, byAgent: {} },
     tokens: { agent: 0, orchestration: 0, total: 0, byAgent: {} },
     costUsd: { total: 0, agent: 0, orchestration: 0, callsWithUnknownCost: 0 },
@@ -88,6 +89,8 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         finishedTs = e.ts;
         m.termination = p.termination as Termination;
         m.durationMs.active = typeof p.activeElapsedMs === "number" ? p.activeElapsedMs : null;
+        m.durationMs.paused = typeof p.pausedMs === "number" ? p.pausedMs : null;
+        m.durationMs.presentation = typeof p.presentationDelayMs === "number" ? p.presentationDelayMs : null;
         break;
       case EventType.TURN_STARTED:
         m.turns.total += 1;
@@ -105,6 +108,8 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         if (sender.kind === "agent" && sender.agentId) {
           m.messages.public += 1;
           inc(m.messages.byAgent, sender.agentId);
+        } else if (sender.kind === "narrator") {
+          m.messages.narrator += 1;
         } else {
           m.messages.system += 1;
         }

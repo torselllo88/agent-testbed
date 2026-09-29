@@ -3,7 +3,7 @@ import { ChumsTransport } from "./chumsTransport.js";
 import { LocalTransport } from "./localTransport.js";
 import type { Transport } from "./transport.js";
 
-export type { RoomMessage, RoomParticipant, RoomSender, Transport } from "./transport.js";
+export { agentVisible, type RoomMessage, type RoomParticipant, type RoomSender, type Transport } from "./transport.js";
 
 export function createTransport(config: TransportConfig): Transport {
   switch (config.type) {

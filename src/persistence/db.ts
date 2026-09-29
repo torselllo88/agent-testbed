@@ -29,6 +29,10 @@ function ensureColumn(db: Db, table: string, column: string, ddl: string): void 
 function applyMigrations(db: Db): void {
   db.exec(INIT_SQL);
   ensureColumn(db, "experiments", "repetition", "repetition INTEGER");
+  ensureColumn(db, "experiments", "task_definition_hash", "task_definition_hash TEXT");
+  // At most one row per builtin_id — enforced by ScenarioRepository.syncBuiltins (the only writer).
+  ensureColumn(db, "scenarios", "builtin_id", "builtin_id TEXT");
+  ensureColumn(db, "scenarios", "builtin_version", "builtin_version INTEGER");
 }
 
 const SYNCHRONOUS_NAMES = ["OFF", "NORMAL", "FULL", "EXTRA"] as const;

@@ -52,7 +52,10 @@ describe("HTTP basics", () => {
     expect(body.evaluators[0]).toMatchObject({ id: "space-station", version: "1" });
     expect(body.evaluators[0].proposalSchema.properties).toHaveProperty("coolant_loop");
     expect(body.schedulers).toEqual(["round_robin", "hybrid"]);
-    expect(body.builtinScenarios).toEqual([{ id: "space-station", name: "Space Station Benchmark" }]);
+    expect(body.builtinScenarios.map((b: { id: string; version: number }) => [b.id, b.version])).toEqual([
+      ["space-station", 2],
+      ["station-kestrel", 1],
+    ]);
   });
 
   it("serves the SPA shell and JSON 404s for unknown API routes", async () => {
@@ -230,5 +233,37 @@ describe("restart recovery", () => {
     expect(repo.getOrThrow("orphan-1")).toMatchObject({ outcome: "INTERRUPTED", status: "ABORTED", phase: "FINISHED" });
     const events = (await call("GET", "/api/experiments/orphan-1/events")).body.events;
     expect(events.at(-1)).toMatchObject({ type: "experiment_finished", payload: { recovered: true } });
+  });
+});
+
+describe("scenario library + run overrides", () => {
+  it("lists managed built-ins first as read-only, refuses edits/deletes, allows duplicate and run with a language override", async () => {
+    const { ScenarioRepository } = await import("../../src/persistence/scenarioRepository.js");
+    const { BUILTIN_SCENARIOS } = await import("../../src/scenarios/index.js");
+    new ScenarioRepository(db).syncBuiltins(BUILTIN_SCENARIOS);
+
+    const list = (await call("GET", "/api/scenarios")).body.scenarios;
+    const kestrel = list.find((s: { name: string }) => s.name === "Station Kestrel");
+    expect(list[0]).toMatchObject({ readOnly: true, name: "Space Station Benchmark" });
+    expect(kestrel).toMatchObject({ readOnly: true, narrated: true, paced: true, language: "en", presentationLanguages: ["en", "ru"] });
+    expect(kestrel.taskDefinitionHash).toBe(list[0].taskDefinitionHash);
+
+    const full = (await call("GET", `/api/scenarios/${kestrel.id}`)).body.scenario;
+    expect((await call("PUT", `/api/scenarios/${kestrel.id}`, { config: full.config })).status).toBe(409);
+    expect((await call("DELETE", `/api/scenarios/${kestrel.id}`)).status).toBe(409);
+    expect((await call("POST", `/api/scenarios/${kestrel.id}/duplicate`, {})).body.scenario).toMatchObject({ builtin: null });
+
+    expect((await call("POST", `/api/scenarios/${kestrel.id}/run`, { overrides: { language: "not a code!" } })).status).toBe(400);
+    const run = await call("POST", `/api/scenarios/${kestrel.id}/run`, { overrides: { language: "ru" } });
+    expect(run.status).toBe(201);
+    await call("POST", `/api/experiments/${run.body.id}/control`, { type: "stop" });
+    await service.settle();
+    const experiment = (await call("GET", `/api/experiments/${run.body.id}`)).body.experiment;
+    expect(experiment.config.conversation.language).toBe("ru");
+    expect(experiment.scenarioId).toBe(kestrel.id);
+    // The saved scenario is untouched.
+    expect((await call("GET", `/api/scenarios/${kestrel.id}`)).body.scenario.config.conversation.language).toBe("en");
+    const byTask = (await call("GET", `/api/experiments?taskDefinitionHash=${kestrel.taskDefinitionHash}`)).body.experiments;
+    expect(byTask.map((e: { id: string }) => e.id)).toContain(run.body.id);
   });
 });

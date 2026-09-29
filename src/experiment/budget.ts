@@ -42,6 +42,9 @@ export class BudgetTracker {
   private startedAtMs: number | null = null;
   private pausedAtMs: number | null = null;
   private pausedTotalMs = 0;
+  // Presentation pacing (viewer reading time): like a pause, excluded from active time.
+  private presentationAtMs: number | null = null;
+  private presentationTotalMs = 0;
 
   constructor(
     private readonly limits: LimitsConfig,
@@ -63,11 +66,36 @@ export class BudgetTracker {
     }
   }
 
-  /** Wall-clock time the run has been active, excluding operator pauses. */
+  beginPresentationDelay(): void {
+    if (this.presentationAtMs === null) this.presentationAtMs = this.now();
+  }
+
+  /** Ends the current presentation-delay segment; returns its length. */
+  endPresentationDelay(): number {
+    if (this.presentationAtMs === null) return 0;
+    const ms = this.now() - this.presentationAtMs;
+    this.presentationTotalMs += ms;
+    this.presentationAtMs = null;
+    return ms;
+  }
+
+  presentationDelayMs(): number {
+    return this.presentationTotalMs + (this.presentationAtMs !== null ? this.now() - this.presentationAtMs : 0);
+  }
+
+  /**
+   * Wall-clock time the run has been active — excluding operator pauses and
+   * presentation pacing, so neither consumes the experiment time limit:
+   *   wall = active + paused + presentation delay
+   */
   activeElapsedMs(): number {
     if (this.startedAtMs === null) return 0;
     const pausedNow = this.pausedAtMs !== null ? this.now() - this.pausedAtMs : 0;
-    return this.now() - this.startedAtMs - this.pausedTotalMs - pausedNow;
+    return this.now() - this.startedAtMs - this.pausedTotalMs - pausedNow - this.presentationDelayMs();
+  }
+
+  pausedMs(): number {
+    return this.pausedTotalMs + (this.pausedAtMs !== null ? this.now() - this.pausedAtMs : 0);
   }
 
   /** Remaining active time before TIMEOUT, or null when there is no time limit. */

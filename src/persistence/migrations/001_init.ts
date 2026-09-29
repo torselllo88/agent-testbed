@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS scenarios (
   version INTEGER NOT NULL,
   config_json TEXT NOT NULL,
   config_hash TEXT NOT NULL,
+  -- Set for managed built-in scenarios (synced from code, read-only); null for user scenarios.
+  builtin_id TEXT,
+  builtin_version INTEGER,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -36,6 +39,9 @@ CREATE TABLE IF NOT EXISTS experiments (
   scenario_version INTEGER,
   config_snapshot_json TEXT NOT NULL,
   config_hash TEXT NOT NULL,
+  -- Hash of the underlying task definition only (see experiment/config.ts taskDefinitionHash):
+  -- equal for runs of the same problem even when persona, models, language or presentation differ.
+  task_definition_hash TEXT,
   batch_id TEXT REFERENCES batches(id) ON DELETE SET NULL,
   condition_key TEXT,
   -- 1-based repetition index within its batch condition (null outside batches).

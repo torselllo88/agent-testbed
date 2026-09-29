@@ -43,6 +43,12 @@ export const BatchSpecSchema = z.object({
    * conditions instead of confounding them. "sequential" runs condition by condition.
    */
   order: z.enum(["interleaved", "sequential"]).default("interleaved"),
+  /**
+   * Viewer pacing of the scenario (e.g. Kestrel's). "off" by default: batch
+   * runs are headless, and pacing would only add wall time (it never counts
+   * as experiment time). "scenario" keeps it — e.g. to record demo-like runs.
+   */
+  pacing: z.enum(["off", "scenario"]).default("off"),
 });
 export type BatchSpec = z.infer<typeof BatchSpecSchema>;
 

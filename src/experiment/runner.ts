@@ -9,9 +9,23 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
 import { createScheduler, type RoutingDecision, type Scheduler } from "../scheduling/index.js";
 import type { LastTurn } from "../scheduling/types.js";
-import { createTransport, type RoomMessage, type Transport } from "../transport/index.js";
+import { agentVisible, createTransport, type RoomMessage, type Transport } from "../transport/index.js";
 import { BudgetTracker, type UsageTotals } from "./budget.js";
-import { canonicalJson, configHash, parseExperimentConfig, sha256, type AgentConfig, type ExperimentConfig } from "./config.js";
+import {
+  applyRunOverrides,
+  canonicalJson,
+  configHash,
+  parseExperimentConfig,
+  RunOverridesSchema,
+  sha256,
+  taskDefinitionHash,
+  type AgentConfig,
+  type ExperimentConfig,
+  type RunOverrides,
+} from "./config.js";
+import type { EvaluationResult } from "../evaluation/types.js";
+import { endingNarration, narratorName, openingNarration, type Narration } from "../presentation/narration.js";
+import { runtimeStrings, type RuntimeStrings } from "../presentation/runtimeStrings.js";
 import { EventLog, EventType } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
 import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
@@ -48,6 +62,8 @@ export interface RunOptions {
   conditionKey?: string | null;
   repetition?: number | null;
   origin?: RunEnvironment["origin"];
+  /** Per-run settings applied on top of the scenario config (e.g. conversation language). */
+  overrides?: RunOverrides;
 }
 
 /** Recorded on experiment_started. The stub latency matters: it changes every duration metric. */
@@ -58,6 +74,12 @@ export interface RunEnvironment {
   sqliteSynchronous: string;
   /** Process-wide cap on simultaneous requests per real provider; null = unlimited. */
   maxConcurrentRequests: number | null;
+  /** Effective conversation language of this run, and whether it came from a per-run override. */
+  conversationLanguage: string;
+  languageOverridden: boolean;
+  scenarioDefaultLanguage: string;
+  /** True when the scenario defines viewer pacing but this run disabled it (e.g. batch/CLI). */
+  pacingDisabled: boolean;
 }
 
 export type OperatorCommand =
@@ -104,6 +126,8 @@ export interface LiveState {
   lastRouting: RoutingDecision | null;
   usage: UsageTotals;
   activeElapsedMs: number;
+  /** Viewer pacing waited so far (excluded from activeElapsedMs). */
+  presentationDelayMs: number;
   termination: Termination | null;
 }
 
@@ -144,6 +168,10 @@ export class ExperimentRunner {
   private discussion = { segment: 1, turnsUsed: 0, turnLimit: 0 };
   private proposalAttempt = 1;
   private readonly environment: RunEnvironment;
+  private readonly strings: RuntimeStrings;
+  private evaluation: EvaluationResult | null = null;
+  /** The last visible room message, for viewer pacing. */
+  private lastVisible: { at: number; length: number } | null = null;
 
   // Operator control state.
   private paused = false;
@@ -159,8 +187,12 @@ export class ExperimentRunner {
     rawConfig: unknown,
     options: RunOptions = {}
   ) {
-    this.config = parseExperimentConfig(rawConfig);
+    const scenarioConfig = parseExperimentConfig(rawConfig);
+    const overrides = options.overrides ? RunOverridesSchema.parse(options.overrides) : undefined;
+    // What the run snapshots and executes; the saved scenario itself is never modified.
+    this.config = applyRunOverrides(scenarioConfig, overrides);
     this.id = options.id ?? randomUUID();
+    this.strings = runtimeStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
 
     const runnable = checkRunnable(deps, this.config);
@@ -181,6 +213,12 @@ export class ExperimentRunner {
       origin: options.origin ?? "interactive",
       sqliteSynchronous: sqliteSynchronousMode(deps.db),
       maxConcurrentRequests: deps.providers.maxConcurrentRequests,
+      conversationLanguage: this.config.conversation.language,
+      languageOverridden: this.config.conversation.language !== scenarioConfig.conversation.language,
+      scenarioDefaultLanguage: scenarioConfig.conversation.language,
+      pacingDisabled:
+        overrides?.pacing === "off" &&
+        (scenarioConfig.presentation.pacing.minVisibleIntervalMs > 0 || scenarioConfig.presentation.pacing.perCharMs > 0),
     };
 
     this.experiments.create({
@@ -189,6 +227,7 @@ export class ExperimentRunner {
       scenarioVersion: options.scenarioVersion,
       config: this.config,
       configHash: configHash(this.config),
+      taskDefinitionHash: taskDefinitionHash(this.config),
       batchId: options.batchId,
       conditionKey: options.conditionKey,
       repetition: options.repetition,
@@ -213,6 +252,12 @@ export class ExperimentRunner {
         this.log.append(EventType.ERROR, { message, stack: err instanceof Error ? err.stack : undefined });
         outcome = termination("ERROR", message);
       }
+    }
+    try {
+      await this.postEnding(outcome);
+    } catch (err) {
+      // Presentation must never change the outcome of a run.
+      this.log.append(EventType.ERROR, { message: `ending narration failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       await this.transport.close().catch(() => undefined);
     }
@@ -273,6 +318,7 @@ export class ExperimentRunner {
       lastRouting: this.lastRouting,
       usage: this.budget.totals(),
       activeElapsedMs: this.budget.activeElapsedMs(),
+      presentationDelayMs: this.budget.presentationDelayMs(),
       termination: this.finished,
     };
   }
@@ -289,6 +335,7 @@ export class ExperimentRunner {
     this.log.append(EventType.EXPERIMENT_STARTED, {
       config,
       configHash: configHash(config),
+      taskDefinitionHash: taskDefinitionHash(config),
       testbedVersion: getTestbedVersion(),
       environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
@@ -303,6 +350,7 @@ export class ExperimentRunner {
       experimentId: this.id,
       participants: config.agents.map((a) => ({ agentId: a.id, displayName: a.name })),
     });
+    await this.narrate(openingNarration(config, config.conversation.language));
     this.transition(Phase.DISCUSSION, { segment: 1, turnLimit: this.discussion.turnLimit });
 
     for (;;) {
@@ -377,7 +425,7 @@ export class ExperimentRunner {
     } else {
       decision = await this.scheduler.next({
         config: this.config,
-        transcript: await this.transport.history(),
+        transcript: await this.agentHistory(),
         lastTurn: this.lastTurn,
         lastActivatedTurn: this.lastActivatedTurn,
         turn: this.budget.turnsUsed() + 1,
@@ -398,7 +446,7 @@ export class ExperimentRunner {
     const agentTurn = this.discussionTurnsByAgent.get(agentId) ?? 0;
     this.discussionTurnsByAgent.set(agentId, agentTurn + 1);
 
-    const transcript = await this.transport.history();
+    const transcript = await this.agentHistory();
     const result = await this.llm.call({
       category: "agent",
       purpose: "discussion",
@@ -438,7 +486,7 @@ export class ExperimentRunner {
       agentId
     );
 
-    let atIndex = transcript.length;
+    let atIndex = transcript.at(-1)?.index ?? 0;
     if (!pass) {
       const message = await this.publish({ kind: "agent", agentId }, response.message.trim());
       atIndex = message.index;
@@ -464,7 +512,7 @@ export class ExperimentRunner {
       this.enforceHardLimits(1);
 
       const turn = this.startTurn(proposer.id, "proposal");
-      const transcript = await this.transport.history();
+      const transcript = await this.agentHistory();
       const result = await this.llm.call({
         category: "agent",
         purpose: "proposal",
@@ -522,7 +570,12 @@ export class ExperimentRunner {
       this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen" });
       await this.publish(
         { kind: "system" },
-        `Final proposal #${frozen.attempt} submitted by ${proposer.name}:\n${JSON.stringify(frozen.body)}\nRationale: ${frozen.rationale || "(none)"}\nVoting is open.`
+        this.strings.proposalSubmitted({
+          attempt: frozen.attempt,
+          proposerName: proposer.name,
+          body: JSON.stringify(frozen.body),
+          rationale: frozen.rationale,
+        })
       );
       return frozen;
     }
@@ -543,7 +596,7 @@ export class ExperimentRunner {
     await this.checkpoint();
     this.enforceHardLimits(voters.length);
 
-    const transcript = await this.transport.history();
+    const transcript = await this.agentHistory();
     const proposerName = this.agents.get(proposal.proposerId)!.name;
     const turns = voters.map((voter) => this.startTurn(voter.id, "vote"));
 
@@ -591,11 +644,17 @@ export class ExperimentRunner {
     if (!consensus.reached) {
       const reasons = votes
         .filter((v) => v.vote !== "APPROVE")
-        .map((v) => `- ${this.agents.get(v.agentId)!.name}: ${v.vote}${v.reason ? ` — ${v.reason}` : ""}`)
+        .map((v) => this.strings.voteLine({ agentName: this.agents.get(v.agentId)!.name, vote: v.vote, reason: v.reason }))
         .join("\n");
       await this.publish(
         { kind: "system" },
-        `Proposal #${proposal.attempt} was not approved (${consensus.approvals} of ${consensus.eligible} approved; ${consensus.rule} requires ${consensus.required}).${reasons ? `\n${reasons}` : ""}`
+        `${this.strings.proposalNotApproved({
+          attempt: proposal.attempt,
+          approvals: consensus.approvals,
+          eligible: consensus.eligible,
+          rule: consensus.rule,
+          required: consensus.required,
+        })}${reasons ? `\n${reasons}` : ""}`
       );
     }
     return consensus;
@@ -605,6 +664,7 @@ export class ExperimentRunner {
     this.transition(Phase.COMMITTED, { proposalId: proposal.id, proposalHash: proposal.hash });
     this.transition(Phase.EVALUATION, { evaluator: this.evaluator.id, evaluatorVersion: this.evaluator.version });
     const result = this.evaluator.evaluate(proposal.body, this.evaluatorParams);
+    this.evaluation = result;
     this.log.append(EventType.EVALUATION_RESULT, {
       evaluator: this.evaluator.id,
       evaluatorVersion: this.evaluator.version,
@@ -626,6 +686,8 @@ export class ExperimentRunner {
       usage: this.budget.totals(),
       turns: this.budget.turnsUsed(),
       activeElapsedMs: this.budget.activeElapsedMs(),
+      pausedMs: this.budget.pausedMs(),
+      presentationDelayMs: this.budget.presentationDelayMs(),
     });
 
     const record = this.experiments.getOrThrow(this.id);
@@ -664,11 +726,54 @@ export class ExperimentRunner {
     this.log.append(EventType.TURN_COMPLETED, { turn, ...payload }, agentId);
   }
 
-  private async publish(sender: RoomMessage["sender"], text: string): Promise<RoomMessage> {
+  /** The room as agents and schedulers see it — narration is for observers only. */
+  private async agentHistory(): Promise<RoomMessage[]> {
+    return agentVisible(await this.transport.history());
+  }
+
+  /** Publishes a narrator message (observer-only: filtered out of every agent's context). */
+  private async narrate(narration: Narration | null): Promise<void> {
+    const name = narratorName(this.config, this.config.conversation.language);
+    if (!narration || !name) return;
+    await this.publish({ kind: "narrator", name }, narration.text, {
+      narration: { source: narration.source, language: narration.language, missing: narration.missing },
+    });
+  }
+
+  private async postEnding(outcome: Termination): Promise<void> {
+    await this.narrate(endingNarration(this.config, this.config.conversation.language, outcome, this.evaluation, this.evaluatorParams));
+  }
+
+  /**
+   * Viewer pacing: hold a visible message until the previous one has been on
+   * screen for min(maxGapMs, minVisibleIntervalMs + its length × perCharMs).
+   * Measured from when the previous message appeared, so slow provider
+   * replies need little or no extra wait. Recorded as presentation_delay and
+   * excluded from active time; a stop ends the wait immediately.
+   */
+  private async pace(before: RoomMessage["sender"]["kind"]): Promise<void> {
+    const { minVisibleIntervalMs, perCharMs, maxGapMs } = this.config.presentation.pacing;
+    if (!this.lastVisible || (minVisibleIntervalMs === 0 && perCharMs === 0)) return;
+    const gapMs = Math.min(maxGapMs, minVisibleIntervalMs + this.lastVisible.length * perCharMs);
+    const until = this.lastVisible.at + gapMs;
+    if (Date.now() >= until || this.stopRequested) return;
+
+    const sincePreviousMs = Date.now() - this.lastVisible.at;
+    this.budget.beginPresentationDelay();
+    while (Date.now() < until && !this.stopRequested) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(100, until - Date.now())));
+    }
+    const waitedMs = this.budget.endPresentationDelay();
+    this.log.append(EventType.PRESENTATION_DELAY, { waitedMs, gapMs, sincePreviousMs, before, interrupted: this.stopRequested });
+  }
+
+  private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
+    await this.pace(sender.kind);
     const message = await this.transport.publish({ sender, text });
+    this.lastVisible = { at: Date.now(), length: text.length };
     this.log.append(
       EventType.MESSAGE_POSTED,
-      { index: message.index, messageId: message.id, sender: message.sender, text: message.text },
+      { index: message.index, messageId: message.id, sender: message.sender, text: message.text, ...extra },
       sender.kind === "agent" ? sender.agentId : null
     );
     return message;

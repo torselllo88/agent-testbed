@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Headless single run:  npm run experiment -- [config.json | builtin-id] [--db <dir>]
+ * Headless single run:  npm run experiment -- [config.json | builtin-id] [--db <dir>] [--language ru] [--pacing scenario]
  * Runs through exactly the same ExperimentRunner as the web UI, persists the
  * full trace to the database, and prints the summary as JSON.
  */
@@ -14,7 +14,7 @@ import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { db: { type: "string" } },
+  options: { db: { type: "string" }, language: { type: "string" }, pacing: { type: "string" } },
 });
 
 const source = positionals[0] ?? "space-station";
@@ -23,7 +23,11 @@ const rawConfig: unknown = builtin ? builtin.config() : JSON.parse(fs.readFileSy
 
 const db = openDb(values.db);
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
-const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry() }, rawConfig, { origin: "cli" });
+const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry() }, rawConfig, {
+  origin: "cli",
+  // Headless: viewer pacing is off unless explicitly requested with --pacing scenario.
+  overrides: { ...(values.language ? { language: values.language } : {}), pacing: values.pacing === "scenario" ? "scenario" : "off" },
+});
 
 process.on("SIGINT", () => {
   console.error("\nStopping experiment…");

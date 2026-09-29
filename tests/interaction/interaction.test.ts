@@ -216,6 +216,20 @@ describe("post-mission debrief", () => {
     expect(call.payload.requestedModel).toBe(config.agents.find((a) => a.id === "power")!.model.model);
   });
 
+  it("a reply carries the quoted message and says who to answer (the asker, not the message's author)", async () => {
+    const env = setup();
+    const id = await finishedKestrel(env);
+    const johnMessage = env.experimentEvents(id).find((e) => e.type === "message_posted" && e.agentId === "engineering")!;
+    await env.interaction.receive(id, say("u-bob", "Bob", "Why did you insist on that?", { replyTo: String(johnMessage.payload.messageId) }));
+    await env.interaction.settle();
+
+    const call = env.ievents(id, "debrief_llm_call").find((e) => e.payload.purpose === "debrief_answer")!;
+    expect(call.agentId).toBe("engineering");
+    const prompt = (call.payload.messages as Array<{ content: string }>).at(-1)!.content;
+    expect(prompt).toContain(`Bob is replying to your own message:\n"${String(johnMessage.payload.text)}"`);
+    expect(prompt).toContain("Answer Bob — the person who asked — and address them by name");
+  });
+
   it("limits pending questions per person with a deterministic notice, instead of dropping them silently", async () => {
     const env = setup(20);
     const id = await finishedKestrel(env, (c) => (c.humanInteraction!.debrief.maxPendingPerUser = 2));

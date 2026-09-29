@@ -30,8 +30,8 @@ export interface DebriefSessionContext {
   mission(): MissionRecord;
   /** Every public debrief exchange of this experiment so far (all sessions), oldest first. */
   history(): DebriefExchange[];
-  /** Room message id -> the character who posted it (mission messages and debrief answers). */
-  authorOf(messageId: string): string | null;
+  /** A room message by id (mission message or debrief answer) and the character who posted it, if any. */
+  messageOf(messageId: string): { agentId: string | null; text: string } | null;
   saveUsage(usage: DebriefUsage): void;
   markClosed(status: "CLOSED" | "INTERRUPTED", reason: string): void;
   now(): number;
@@ -201,6 +201,15 @@ export class DebriefSession {
 
     const agent = this.ctx.config.agents.find((a) => a.id === route.agentId)!;
     const llm = this.caller(question.messageId);
+    // A reply is only meaningful with what it replies to — and the asker, not that message's author, is who gets the answer.
+    const replied = question.replyTo ? this.ctx.messageOf(question.replyTo) : null;
+    const inReplyTo = replied
+      ? {
+          authorName: replied.agentId ? (this.ctx.config.agents.find((a) => a.id === replied.agentId)?.name ?? replied.agentId) : null,
+          own: replied.agentId === agent.id,
+          text: replied.text,
+        }
+      : null;
     try {
       const result = await llm.call({
         category: "agent",
@@ -217,7 +226,7 @@ export class DebriefSession {
               agent,
               this.ctx.mission(),
               this.ctx.history(),
-              { askerName: question.displayName, text: question.text },
+              { askerName: question.displayName, text: question.text, inReplyTo },
               { revealEvaluation: this.settings.revealEvaluation }
             ),
           },
@@ -245,7 +254,7 @@ export class DebriefSession {
   /** Reply > mention > name in the text > router (the scenario's router model, if any) > the default character. */
   private async route(question: HumanRoomMessage): Promise<{ agentId: string; source: RouteSource; detail: string }> {
     const config = this.ctx.config;
-    const direct = resolveAddressee(config, question, (id) => this.ctx.authorOf(id));
+    const direct = resolveAddressee(config, question, (id) => this.ctx.messageOf(id)?.agentId ?? null);
     if (direct) return direct;
 
     const fallback = this.settings.defaultAgentId ?? config.decision.proposerId;

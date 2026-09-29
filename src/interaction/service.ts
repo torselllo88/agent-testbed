@@ -185,7 +185,7 @@ export class HumanInteractionService {
         // The experiment is frozen: its record is read once and never changes.
         mission: () => (mission ??= missionRecord(this.events.list(experimentId))),
         history: () => this.history(experimentId),
-        authorOf: (messageId) => this.authorOf(experimentId, messageId, mission ?? (mission = missionRecord(this.events.list(experimentId)))),
+        messageOf: (messageId) => this.messageOf(experimentId, messageId, (mission ??= missionRecord(this.events.list(experimentId)))),
         saveUsage: (usage) => this.repo.updateUsage(created.id, usage),
         markClosed: (status, reason) => this.repo.closeSession(created.id, status, reason, new Date(this.now()).toISOString()),
         now: this.now,
@@ -283,11 +283,12 @@ export class HumanInteractionService {
       .slice(-12);
   }
 
-  private authorOf(experimentId: string, messageId: string, mission: MissionRecord): string | null {
+  /** A room message by id — a mission message or a debrief answer — with its author (null for moderator notices). */
+  private messageOf(experimentId: string, messageId: string, mission: MissionRecord): { agentId: string | null; text: string } | null {
     const fromMission = mission.transcript.find((m) => m.id === messageId);
-    if (fromMission) return fromMission.sender.kind === "agent" ? fromMission.sender.agentId : null;
+    if (fromMission) return { agentId: fromMission.sender.kind === "agent" ? fromMission.sender.agentId : null, text: fromMission.text };
     const answer = this.repo.listEvents(experimentId).find((e) => e.type === "debrief_answer_published" && e.payload.messageId === messageId);
-    return answer ? String(answer.payload.agentId) : null;
+    return answer ? { agentId: String(answer.payload.agentId), text: String(answer.payload.text) } : null;
   }
 
   private async postNotice(

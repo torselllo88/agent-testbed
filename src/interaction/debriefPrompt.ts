@@ -119,7 +119,12 @@ export function renderDebriefQuestionPrompt(
   agent: AgentConfig,
   mission: MissionRecord,
   history: DebriefExchange[],
-  question: { askerName: string; text: string },
+  question: {
+    askerName: string;
+    text: string;
+    /** The room message the question replies to, if it is a reply. */
+    inReplyTo?: { authorName: string | null; own: boolean; text: string } | null;
+  },
   options: { revealEvaluation: boolean }
 ): string {
   const nameOf = names(config);
@@ -151,7 +156,11 @@ export function renderDebriefQuestionPrompt(
     `OUTCOME: ${mission.outcome}${mission.endingNarration ? `\nAs announced in the room:\n${mission.endingNarration}` : ""}`,
     evaluation,
     `DEBRIEF SO FAR (oldest first):\n${debrief}`,
+    question.inReplyTo
+      ? `${question.askerName} is replying to ${question.inReplyTo.own ? "your own message" : `a message by ${question.inReplyTo.authorName ?? "the moderator"}`}:\n"${question.inReplyTo.text}"`
+      : "",
     `QUESTION from ${question.askerName}, addressed to you:\n${question.text}`,
+    `Answer ${question.askerName} — the person who asked — and address them by name, not anyone mentioned in the transcript.`,
     `Respond with ONLY a single JSON object matching this JSON Schema — no other text:\n${JSON.stringify(DEBRIEF_ANSWER_JSON_SCHEMA)}`,
   ]
     .filter(Boolean)

@@ -7,12 +7,14 @@ import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
 import { ScenarioRepository } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
+import { presentationExtensions } from "../presentation/index.js";
 import { createApp } from "./app.js";
 
 const db = openDb();
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider(env.stubLatencyMs)));
 const evaluators = createEvaluatorRegistry();
-const service = new ExperimentService({ db, providers, evaluators });
+// Product/demo features (narration, viewer pacing) attach through the core's extension interface.
+const service = new ExperimentService({ db, providers, evaluators, extensions: presentationExtensions });
 
 const batches = new BatchService({ db, providers, evaluators, service });
 

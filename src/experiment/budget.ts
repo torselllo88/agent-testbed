@@ -42,9 +42,9 @@ export class BudgetTracker {
   private startedAtMs: number | null = null;
   private pausedAtMs: number | null = null;
   private pausedTotalMs = 0;
-  // Presentation pacing (viewer reading time): like a pause, excluded from active time.
-  private presentationAtMs: number | null = null;
-  private presentationTotalMs = 0;
+  // Held clock: time an extension holds the run (e.g. viewer pacing) — like a pause, excluded from active time.
+  private heldAtMs: number | null = null;
+  private heldTotalMs = 0;
 
   constructor(
     private readonly limits: LimitsConfig,
@@ -66,32 +66,33 @@ export class BudgetTracker {
     }
   }
 
-  beginPresentationDelay(): void {
-    if (this.presentationAtMs === null) this.presentationAtMs = this.now();
+  beginHold(): void {
+    if (this.heldAtMs === null) this.heldAtMs = this.now();
   }
 
-  /** Ends the current presentation-delay segment; returns its length. */
-  endPresentationDelay(): number {
-    if (this.presentationAtMs === null) return 0;
-    const ms = this.now() - this.presentationAtMs;
-    this.presentationTotalMs += ms;
-    this.presentationAtMs = null;
+  /** Ends the current held segment; returns its length. */
+  endHold(): number {
+    if (this.heldAtMs === null) return 0;
+    const ms = this.now() - this.heldAtMs;
+    this.heldTotalMs += ms;
+    this.heldAtMs = null;
     return ms;
   }
 
-  presentationDelayMs(): number {
-    return this.presentationTotalMs + (this.presentationAtMs !== null ? this.now() - this.presentationAtMs : 0);
+  heldMs(): number {
+    return this.heldTotalMs + (this.heldAtMs !== null ? this.now() - this.heldAtMs : 0);
   }
 
   /**
    * Wall-clock time the run has been active — excluding operator pauses and
-   * presentation pacing, so neither consumes the experiment time limit:
-   *   wall = active + paused + presentation delay
+   * held time (extensions such as viewer pacing), so neither consumes the
+   * experiment time limit:
+   *   wall = active + paused + held
    */
   activeElapsedMs(): number {
     if (this.startedAtMs === null) return 0;
     const pausedNow = this.pausedAtMs !== null ? this.now() - this.pausedAtMs : 0;
-    return this.now() - this.startedAtMs - this.pausedTotalMs - pausedNow - this.presentationDelayMs();
+    return this.now() - this.startedAtMs - this.pausedTotalMs - pausedNow - this.heldMs();
   }
 
   pausedMs(): number {

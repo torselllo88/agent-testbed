@@ -626,12 +626,13 @@ src/
   experiment/   config schema · state machine (phases) · ExperimentRunner (lifecycle loop, operator controls)
                 LlmCaller (every model call: retries, parsing, tracing, budget) · protocol (prompts, response schemas)
                 readiness · budget · outcome taxonomy · event log · metrics · ExperimentService (running experiments)
+                protocolStrings (moderator notices agents read, en/ru) · RunExtension interface (extensions.ts)
   scheduling/   Scheduler interface · round-robin · hybrid (explicit → classifier → fallback)
   consensus/    ConsensusRule interface · unanimity · majority
   transport/    Transport interface · LocalTransport · ChumsTransport (extension point)
   evaluation/   ScenarioEvaluator interface · registry
   scenarios/    scenario packages (config + evaluator + stub scripts) · registries
-  presentation/ narration (opening / grounded endings) · runtime moderator strings (en, ru) · language names
+  presentation/ run extensions: narrator (opening / grounded endings) · PacedTransport (viewer pacing)
   batch/        spec & condition expansion · BatchService · aggregates
   llm/          provider interface · OpenRouter · Azure OpenAI · stub · registry · concurrency gate · pricing
   persistence/  SQLite (node:sqlite) · scenarios · experiments · events · batches
@@ -655,6 +656,33 @@ Agents are data, not classes: one generic runtime renders each agent's prompt
 from the config and parses its JSON response. The runner never solves anything,
 and every decision point is an interface: `Scheduler`, `ConsensusRule`,
 `Transport`, `ScenarioEvaluator`, `LlmProvider`.
+
+**Core vs. add-ons.** `ExperimentRunner` contains only experiment semantics.
+That includes everything that can change what agents do or what the run
+records as its result: turns, routing, readiness, proposal, voting,
+evaluation, budgets, and the protocol notices agents read. Persona and
+conversation language belong here too, as run configuration, because they
+change behavior.
+
+Everything for human observers is outside the core and attaches through one
+interface, `RunExtension` ([src/experiment/extensions.ts](src/experiment/extensions.ts)):
+
+- `wrapTransport` — e.g. `PacedTransport`;
+- `onRoomOpened` / `onRunEnded` — e.g. the narrator;
+- a context that can post observer-only messages, append trace events, hold
+  the experiment clock (excluded from active time, like a pause) and see the
+  stop signal.
+
+Extensions cannot touch turns, proposals, votes, evaluation or the outcome. A
+failing extension is logged and changes nothing. The composition roots
+(server, CLI, batch) attach `presentationExtensions`; without extensions the
+runner is the bare core.
+
+Viewer-only features (viewer mode, localized agent labels, the readable
+proposal card, and any future post-run debrief) do not even need an
+extension. They are projections of the event log.
+
+A test enforces the boundary: no core module imports `src/presentation/`.
 
 ---
 

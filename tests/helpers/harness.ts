@@ -1,6 +1,8 @@
 import type { ExperimentConfig } from "../../src/experiment/config.js";
 import type { ExperimentEvent } from "../../src/experiment/events.js";
+import type { RunExtensionFactory } from "../../src/experiment/extensions.js";
 import { ExperimentRunner } from "../../src/experiment/runner.js";
+import { presentationExtensions } from "../../src/presentation/index.js";
 import type { CompletionRequest, LlmProvider } from "../../src/llm/provider.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider, type StubResponder } from "../../src/llm/stubProvider.js";
@@ -33,7 +35,14 @@ export interface Harness {
 }
 
 export function createHarness(
-  opts: { providers?: LlmProvider[]; secrets?: string[]; scripts?: Record<string, StubResponder>; maxConcurrentRequests?: number } = {}
+  opts: {
+    providers?: LlmProvider[];
+    secrets?: string[];
+    scripts?: Record<string, StubResponder>;
+    maxConcurrentRequests?: number;
+    /** Presentation extensions, as the app wires them; pass null for the bare experiment core. */
+    extensions?: RunExtensionFactory | null;
+  } = {}
 ): Harness {
   const db = createInMemoryDb();
   const stub = registerBuiltinStubs(new StubProvider());
@@ -44,7 +53,8 @@ export function createHarness(
     db,
     stub,
     providers,
-    runner: (config) => new ExperimentRunner({ db, providers, evaluators }, config),
+    runner: (config) =>
+      new ExperimentRunner({ db, providers, evaluators, extensions: opts.extensions === null ? undefined : (opts.extensions ?? presentationExtensions) }, config),
     events: (id) => new EventRepository(db).list(id),
     record: (id) => new ExperimentRepository(db).getOrThrow(id),
   };

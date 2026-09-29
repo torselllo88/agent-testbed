@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyRunOverrides, configHash, parseExperimentConfig, taskDefinitionHash, type ExperimentConfig } from "../../src/experiment/config.js";
 import type { CompletionRequest } from "../../src/llm/provider.js";
 import { endingNarration, openingNarration, renderTemplate } from "../../src/presentation/narration.js";
-import { runtimeStrings } from "../../src/presentation/runtimeStrings.js";
+import { protocolStrings } from "../../src/experiment/protocolStrings.js";
 import { ReadOnlyScenarioError, ScenarioRepository } from "../../src/persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS } from "../../src/scenarios/index.js";
 import { spaceStationConfig } from "../../src/scenarios/spaceStation/config.js";
@@ -256,11 +256,11 @@ describe("narration rendering", () => {
     expect(endingNarration(noNarrator, "en", termination("SUCCESS", "ok"), null, {})).toBeNull();
   });
 
-  it("English runtime strings match the text the benchmark always used", () => {
-    expect(runtimeStrings("en").proposalSubmitted({ attempt: 1, proposerName: "Ops", body: "{}", rationale: "" })).toBe(
+  it("English protocol strings match the text the benchmark always used", () => {
+    expect(protocolStrings("en").proposalSubmitted({ attempt: 1, proposerName: "Ops", body: "{}", rationale: "" })).toBe(
       "Final proposal #1 submitted by Ops:\n{}\nRationale: (none)\nVoting is open."
     );
-    expect(runtimeStrings("xx").voteLine({ agentName: "A", vote: "REJECT", reason: "no" })).toBe("- A: REJECT — no");
+    expect(protocolStrings("xx").voteLine({ agentName: "A", vote: "REJECT", reason: "no" })).toBe("- A: REJECT — no");
   });
 });
 

@@ -1,13 +1,34 @@
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { ExperimentConfig, PresentationStrings } from "../experiment/config.js";
 import type { Termination } from "../experiment/outcome.js";
-import { runtimeStrings } from "./runtimeStrings.js";
 
 /**
  * Deterministic narration for observers: an opening and an ending, rendered
  * from the scenario's authored strings and the run's actual state. No model
  * call is ever involved — the ending says what the evaluator found, nothing more.
  */
+
+/** Short neutral endings for technical / operator outcomes (and anything unauthored), per authored language. */
+const NEUTRAL_ENDINGS: Record<string, Record<string, string>> = {
+  en: {
+    STOPPED_BY_OPERATOR: "The run was stopped by the operator.",
+    PROVIDER_ERROR: "The run ended because a model provider failed. This is a technical interruption, not an outcome of the mission.",
+    ERROR: "The run ended because of an internal error. This is a technical interruption, not an outcome of the mission.",
+    INTERRUPTED: "The run was interrupted.",
+  },
+  ru: {
+    STOPPED_BY_OPERATOR: "Прогон остановлен оператором.",
+    PROVIDER_ERROR: "Прогон прерван из-за сбоя провайдера модели. Это техническая остановка, а не исход миссии.",
+    ERROR: "Прогон прерван из-за внутренней ошибки. Это техническая остановка, а не исход миссии.",
+    INTERRUPTED: "Прогон был прерван.",
+  },
+};
+
+export function neutralEnding(language: string, outcome: string): string {
+  const lower = language.toLowerCase();
+  const table = NEUTRAL_ENDINGS[lower] ?? NEUTRAL_ENDINGS[lower.split("-")[0]!] ?? NEUTRAL_ENDINGS.en!;
+  return table[outcome] ?? (lower.startsWith("ru") ? `Прогон завершён: ${outcome}.` : `The run ended: ${outcome}.`);
+}
 
 /** Outcomes that are not part of the story: they get short neutral messages unless a scenario explicitly authors one. */
 const TECHNICAL_OUTCOMES = new Set(["PROVIDER_ERROR", "ERROR", "INTERRUPTED", "STOPPED_BY_OPERATOR"]);
@@ -102,7 +123,7 @@ export function endingNarration(
     source = "outcomes.default";
   }
   if (!picked) {
-    return { text: runtimeStrings(language).neutralEnding(outcome, termination.reason), source: "runtime.neutral", language, missing: [] };
+    return { text: neutralEnding(language, outcome), source: "runtime.neutral", language, missing: [] };
   }
 
   const { text, missing } = renderTemplate(picked.text, {

@@ -7,8 +7,8 @@ import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import { ConfigValidationError, parseExperimentConfig, RunOverridesSchema, type RunOverrides } from "../experiment/config.js";
-import { AUTHORED_RUNTIME_LANGUAGES } from "../presentation/runtimeStrings.js";
-import { COMMON_LANGUAGES } from "../presentation/languages.js";
+import { COMMON_LANGUAGES } from "../experiment/languages.js";
+import { AUTHORED_PROTOCOL_LANGUAGES } from "../experiment/protocolStrings.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
 import { OUTCOMES } from "../experiment/outcome.js";
 import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
@@ -147,7 +147,7 @@ const ROUTES: Route[] = [
         consensusRules: Object.keys(CONSENSUS_RULES),
         outcomes: OUTCOMES,
         builtinScenarios: BUILTIN_SCENARIOS.map((s) => ({ id: s.id, name: s.name, version: s.version, summary: s.summary })),
-        languages: { suggested: COMMON_LANGUAGES, authoredRuntime: AUTHORED_RUNTIME_LANGUAGES },
+        languages: { suggested: COMMON_LANGUAGES, authoredProtocol: AUTHORED_PROTOCOL_LANGUAGES },
         runningExperiments: deps.service.runningIds(),
       }),
   },

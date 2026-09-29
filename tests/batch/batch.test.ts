@@ -8,6 +8,7 @@ import { StubProvider } from "../../src/llm/stubProvider.js";
 import { createInMemoryDb } from "../../src/persistence/db.js";
 import { BatchRepository } from "../../src/persistence/batchRepository.js";
 import { EventRepository } from "../../src/persistence/eventRepository.js";
+import { presentationExtensions } from "../../src/presentation/index.js";
 import { createEvaluatorRegistry, registerBuiltinStubs } from "../../src/scenarios/index.js";
 import { spaceStationConfig } from "../../src/scenarios/spaceStation/config.js";
 import { script, turnJson } from "../helpers/harness.js";
@@ -18,7 +19,7 @@ function setup(stubLatencyMs = 0) {
   stub.register("test/chatty", script({ discussion: () => turnJson({ message: "talking" }) }));
   const providers = new ProviderRegistry([], stub);
   const evaluators = createEvaluatorRegistry();
-  const service = new ExperimentService({ db, providers, evaluators });
+  const service = new ExperimentService({ db, providers, evaluators, extensions: presentationExtensions });
   const batches = new BatchService({ db, providers, evaluators, service });
   return { db, service, batches };
 }

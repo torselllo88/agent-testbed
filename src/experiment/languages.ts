@@ -1,5 +1,5 @@
 /**
- * Human-readable names for common language codes, used only to phrase the
+ * Part of the agent protocol. Human-readable names for common language codes, used only to phrase the
  * instruction to agents ("write in Russian (ru)"). Any other code is passed
  * through as-is — the conversation itself supports whatever the model does.
  */

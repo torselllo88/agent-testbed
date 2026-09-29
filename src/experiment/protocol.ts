@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { RoomMessage } from "../transport/transport.js";
 import type { AgentConfig, ExperimentConfig } from "./config.js";
-import { languageName } from "../presentation/languages.js";
+import { languageName } from "./languages.js";
 import { toJsonSchema } from "./jsonSchema.js";
 
 /**

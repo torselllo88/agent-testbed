@@ -24,8 +24,8 @@ import {
   type RunOverrides,
 } from "./config.js";
 import type { EvaluationResult } from "../evaluation/types.js";
-import { endingNarration, narratorName, openingNarration, type Narration } from "../presentation/narration.js";
-import { runtimeStrings, type RuntimeStrings } from "../presentation/runtimeStrings.js";
+import type { NarratorSender, RunExtension, RunExtensionContext, RunExtensionFactory } from "./extensions.js";
+import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
 import { EventLog, EventType } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
 import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
@@ -52,6 +52,11 @@ export interface RunnerDeps {
   evaluators: EvaluatorRegistry;
   /** Override for tests; defaults to the transport named in the config. */
   createTransport?: (config: ExperimentConfig) => Transport;
+  /**
+   * Product / demo features (narration, viewer pacing, ...) attached through
+   * the extension interface. Omitted = the pure experiment core.
+   */
+  extensions?: RunExtensionFactory;
 }
 
 export interface RunOptions {
@@ -168,10 +173,10 @@ export class ExperimentRunner {
   private discussion = { segment: 1, turnsUsed: 0, turnLimit: 0 };
   private proposalAttempt = 1;
   private readonly environment: RunEnvironment;
-  private readonly strings: RuntimeStrings;
+  private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
-  /** The last visible room message, for viewer pacing. */
-  private lastVisible: { at: number; length: number } | null = null;
+  private readonly extensions: RunExtension[];
+  private readonly extensionContext: RunExtensionContext;
 
   // Operator control state.
   private paused = false;
@@ -192,7 +197,7 @@ export class ExperimentRunner {
     // What the run snapshots and executes; the saved scenario itself is never modified.
     this.config = applyRunOverrides(scenarioConfig, overrides);
     this.id = options.id ?? randomUUID();
-    this.strings = runtimeStrings(this.config.conversation.language);
+    this.strings = protocolStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
 
     const runnable = checkRunnable(deps, this.config);
@@ -205,7 +210,25 @@ export class ExperimentRunner {
     this.llm = new LlmCaller(deps.providers, this.log, this.budget, this.config.runtime, this.abort.signal);
     this.scheduler = createScheduler(this.config.scheduler, { llm: this.llm });
     this.consensus = createConsensusRule(this.config.consensus);
-    this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
+    this.extensions = deps.extensions?.(this.config) ?? [];
+    this.extensionContext = {
+      config: this.config,
+      post: (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => this.publish(sender, text, meta),
+      log: (type, payload) => {
+        this.log.append(type, payload);
+      },
+      holdClock: async (fn) => {
+        this.budget.beginHold();
+        try {
+          return await fn();
+        } finally {
+          this.budget.endHold();
+        }
+      },
+      stopSignal: this.abort.signal,
+    };
+    const baseTransport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
+    this.transport = this.extensions.reduce((t, ext) => ext.wrapTransport?.(t, this.extensionContext) ?? t, baseTransport);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
     this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
     this.environment = {
@@ -253,14 +276,10 @@ export class ExperimentRunner {
         outcome = termination("ERROR", message);
       }
     }
-    try {
-      await this.postEnding(outcome);
-    } catch (err) {
-      // Presentation must never change the outcome of a run.
-      this.log.append(EventType.ERROR, { message: `ending narration failed: ${err instanceof Error ? err.message : String(err)}` });
-    } finally {
-      await this.transport.close().catch(() => undefined);
-    }
+    await this.notifyExtensions("onRunEnded", (ext) =>
+      ext.onRunEnded?.(this.extensionContext, { termination: outcome, evaluation: this.evaluation, evaluatorParams: this.evaluatorParams })
+    );
+    await this.transport.close().catch(() => undefined);
     return this.finish(outcome);
   }
 
@@ -318,7 +337,7 @@ export class ExperimentRunner {
       lastRouting: this.lastRouting,
       usage: this.budget.totals(),
       activeElapsedMs: this.budget.activeElapsedMs(),
-      presentationDelayMs: this.budget.presentationDelayMs(),
+      presentationDelayMs: this.budget.heldMs(),
       termination: this.finished,
     };
   }
@@ -350,7 +369,7 @@ export class ExperimentRunner {
       experimentId: this.id,
       participants: config.agents.map((a) => ({ agentId: a.id, displayName: a.name })),
     });
-    await this.narrate(openingNarration(config, config.conversation.language));
+    await this.notifyExtensions("onRoomOpened", (ext) => ext.onRoomOpened?.(this.extensionContext));
     this.transition(Phase.DISCUSSION, { segment: 1, turnLimit: this.discussion.turnLimit });
 
     for (;;) {
@@ -690,7 +709,7 @@ export class ExperimentRunner {
       turns: this.budget.turnsUsed(),
       activeElapsedMs: this.budget.activeElapsedMs(),
       pausedMs: this.budget.pausedMs(),
-      presentationDelayMs: this.budget.presentationDelayMs(),
+      presentationDelayMs: this.budget.heldMs(),
     });
 
     const record = this.experiments.getOrThrow(this.id);
@@ -734,46 +753,19 @@ export class ExperimentRunner {
     return agentVisible(await this.transport.history());
   }
 
-  /** Publishes a narrator message (observer-only: filtered out of every agent's context). */
-  private async narrate(narration: Narration | null): Promise<void> {
-    const name = narratorName(this.config, this.config.conversation.language);
-    if (!narration || !name) return;
-    await this.publish({ kind: "narrator", name }, narration.text, {
-      narration: { source: narration.source, language: narration.language, missing: narration.missing },
-    });
-  }
-
-  private async postEnding(outcome: Termination): Promise<void> {
-    await this.narrate(endingNarration(this.config, this.config.conversation.language, outcome, this.evaluation, this.evaluatorParams));
-  }
-
-  /**
-   * Viewer pacing: hold a visible message until the previous one has been on
-   * screen for min(maxGapMs, minVisibleIntervalMs + its length × perCharMs).
-   * Measured from when the previous message appeared, so slow provider
-   * replies need little or no extra wait. Recorded as presentation_delay and
-   * excluded from active time; a stop ends the wait immediately.
-   */
-  private async pace(before: RoomMessage["sender"]["kind"]): Promise<void> {
-    const { minVisibleIntervalMs, perCharMs, maxGapMs } = this.config.presentation.pacing;
-    if (!this.lastVisible || (minVisibleIntervalMs === 0 && perCharMs === 0)) return;
-    const gapMs = Math.min(maxGapMs, minVisibleIntervalMs + this.lastVisible.length * perCharMs);
-    const until = this.lastVisible.at + gapMs;
-    if (Date.now() >= until || this.stopRequested) return;
-
-    const sincePreviousMs = Date.now() - this.lastVisible.at;
-    this.budget.beginPresentationDelay();
-    while (Date.now() < until && !this.stopRequested) {
-      await new Promise((resolve) => setTimeout(resolve, Math.min(100, until - Date.now())));
+  /** Runs one lifecycle hook on every extension; an extension failure is logged and never changes the run. */
+  private async notifyExtensions(hook: string, call: (ext: RunExtension) => Promise<void> | undefined): Promise<void> {
+    for (const ext of this.extensions) {
+      try {
+        await call(ext);
+      } catch (err) {
+        this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in ${hook}: ${err instanceof Error ? err.message : String(err)}` });
+      }
     }
-    const waitedMs = this.budget.endPresentationDelay();
-    this.log.append(EventType.PRESENTATION_DELAY, { waitedMs, gapMs, sincePreviousMs, before, interrupted: this.stopRequested });
   }
 
   private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
-    await this.pace(sender.kind);
     const message = await this.transport.publish({ sender, text });
-    this.lastVisible = { at: Date.now(), length: text.length };
     this.log.append(
       EventType.MESSAGE_POSTED,
       { index: message.index, messageId: message.id, sender: message.sender, text: message.text, ...extra },

@@ -10,6 +10,7 @@ import { ExperimentRunner } from "../experiment/runner.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
+import { presentationExtensions } from "../presentation/index.js";
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
 
 const { positionals, values } = parseArgs({
@@ -23,7 +24,7 @@ const rawConfig: unknown = builtin ? builtin.config() : JSON.parse(fs.readFileSy
 
 const db = openDb(values.db);
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
-const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry() }, rawConfig, {
+const runner = new ExperimentRunner({ db, providers, evaluators: createEvaluatorRegistry(), extensions: presentationExtensions }, rawConfig, {
   origin: "cli",
   // Headless: viewer pacing is off unless explicitly requested with --pacing scenario.
   overrides: { ...(values.language ? { language: values.language } : {}), pacing: values.pacing === "scenario" ? "scenario" : "off" },

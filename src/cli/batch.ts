@@ -16,6 +16,7 @@ import { ExperimentService } from "../experiment/service.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
+import { presentationExtensions } from "../presentation/index.js";
 import { createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
 
 const { positionals, values } = parseArgs({
@@ -37,7 +38,7 @@ const db = openDb(values.db);
 // Latency here is irrelevant: BatchService always uses the spec's own stubLatencyMs (default 0).
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
 const evaluators = createEvaluatorRegistry();
-const service = new ExperimentService({ db, providers, evaluators });
+const service = new ExperimentService({ db, providers, evaluators, extensions: presentationExtensions });
 const batches = new BatchService({ db, providers, evaluators, service });
 
 let batchId: string;

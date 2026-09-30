@@ -8,7 +8,10 @@ import { BUILTIN_SCENARIOS } from "../../src/scenarios/index.js";
 import { spaceStationConfig } from "../../src/scenarios/spaceStation/config.js";
 import { kestrelConfig } from "../../src/scenarios/spaceStation/kestrel.js";
 import { termination } from "../../src/experiment/outcome.js";
-import { createHarness, ofType, script, useModel } from "../helpers/harness.js";
+import { ExperimentRunner } from "../../src/experiment/runner.js";
+import { presentationExtensions } from "../../src/presentation/index.js";
+import { createEvaluatorRegistry } from "../../src/scenarios/index.js";
+import { createHarness, ofType, script, turnJson, useModel } from "../helpers/harness.js";
 
 /** Kestrel with test-speed settings: no pacing, no retry delays. */
 function fastKestrel(model?: string, mutate?: (c: ExperimentConfig) => void): ExperimentConfig {
@@ -93,9 +96,14 @@ describe("Kestrel end-to-end (stub agents)", () => {
     expect(room[0]).toMatchObject({ index: null, sender: { kind: "narrator", name: "MISSION CONTROL" }, narration: { source: "opening", language: "en" } });
     expect(room[1]).toMatchObject({ index: 1, sender: { kind: "agent" } });
     expect(room[0]!.text).toContain("Station Kestrel has lost its primary reactor cooling loop");
-    expect(room.at(-1)).toMatchObject({ sender: { kind: "narrator" }, narration: { source: "outcomes.SUCCESS" } });
+    // The ending is revealed as a sequence: tally → pump start → outcome.
+    const ending = room.filter((m) => m.narration?.source === "outcomes.SUCCESS");
+    expect(ending.map((m) => (m.narration as { part?: number }).part)).toEqual([1, 2, 3]);
+    expect(ending[0]!.text).toBe("Vote: 4 of 4 in favor. Decision locked — executing the recovery procedure.");
+    expect(room.at(-1)).toBe(ending[2]);
     expect(room.at(-1)!.text).toContain("Mission successful");
-    expect(metrics.messages.narrator).toBe(2);
+    const beats = room.filter((m) => m.narration?.source.startsWith("beats."));
+    expect(metrics.messages.narrator).toBe(1 + beats.length + 3);
 
     // Narration never reaches any agent's context.
     for (const req of seen) expect(req.messages.map((m) => m.content).join("\n")).not.toContain("03:17 UTC");
@@ -186,6 +194,90 @@ describe("Kestrel end-to-end (stub agents)", () => {
     expect(metrics.messages.narrator).toBe(0);
     expect(ofType(h.events(runner.id), "presentation_delay")).toHaveLength(0);
     expect(metrics.durationMs.presentation).toBe(0);
+  });
+});
+
+describe("Kestrel dramaturgy (observer-only)", () => {
+  /** A run whose discussion lasts long enough for every beat: chatty turns until the soft limit, then a rejected plan, then agreement. */
+  function longKestrel(language = "en") {
+    const chatty = script({
+      discussion: (agentId, turn) => turnJson({ message: `${agentId} point ${turn}`, ready: turn >= 4 }),
+      vote: (agentId, req) =>
+        JSON.stringify({ vote: agentId === "life_support" && Number(req.context?.proposalAttempt) === 1 ? "REJECT" : "APPROVE", reason: "r" }),
+    });
+    const config = fastKestrel(undefined, (c) => {
+      c.conversation.language = language;
+    });
+    useModel(config, "test/long");
+    return { chatty, config };
+  }
+
+  it("beats fire on protocol state — progress thresholds once, a rejected plan every time — just before the next visible message", async () => {
+    const { chatty, config } = longKestrel();
+    const h = createHarness({ scripts: { "test/long": chatty } });
+    const runner = h.runner(config);
+    await runner.run();
+
+    const room = messages(h, runner.id);
+    const sources = room.map((m) => (m.sender.kind === "narrator" ? String(m.narration?.source) : m.sender.kind));
+    expect(sources.filter((s) => s.startsWith("beats."))).toEqual(["beats.window", "beats.urgent", "beats.rejected"]);
+    // Every beat is followed by a visible (non-narrator) message: it never trails or interrupts one.
+    for (const [i, s] of sources.entries()) if (s.startsWith("beats.")) expect(["agent", "system"]).toContain(sources[i + 1]);
+    // The rejected-plan beat comes after the "not approved" notice.
+    const notice = room.findIndex((m) => m.sender.kind === "system" && m.text.includes("not approved"));
+    expect(sources.indexOf("beats.rejected")).toBeGreaterThan(notice);
+    const window = room.find((m) => m.narration?.source === "beats.window")!;
+    expect(window.text).toContain("primary cooling is still offline");
+  });
+
+  it("beats and the ending sequence are localized", async () => {
+    const { chatty, config } = longKestrel("ru");
+    const h = createHarness({ scripts: { "test/long": chatty } });
+    const runner = h.runner(config);
+    await runner.run();
+    const room = messages(h, runner.id);
+    expect(room.find((m) => m.narration?.source === "beats.rejected")!.text).toBe("План отклонён. Процедуры нет — активная зона продолжает нагреваться.");
+    expect(room.find((m) => m.narration?.source === "outcomes.SUCCESS")!.text).toBe(
+      "Голосование: «за» — 4 из 4. Решение принято — выполняется процедура восстановления."
+    );
+  });
+
+  it("removing all presentation changes nothing the agents see or decide", async () => {
+    const prompts = async (extensions: null | undefined) => {
+      const seen: CompletionRequest[] = [];
+      const { chatty, config } = longKestrel();
+      const h = createHarness({ extensions, scripts: { "test/long": (req) => (seen.push(req), chatty(req)) } });
+      const runner = h.runner(config);
+      const metrics = await runner.run();
+      return { metrics, seen: seen.map((r) => ({ context: r.context, messages: r.messages })), narrator: metrics.messages.narrator };
+    };
+    const withPresentation = await prompts(undefined);
+    const bare = await prompts(null);
+    expect(withPresentation.narrator).toBeGreaterThan(5);
+    expect(bare.narrator).toBe(0);
+    expect(withPresentation.seen).toEqual(bare.seen);
+    expect(withPresentation.metrics.termination).toEqual(bare.metrics.termination);
+    expect(withPresentation.metrics.turns).toEqual(bare.metrics.turns);
+  });
+
+  it("the ending reveal pauses on the held clock, and pacing: off removes the pause", async () => {
+    const h = createHarness();
+    const config = fastKestrel();
+    config.presentation.pacing.sequencePauseMs = 150;
+    const paced = h.runner(config);
+    const pacedMetrics = await paced.run();
+    const endings = messages(h, paced.id).filter((m) => m.narration?.source === "outcomes.SUCCESS");
+    const times = ofType(h.events(paced.id), "message_posted")
+      .filter((e) => (e.payload.narration as { source?: string } | undefined)?.source === "outcomes.SUCCESS")
+      .map((e) => Date.parse(e.ts));
+    expect(endings).toHaveLength(3);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(130);
+    expect(pacedMetrics.durationMs.presentation).toBeGreaterThanOrEqual(260);
+
+    const off = new ExperimentRunner({ db: h.db, providers: h.providers, evaluators: createEvaluatorRegistry(), extensions: presentationExtensions }, config, { overrides: { pacing: "off" } });
+    const offMetrics = await off.run();
+    expect(off.config.presentation.pacing.sequencePauseMs).toBe(0);
+    expect(offMetrics.durationMs.presentation).toBeLessThan(50);
   });
 });
 

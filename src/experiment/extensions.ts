@@ -1,7 +1,8 @@
+import type { ConsensusResult } from "../consensus/index.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { RoomMessage, RoomSender, Transport } from "../transport/transport.js";
 import type { ExperimentConfig } from "./config.js";
-import type { EventType } from "./events.js";
+import type { EventListener, EventType } from "./events.js";
 import type { Termination } from "./outcome.js";
 
 /**
@@ -33,6 +34,14 @@ export interface RunExtensionContext {
   holdClock<T>(fn: () => Promise<T>): Promise<T>;
   /** Aborted when the operator stops the run — long waits should end on it. */
   readonly stopSignal: AbortSignal;
+  /**
+   * Observes the run's trace as it is written (read-only, synchronous). For
+   * presentation that reacts to protocol state — e.g. a narration beat after
+   * a rejected plan — without the runner knowing about it. Listeners must not
+   * throw and must not block; act on what they see later (e.g. at the next
+   * publish through a wrapped transport).
+   */
+  subscribe(listener: EventListener): () => void;
 }
 
 export interface RunEndedInfo {
@@ -40,6 +49,8 @@ export interface RunEndedInfo {
   /** The evaluator's result, if a proposal was committed and evaluated. */
   evaluation: EvaluationResult | null;
   evaluatorParams: unknown;
+  /** The last vote's tally, if any vote took place. */
+  consensus: ConsensusResult | null;
 }
 
 export interface RunExtension {

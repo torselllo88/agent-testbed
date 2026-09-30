@@ -179,6 +179,7 @@ export class ExperimentRunner {
   private readonly environment: RunEnvironment;
   private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
+  private lastConsensus: ConsensusResult | null = null;
   private readonly extensions: RunExtension[];
   private readonly extensionContext: RunExtensionContext;
 
@@ -230,6 +231,7 @@ export class ExperimentRunner {
         }
       },
       stopSignal: this.abort.signal,
+      subscribe: (listener) => this.log.subscribe(listener),
     };
     const baseTransport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.transport = this.extensions.reduce((t, ext) => ext.wrapTransport?.(t, this.extensionContext) ?? t, baseTransport);
@@ -281,7 +283,12 @@ export class ExperimentRunner {
       }
     }
     await this.notifyExtensions("onRunEnded", (ext) =>
-      ext.onRunEnded?.(this.extensionContext, { termination: outcome, evaluation: this.evaluation, evaluatorParams: this.evaluatorParams })
+      ext.onRunEnded?.(this.extensionContext, {
+        termination: outcome,
+        evaluation: this.evaluation,
+        evaluatorParams: this.evaluatorParams,
+        consensus: this.lastConsensus,
+      })
     );
     await this.transport.close().catch(() => undefined);
     return this.finish(outcome);
@@ -664,6 +671,7 @@ export class ExperimentRunner {
     });
 
     const consensus = this.consensus.decide(votes, voters.map((v) => v.id));
+    this.lastConsensus = consensus;
     this.log.append(EventType.CONSENSUS_RESULT, { proposalId: proposal.id, proposalHash: proposal.hash, ...consensus, votes });
 
     if (!consensus.reached) {

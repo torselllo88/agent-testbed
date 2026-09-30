@@ -6,15 +6,35 @@ import { api, apiDetailed, app, badge, downloadJson, escapeHtml, getPath, jsonBl
 // update the draft in place without re-rendering (keeps focus); structural
 // edits (scheduler type, adding an agent, ...) re-render the editor.
 
-const TABS = [
-  ["general", "Task"],
-  ["agents", "Agents"],
-  ["protocol", "Protocol"],
-  ["limits", "Limits"],
-  ["evaluator", "Evaluator"],
-  ["presentation", "Presentation"],
-  ["raw", "Raw JSON"],
+/**
+ * Two groups, mirroring the architecture: what defines the experiment (what
+ * agents see and do, and how the result is judged) vs. what only viewers and
+ * people in the room experience (presentation, spectators, debrief).
+ */
+const TAB_GROUPS = [
+  {
+    label: "Experiment",
+    hint: "Defines the run: what agents know and do, the protocol and how the result is judged.",
+    tabs: [
+      ["general", "Task"],
+      ["agents", "Agents"],
+      ["protocol", "Protocol"],
+      ["limits", "Limits"],
+      ["evaluator", "Evaluator"],
+    ],
+  },
+  {
+    label: "Presentation & demo",
+    hint: "For viewers and people in the room only — never seen by agents, never changes the protocol or the result.",
+    tabs: [
+      ["presentation", "Presentation"],
+      ["people", "People in the room"],
+    ],
+  },
+  { label: null, tabs: [["raw", "Raw JSON"]] },
 ];
+const TABS = TAB_GROUPS.flatMap((g) => g.tabs);
+const groupOf = (tab) => TAB_GROUPS.find((g) => g.tabs.some(([key]) => key === tab));
 
 const PROVIDERS = ["openrouter", "azure", "stub"];
 
@@ -184,16 +204,18 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         <div class="card agent-card">
           <div class="row"><h3>${escapeHtml(agent.name || agent.id)}</h3>
             <button type="button" class="danger" data-action="remove-agent" data-index="${i}" ${state.draft.agents.length <= 2 ? "disabled" : ""}>Remove</button></div>
+          <h4 class="subhead">Task definition <span class="muted small">— part of the task definition hash</span></h4>
           <div class="grid-3">
             ${field("Id", input(`agents.${i}.id`))}
-            ${field("Display name", input(`agents.${i}.name`))}
             ${field("Role", input(`agents.${i}.role`))}
           </div>
-          ${modelFields(`agents.${i}.model`)}
-          ${field("Objective", textarea(`agents.${i}.objective`, 2), "What this agent is responsible for — part of the task definition")}
-          ${field("Persona", textarea(`agents.${i}.persona`, 4), "Personality and interpersonal tendencies — shapes how it talks, never what it knows")}
-          ${field("Extra system prompt", textarea(`agents.${i}.systemPrompt`, 2), "Optional free-form instructions")}
+          ${field("Objective", textarea(`agents.${i}.objective`, 2), "What this agent is responsible for")}
           ${field("Private context", textarea(`agents.${i}.privateContext`, 8), "Visible only to this agent")}
+          <h4 class="subhead">Behavior &amp; model <span class="muted small">— changes how the agent acts, so runs differing here are different conditions</span></h4>
+          ${field("Name", input(`agents.${i}.name`), "The name other participants see")}
+          ${modelFields(`agents.${i}.model`)}
+          ${field("Persona", textarea(`agents.${i}.persona`, 4), "Personality and interpersonal tendencies — shapes how it talks, never what it knows")}
+          ${field("Extra system prompt", textarea(`agents.${i}.systemPrompt`, 3), "Optional free-form instructions (e.g. speech style)")}
         </div>`
         )
         .join("") + `<button type="button" data-action="add-agent">+ Add agent</button>`,
@@ -221,6 +243,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         ${field("Max proposal attempts", input("decision.maxProposalAttempts", "number", `min="1"`))}
         ${field("Format retries", input("decision.maxProposalFormatRetries", "number", `min="0"`), "re-asks after a schema-invalid proposal")}
       </div>
+      <h3>Conversation</h3>
+      ${field("Conversation language", input("conversation.language", "string", `list="language-suggestions"`), "What agents write in (changes behavior); a run can override it")}
       <h3>Agent visibility</h3>
       ${checkbox("agentVisibility.discussionBudget", "Show agents the discussion turn budget and proposal attempt (changes agent behavior — off for baseline runs)")}
       <h3>Transport</h3>
@@ -267,19 +291,20 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       const p = state.draft.presentation ?? {};
       const narrated = Boolean(p.narrator);
       return `
-      <p class="muted">How a run is presented to viewers. None of this changes protocol semantics: agents never see narration, and endings are rendered from evaluator state.</p>
-      <h3>Conversation</h3>
-      <div class="grid-3">
-        ${field("Default conversation language", input("conversation.language", "string", `list="language-suggestions"`), "Language code; a run can override it")}
-        ${field("Fallback language for narration", input("presentation.fallbackLanguage", "string", `list="language-suggestions"`))}
-      </div>
+      <p class="muted">How a run is presented to viewers. Agents never see narration; endings and beats are rendered from runtime and evaluator state. Texts follow the run's conversation language (Protocol tab).</p>
       <h3>Narration</h3>
+      ${field("Fallback language for narration", input("presentation.fallbackLanguage", "string", `list="language-suggestions"`), "Used for any text missing in the conversation language")}
       ${checkbox("presentation.__narratorEnabled", "Post an opening and an ending narration in the room")}
       ${narrated ? field("Narrator display name", input("presentation.narrator.displayName"), "Default; a language's strings may override it (narratorName)") : ""}
       ${field(
         "Presentation strings (JSON, keyed by language)",
         `<textarea class="code" data-path="presentation.strings" data-kind="json" rows="16">${escapeHtml(JSON.stringify(p.strings ?? {}, null, 2))}</textarea>`,
-        "Per language: title, narratorName, opening, outcomes.{OUTCOME|default}, missionFailure.{check}. Placeholders: {{derived.x}}, {{params.x}}, {{checks.x.detail}}, {{reason}}"
+        "Per language: title, narratorName, opening, outcomes.{OUTCOME|default}, missionFailure.{check}, beats.{id}, agents, proposal, interaction. An ending may be a list of parts, revealed one by one. Placeholders: {{derived.x}}, {{params.x}}, {{checks.x.detail}}, {{votes.approvals}}, {{votes.eligible}}, {{reason}}"
+      )}
+      ${field(
+        "Beats (JSON)",
+        `<textarea class="code" data-path="presentation.beats" data-kind="json-optional" rows="6">${escapeHtml(p.beats ? JSON.stringify(p.beats, null, 2) : "")}</textarea>`,
+        'Observer-only lines during the run, e.g. [{"id": "urgent", "when": {"discussionProgress": 0.75}}, {"id": "rejected", "when": {"planRejected": true}}]; texts in strings.<lang>.beats. Empty = none.'
       )}
       ${field("Mission-failure priority", csvInput("presentation.missionFailurePriority", "e.g. power_feasible, life_support_preserved"), "Evaluator checks in narrative priority; the first violated one picks the ending")}
       <h3>Pacing</h3>
@@ -287,8 +312,39 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         ${field("Minimum visible interval (ms)", input("presentation.pacing.minVisibleIntervalMs", "number", `min="0"`), "0 = no pacing (research runs)")}
         ${field("Per character of previous message (ms)", input("presentation.pacing.perCharMs", "number", `min="0" step="1"`))}
         ${field("Maximum gap (ms)", input("presentation.pacing.maxGapMs", "number", `min="0"`))}
+        ${field("Ending reveal pause (ms)", input("presentation.pacing.sequencePauseMs", "optional-number", `min="0"`), "minimum pause between the parts of an ending")}
       </div>
       <p class="muted small">Pacing is excluded from provider latency and from the experiment's time limit; it is recorded separately.</p>`;
+    },
+
+    people: () => {
+      const hi = state.draft.humanInteraction;
+      const profile = hi?.profile ?? "";
+      const profiles = meta.humanInteraction?.profiles ?? {};
+      const options = [["", "OBSERVE (default) — spectators only"], ...Object.entries(profiles).filter(([p]) => p !== "OBSERVE").map(([p, c]) => [p, c.supported ? p : `${p} — not supported yet`])];
+      const debrief = profile === "DEBRIEF";
+      const d = "humanInteraction.debrief";
+      return `
+      <p class="muted">What people in the room may do around a run. During a run they are always spectators: their messages never reach the agents. None of this changes the experiment or its metrics.</p>
+      ${field("Profile", `<select data-path="humanInteraction.__profile" data-kind="string" data-structural>${options
+        .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === profile ? "selected" : ""} ${value && !profiles[value]?.supported ? "disabled" : ""}>${escapeHtml(label)}</option>`)
+        .join("")}</select>`, "DEBRIEF: after the outcome, people can question the characters")}
+      ${
+        debrief
+          ? `<h3>Debrief</h3>
+        <div class="grid-3">
+          ${field("Default character", optionalSelect(`${d}.defaultAgentId`, state.draft.agents.map((a) => a.id), `default (proposer: ${state.draft.decision.proposerId})`), "answers questions addressed to nobody in particular")}
+          ${field("Answer max tokens", input(`${d}.maxOutputTokens`, "number", `min="1"`), "each character uses its own mission model")}
+          ${field("Cost cap per session (USD)", input(`${d}.costCapUsd`, "nullable-number", `step="0.01" min="0"`), "blank = none")}
+          ${field("Pending questions per person", input(`${d}.maxPendingPerUser`, "number", `min="1"`))}
+          ${field("Pending questions in total", input(`${d}.maxPendingTotal`, "number", `min="1"`))}
+          ${field("Idle timeout (min)", input(`${d}.idleTimeoutMinutes`, "number", `min="1"`))}
+          ${field("Spectator notice cooldown (s)", input(`${d}.spectatorNoticeCooldownSeconds`, "number", `min="0"`))}
+        </div>
+        ${checkbox(`${d}.revealEvaluation`, "Give characters the evaluator's check results (can reveal facts only another character knew)")}
+        <p class="muted small">Notice texts: presentation strings, key <code>interaction</code>.</p>`
+          : ""
+      }`;
     },
 
     raw: () => `
@@ -316,8 +372,12 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       </div>
       ${readOnly ? `<div class="warning-banner">Built-in scenario — read-only. Duplicate it to make an editable copy.</div>` : ""}
       <div id="editor-messages">${state.notice ?? ""}</div>
-      <div class="tabs">${TABS.map(([key, label]) => `<button type="button" class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">${label}</button>`).join("")}</div>
-      <div class="card editor-body" id="editor-body">${tabBody[state.tab]()}</div>
+      <div class="tabs grouped">${TAB_GROUPS.map(
+        (g) => `<div class="tab-group${g.label === "Presentation & demo" ? " demo" : ""}">${g.label ? `<span class="tab-group-label">${escapeHtml(g.label)}</span>` : ""}<div class="tab-group-tabs">${g.tabs
+          .map(([key, label]) => `<button type="button" class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">${label}</button>`)
+          .join("")}</div></div>`
+      ).join("")}</div>
+      <div class="card editor-body${groupOf(state.tab)?.label === "Presentation & demo" ? " demo" : ""}" id="editor-body">${groupOf(state.tab)?.hint ? `<p class="tab-group-hint">${escapeHtml(groupOf(state.tab).hint)}</p>` : ""}${tabBody[state.tab]()}</div>
       <datalist id="stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
       <datalist id="openrouter-models">${state.openRouter ? openRouterOptions(state.openRouter.models) : ""}</datalist>
       <datalist id="language-suggestions">${meta.languages.suggested.map((l) => `<option value="${escapeHtml(l)}">`).join("")}</datalist>
@@ -365,6 +425,21 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         value === "hybrid" ? { type: "hybrid", startAgentId, classifier: null, classifierWindow: 12 } : { type: "round_robin", startAgentId };
     } else if (path === "scheduler.__classifierEnabled") {
       state.draft.scheduler.classifier = value ? { provider: "stub", model: meta.stubModels.find((m) => m.startsWith("router/")) ?? "", structuredOutput: "native" } : null;
+    } else if (path === "humanInteraction.__profile") {
+      if (!value) delete state.draft.humanInteraction;
+      else
+        state.draft.humanInteraction = {
+          profile: value,
+          debrief: state.draft.humanInteraction?.debrief ?? {
+            maxOutputTokens: 250,
+            maxPendingPerUser: 3,
+            maxPendingTotal: 20,
+            costCapUsd: null,
+            idleTimeoutMinutes: 15,
+            revealEvaluation: false,
+            spectatorNoticeCooldownSeconds: 30,
+          },
+        };
     } else if (path === "presentation.__narratorEnabled") {
       state.draft.presentation = { ...(state.draft.presentation ?? {}), narrator: value ? { displayName: "NARRATOR" } : null };
     } else if (path === "transport.type") {
@@ -390,6 +465,14 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     if (kind === "csv-optional") {
       const items = raw.split(",").map((x) => x.trim()).filter(Boolean);
       return { ok: true, value: items.length ? items : undefined };
+    }
+    if (kind === "json-optional") {
+      if (raw.trim() === "") return { ok: true, value: undefined };
+      try {
+        return { ok: true, value: JSON.parse(raw) };
+      } catch {
+        return { ok: false };
+      }
     }
     if (kind === "json") {
       try {

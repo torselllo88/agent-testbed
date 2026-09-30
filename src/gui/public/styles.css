@@ -548,3 +548,14 @@ body.watch-mode .app { max-width: none; padding: 0; }
 .qa-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .qa { border-left: 3px solid var(--border); padding-left: 10px; }
 .qa-answer { margin-top: 2px; }
+
+/* Scenario editor: experiment vs. presentation & demo tab groups. */
+.tabs.grouped { gap: 18px; align-items: flex-end; }
+.tab-group { display: flex; flex-direction: column; gap: 2px; }
+.tab-group-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-left: 4px; }
+.tab-group.demo .tab-group-label { color: var(--accent-ink); }
+.tab-group-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab-group.demo .tab.active { border-top: 2px solid var(--accent); }
+.editor-body.demo { border-top: 2px solid var(--accent); }
+.tab-group-hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.agent-card .subhead { margin: 14px 0 6px; font-size: 14px; }

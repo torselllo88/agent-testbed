@@ -194,6 +194,9 @@ export const ConversationConfigSchema = z.object({
 });
 export type ConversationConfig = z.infer<typeof ConversationConfigSchema>;
 
+/** One narration text, or a sequence revealed part by part (see PacingConfig.sequencePauseMs). */
+const NarrationTextSchema = z.union([z.string(), z.array(z.string().min(1)).min(1)]);
+
 /**
  * Viewer-facing strings for one language. Templates may reference
  * {{outcome}}, {{reason}}, {{derived.<name>}}, {{params.<name>}},
@@ -205,9 +208,11 @@ export const PresentationStringsSchema = z.object({
   narratorName: z.string().optional(),
   opening: z.string().optional(),
   /** Ending per terminal outcome (SUCCESS, CONSENSUS_FAILURE, TIMEOUT, ...), plus optional "default". */
-  outcomes: z.record(z.string()).default({}),
+  outcomes: z.record(NarrationTextSchema).default({}),
   /** MISSION_FAILURE ending per primary violated evaluator check. */
-  missionFailure: z.record(z.string()).default({}),
+  missionFailure: z.record(NarrationTextSchema).default({}),
+  /** Observer-only narration beats during the run, by beat id (see PresentationConfig.beats). */
+  beats: z.record(z.string()).optional(),
   /**
    * Display labels per agent id for viewers (name, role). Display only: agents,
    * their prompts and the protocol keep the config's names and roles.
@@ -257,6 +262,11 @@ export const PacingConfigSchema = z.object({
   minVisibleIntervalMs: z.number().int().min(0).default(0),
   perCharMs: z.number().min(0).default(0),
   maxGapMs: z.number().int().min(0).default(10000),
+  /**
+   * Minimum pause between the parts of a narration sequence (the ending
+   * reveal); absent/0 = pacing alone. Optional so configs without it keep their hash.
+   */
+  sequencePauseMs: z.number().int().min(0).optional(),
 });
 export type PacingConfig = z.infer<typeof PacingConfigSchema>;
 
@@ -265,6 +275,23 @@ export type PacingConfig = z.infer<typeof PacingConfigSchema>;
  * protocol semantics: agents never see narration, and endings are rendered
  * from evaluator/runtime state, not generated.
  */
+/**
+ * When a narration beat is shown — reacting to protocol state the run already
+ * has, never feeding anything back into it:
+ *   discussionProgress  the first time a discussion round has used this
+ *                       fraction of its turn limit (once per run);
+ *   planRejected        after a vote that did not reach agreement (every time).
+ * A beat appears before the next visible message after its trigger.
+ */
+export const NarrationBeatSchema = z.object({
+  id: z.string().regex(idPattern, "beat id must be a lowercase slug"),
+  when: z.union([
+    z.object({ discussionProgress: z.number().gt(0).max(1) }).strict(),
+    z.object({ planRejected: z.literal(true) }).strict(),
+  ]),
+});
+export type NarrationBeat = z.infer<typeof NarrationBeatSchema>;
+
 export const PresentationConfigSchema = z.object({
   /** Visible narrator posting the opening and the ending; null = no narration. */
   narrator: z.object({ displayName: z.string().min(1) }).nullable().default(null),
@@ -274,6 +301,8 @@ export const PresentationConfigSchema = z.object({
   /** Evaluator checks in narrative priority: the first violated one picks the MISSION_FAILURE ending. */
   missionFailurePriority: z.array(z.string()).default([]),
   pacing: PacingConfigSchema.default({}),
+  /** Observer-only beats (texts in strings.<lang>.beats.<id>); optional so configs without them keep their hash. */
+  beats: z.array(NarrationBeatSchema).optional(),
 });
 export type PresentationConfig = z.infer<typeof PresentationConfigSchema>;
 
@@ -470,6 +499,6 @@ export function applyRunOverrides(config: ExperimentConfig, overrides: RunOverri
   if (!overrides || Object.keys(overrides).length === 0) return config;
   const next = structuredClone(config);
   if (overrides.language) next.conversation = { ...next.conversation, language: overrides.language };
-  if (overrides.pacing === "off") next.presentation = { ...next.presentation, pacing: { ...next.presentation.pacing, minVisibleIntervalMs: 0, perCharMs: 0 } };
+  if (overrides.pacing === "off") next.presentation = { ...next.presentation, pacing: { ...next.presentation.pacing, minVisibleIntervalMs: 0, perCharMs: 0, ...(next.presentation.pacing.sequencePauseMs ? { sequencePauseMs: 0 } : {}) } };
   return next;
 }

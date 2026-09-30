@@ -1,3 +1,4 @@
+import type { ConsensusResult } from "../consensus/index.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { ExperimentConfig, PresentationStrings } from "../experiment/config.js";
 import type { Termination } from "../experiment/outcome.js";
@@ -34,7 +35,10 @@ export function neutralEnding(language: string, outcome: string): string {
 const TECHNICAL_OUTCOMES = new Set(["PROVIDER_ERROR", "ERROR", "INTERRUPTED", "STOPPED_BY_OPERATOR"]);
 
 export interface Narration {
+  /** The whole narration (all parts, blank-line separated). */
   text: string;
+  /** Posted one by one when the authored text is a sequence (the ending reveal); otherwise one part. */
+  parts: string[];
   /** Which authored entry produced it, e.g. "opening", "outcomes.SUCCESS", "missionFailure.power_feasible", "runtime.neutral". */
   source: string;
   /** Language of the strings actually used (may be the fallback). */
@@ -49,18 +53,24 @@ function candidates(language: string, fallback: string): string[] {
 }
 
 /** The first language (requested → base language → fallback) whose strings define `pick`. */
-export function pickString(
+export function pickString<T extends string | string[] = string>(
   config: ExperimentConfig,
   language: string,
-  pick: (s: PresentationStrings) => string | undefined
-): { text: string; language: string } | null {
+  pick: (s: PresentationStrings) => T | undefined
+): { text: T; language: string } | null {
   const byLang = Object.fromEntries(Object.entries(config.presentation.strings).map(([k, v]) => [k.toLowerCase(), v]));
   for (const lang of candidates(language, config.presentation.fallbackLanguage)) {
     const strings = byLang[lang];
     const text = strings ? pick(strings) : undefined;
-    if (text) return { text, language: lang };
+    if (text && text.length) return { text, language: lang };
   }
   return null;
+}
+
+function rendered(texts: string | string[], ctx: Record<string, unknown>): { text: string; parts: string[]; missing: string[] } {
+  const results = (Array.isArray(texts) ? texts : [texts]).map((t) => renderTemplate(t, ctx));
+  const parts = results.map((r) => r.text);
+  return { text: parts.join("\n\n"), parts, missing: [...new Set(results.flatMap((r) => r.missing))] };
 }
 
 function lookup(ctx: unknown, path: string): unknown {
@@ -90,7 +100,16 @@ export function openingNarration(config: ExperimentConfig, language: string): Na
   const picked = pickString(config, language, (s) => s.opening);
   if (!picked) return null;
   const { text, missing } = renderTemplate(picked.text, { scenario: config.name });
-  return { text, source: "opening", language: picked.language, missing };
+  return { text, parts: [text], source: "opening", language: picked.language, missing };
+}
+
+/** An observer-only beat during the run (see PresentationConfig.beats); null when the language has no text for it. */
+export function beatNarration(config: ExperimentConfig, language: string, beatId: string): Narration | null {
+  if (!config.presentation.narrator) return null;
+  const picked = pickString(config, language, (s) => s.beats?.[beatId]);
+  if (!picked) return null;
+  const { text, missing } = renderTemplate(picked.text, { scenario: config.name });
+  return { text, parts: [text], source: `beats.${beatId}`, language: picked.language, missing };
 }
 
 export function endingNarration(
@@ -98,7 +117,8 @@ export function endingNarration(
   language: string,
   termination: Termination,
   evaluation: EvaluationResult | null,
-  evaluatorParams: unknown
+  evaluatorParams: unknown,
+  consensus: ConsensusResult | null = null
 ): Narration | null {
   if (!config.presentation.narrator) return null;
   const outcome = termination.outcome;
@@ -108,25 +128,26 @@ export function endingNarration(
       ? (config.presentation.missionFailurePriority.find((c) => violated.includes(c)) ?? violated[0] ?? null)
       : null;
 
-  let picked: { text: string; language: string } | null = null;
+  let picked: { text: string | string[]; language: string } | null = null;
   let source = "";
   if (primaryCheck) {
-    picked = pickString(config, language, (s) => s.missionFailure[primaryCheck]);
+    picked = pickString<string | string[]>(config, language, (s) => s.missionFailure[primaryCheck]);
     source = `missionFailure.${primaryCheck}`;
   }
   if (!picked) {
-    picked = pickString(config, language, (s) => s.outcomes[outcome]);
+    picked = pickString<string | string[]>(config, language, (s) => s.outcomes[outcome]);
     source = `outcomes.${outcome}`;
   }
   if (!picked && !TECHNICAL_OUTCOMES.has(outcome)) {
-    picked = pickString(config, language, (s) => s.outcomes.default);
+    picked = pickString<string | string[]>(config, language, (s) => s.outcomes.default);
     source = "outcomes.default";
   }
   if (!picked) {
-    return { text: neutralEnding(language, outcome), source: "runtime.neutral", language, missing: [] };
+    const text = neutralEnding(language, outcome);
+    return { text, parts: [text], source: "runtime.neutral", language, missing: [] };
   }
 
-  const { text, missing } = renderTemplate(picked.text, {
+  const { text, parts, missing } = rendered(picked.text, {
     scenario: config.name,
     outcome,
     category: termination.category,
@@ -136,6 +157,7 @@ export function endingNarration(
     checks: evaluation?.checks ?? {},
     violated,
     primaryCheck,
+    votes: consensus ? { approvals: consensus.approvals, eligible: consensus.eligible, rejections: consensus.rejections } : {},
   });
-  return { text, source, language: picked.language, missing };
+  return { text, parts, source, language: picked.language, missing };
 }

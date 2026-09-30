@@ -45,7 +45,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     // v1: initial. v2: shorter demo (discussion 16 turns, maxOutputTokens 300, pacing 2000/10/6000),
     //     localized viewer labels for agents, human-readable proposal rendering.
     // v3: human interaction profile DEBRIEF (crew debrief after the mission), crew-voiced room notices.
-    version: 3,
+    // v4: dramaturgy pass — short spoken dialogue (shared speech style), sharper personas, discussion 20 turns,
+    //     observer-only escalation beats, the ending revealed as a paced sequence with the vote tally.
+    version: 4,
     config: () => kestrelConfig(),
   },
 ];

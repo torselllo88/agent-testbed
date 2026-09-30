@@ -185,7 +185,14 @@ evaluator, and therefore the same `taskDefinitionHash`. On top it adds:
   interpersonal priors. A persona shapes how an agent talks, never what it
   knows. Nothing steers the room toward success: a believable coordination
   failure is as valid an ending as a rescue.
-- **A narrator** (MISSION CONTROL) that posts an opening and an ending in the room.
+- **Spoken, short dialogue** (v4). A shared speech style in each officer's
+  `systemPrompt`: one point per turn, usually one or two short sentences, no
+  restating, no politeness formulas. The personas give each character a
+  concrete reason to push back. This is part of the behavior layer, so it
+  changes agent behavior (and `configHash`), but not the task.
+- **A narrator** (MISSION CONTROL): the opening, a few observer-only
+  escalation beats during the run, and an ending revealed step by step (vote
+  tally → procedure starts → grounded result).
 - **Viewer pacing**, so a live audience can follow the conversation.
 
 The building blocks are generic, and Kestrel is simply the first scenario to
@@ -197,10 +204,11 @@ use all of them:
 | `agents[].persona` | Personality, tendencies, interpersonal priors. Behavior layer. |
 | `conversation.language` | Language of everything participants and viewers read: messages, proposal rationale, vote reasons, moderator notices, narration. JSON field names, ids and enum values are never translated. A run can override it without editing the scenario. |
 | `presentation.narrator` | `{ displayName }`, or `null` for no narration. |
-| `presentation.strings.<lang>` | Authored per language: `title`, `narratorName`, `opening`, `outcomes.<OUTCOME>` (plus `default`), `missionFailure.<check>`; for viewers only, `agents.<id>` (`{ name, role }` display labels) and `proposal` (`{ template, values }`, a human-readable rendering of the submitted proposal). Agents and the protocol notices they read keep the config's names and the raw proposal. |
+| `presentation.strings.<lang>` | Authored per language: `title`, `narratorName`, `opening`, `outcomes.<OUTCOME>` (plus `default`), `missionFailure.<check>` — each either one text or a **list of parts** revealed one by one — and `beats.<id>`; for viewers only, `agents.<id>` (`{ name, role }` display labels) and `proposal` (`{ template, values }`, a human-readable rendering of the submitted proposal). Agents and the protocol notices they read keep the config's names and the raw proposal. |
 | `presentation.fallbackLanguage` | Used for any string missing in the conversation language. |
 | `presentation.missionFailurePriority` | Evaluator checks in narrative order; the first violated one picks the `MISSION_FAILURE` ending. All violated checks stay in the technical results. |
-| `presentation.pacing` | `minVisibleIntervalMs`, `perCharMs`, `maxGapMs` (see below). |
+| `presentation.pacing` | `minVisibleIntervalMs`, `perCharMs`, `maxGapMs`, optional `sequencePauseMs` (minimum pause between the parts of an ending) (see below). |
+| `presentation.beats` | Optional observer-only narration during the run: `[{ id, when }]` with `when` = `{ discussionProgress: 0.4 }` (the first time a discussion round has used that fraction of its turn limit) or `{ planRejected: true }` (after each "not approved" notice). A due beat is shown just before the next visible message, so it never interrupts one. Texts: `strings.<lang>.beats.<id>`. |
 
 **Narration is for observers only.** Narrator messages are published to the
 room, but they are filtered out of every agent's and the router's context.
@@ -213,6 +221,10 @@ is chosen by outcome (and, for `MISSION_FAILURE`, by the primary violated
 check), then filled from real values: `{{derived.availableKw}}`,
 `{{params.coolantRequiredKw}}`, `{{checks.<name>.detail}}`, `{{reason}}`, …
 A plan with 22 kW of 30 therefore yields "22 kW available, 30 kW required".
+The vote tally is available as `{{votes.approvals}}` / `{{votes.eligible}}`.
+Beats are deliberately qualitative ("reactor conditions are deteriorating"):
+there is no reactor simulation behind them, so they never state numbers the
+run does not have. Atmosphere may be literary, but facts stay grounded.
 Technical outcomes (`PROVIDER_ERROR`, `ERROR`, `INTERRUPTED`,
 `STOPPED_BY_OPERATOR`) get a short neutral message instead of an in-universe
 disaster.
@@ -230,8 +242,10 @@ provider reply needs little or no extra wait. The wait is recorded as
 `presentation_delay` and counts neither as provider latency nor as experiment
 time: `wall = active + paused + presentation`, and only `active` drives
 `timeLimitSeconds`. Stop interrupts the wait immediately. The benchmark uses
-0; Kestrel (v2) uses 2 s + 10 ms per character, capped at 6 s, together with
-a 16-turn discussion limit and 300 output tokens per turn. A demo should not
+0; Kestrel uses 2 s + 10 ms per character, capped at 6 s, 2.5 s between the
+parts of the ending, a 20-turn discussion limit (v4: short turns need more of
+them) and 300 output tokens per turn (a safety cap; brevity comes from the
+prompt, because a lower cap would truncate the proposal JSON, not the prose). A demo should not
 run long, and v1's 2.5 s / 20 ms / 9 s made a verbose live run take about
 5 minutes. Tune these by watching real runs.
 
@@ -346,8 +360,20 @@ view, **Start & watch** opens viewer mode.
   proposer, attempts, agent visibility, transport.
 - **Limits:** soft discussion limits, hard limits, runtime retries and timeouts.
 - **Evaluator:** evaluator and its parameters; the proposal schema for reference.
-- **Presentation:** default conversation language, narration (narrator,
-  per-language strings, mission-failure priority), pacing.
+- **Presentation:** narration (narrator, per-language strings,
+  mission-failure priority, beats), pacing.
+- **People in the room:** the human-interaction profile and debrief settings.
+
+The tabs come in two groups, mirroring the architecture:
+
+- **Experiment** (Task, Agents, Protocol, Limits, Evaluator) defines what
+  agents know and do and how the result is judged. Each agent card separates
+  its *task definition* (id, role, objective, private context) from its
+  *behavior & model* (name, model, persona, extra prompt). The conversation
+  language sits under Protocol, because it changes what agents write.
+- **Presentation & demo** (Presentation, People in the room) holds everything
+  only viewers and people in the room experience. None of it reaches agents,
+  the protocol or the result.
 - **Raw JSON:** the complete config, editable.
 
 Actions: **Save** (the version goes up only when something changed),
@@ -750,7 +776,8 @@ interface, `RunExtension` ([src/experiment/extensions.ts](src/experiment/extensi
 
 - `wrapTransport` — e.g. `PacedTransport`;
 - `onRoomOpened` / `onRunEnded` — e.g. the narrator;
-- a context that can post observer-only messages, append trace events, hold
+- a context that can post observer-only messages, append trace events,
+  observe the trace as it is written (read-only; e.g. narration beats), hold
   the experiment clock (excluded from active time, like a pause) and see the
   stop signal.
 

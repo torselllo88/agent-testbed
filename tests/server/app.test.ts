@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BatchService } from "../../src/batch/service.js";
 import { ExperimentService } from "../../src/experiment/service.js";
 import { HumanInteractionService } from "../../src/interaction/service.js";
+import { OpenRouterModelCatalog } from "../../src/llm/openRouterModels.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
 import { createInMemoryDb } from "../../src/persistence/db.js";
@@ -29,7 +30,9 @@ beforeAll(async () => {
   service = new ExperimentService({ db, providers, evaluators });
   batches = new BatchService({ db, providers, evaluators, service });
   interaction = new HumanInteractionService({ db, providers, experiments: service });
-  server = createApp({ db, providers, evaluators, service, batches, interaction });
+  const catalogBody = { data: [{ id: "google/gemini-2.5-flash-lite", name: "Gemini Flash Lite", context_length: 1048576, pricing: { prompt: "0.0000001", completion: "0.0000004" }, supported_parameters: ["structured_outputs"] }] };
+  const openRouterModels = new OpenRouterModelCatalog("https://openrouter.test/api/v1", (async () => new Response(JSON.stringify(catalogBody))) as unknown as typeof fetch);
+  server = createApp({ db, providers, evaluators, service, batches, interaction, openRouterModels });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -58,6 +61,12 @@ describe("HTTP basics", () => {
     expect(body.schedulers).toEqual(["round_robin", "hybrid"]);
     expect(body.builtinScenarios.map((b: { id: string }) => b.id)).toEqual(["space-station", "station-kestrel"]);
     expect(body.builtinScenarios.every((b: { version: number }) => b.version >= 1)).toBe(true);
+  });
+
+  it("serves the OpenRouter model list for the editor", async () => {
+    const { status, body } = await call("GET", "/api/providers/openrouter/models");
+    expect(status).toBe(200);
+    expect(body.models).toEqual([expect.objectContaining({ id: "google/gemini-2.5-flash-lite", promptPerM: 0.1, structuredOutputs: true })]);
   });
 
   it("serves the SPA shell and JSON 404s for unknown API routes", async () => {

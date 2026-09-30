@@ -22,6 +22,31 @@ function field(label, inner, hint) {
   return `<label class="field"><span class="field-label">${escapeHtml(label)}</span>${inner}${hint ? `<span class="field-hint">${escapeHtml(hint)}</span>` : ""}</label>`;
 }
 
+/**
+ * OpenRouter's model catalog, loaded once per page session (the server caches
+ * it too). Model ids are stable, so the model field offers them as a
+ * searchable list; free text still works for anything not listed.
+ */
+let openRouterCatalog = null; // Promise<{ models } | { error }>
+function loadOpenRouterCatalog() {
+  openRouterCatalog ??= api("/api/providers/openrouter/models").catch((err) => {
+    openRouterCatalog = null; // retry on the next editor visit
+    return { error: err.message, models: [] };
+  });
+  return openRouterCatalog;
+}
+
+function formatPrice(perM) {
+  if (perM === null || perM === undefined) return "?";
+  return perM === 0 ? "free" : `$${perM < 0.1 ? perM.toFixed(3) : perM.toFixed(2)}`;
+}
+
+function openRouterOptions(models) {
+  return models
+    .map((m) => `<option value="${escapeHtml(m.id)}" label="${escapeHtml(`${m.name} · ${formatPrice(m.promptPerM)} / ${formatPrice(m.completionPerM)} per M`)}"></option>`)
+    .join("");
+}
+
 function valueAttr(v) {
   return v === undefined || v === null ? "" : escapeHtml(String(v));
 }
@@ -45,6 +70,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     rawText: null,
     rawError: null,
     notice: null,
+    openRouter: null, // { models, error? } once loaded
   };
 
   const input = (path, kind = "string", attrs = "") => {
@@ -109,10 +135,31 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     </details>`;
   };
 
+  /** What the catalog says about an OpenRouter model reference (price, context, structured-output support). */
+  const openRouterModelInfo = (ref) => {
+    if (ref?.provider !== "openrouter") return "";
+    const catalog = state.openRouter;
+    if (!catalog) return `<p class="muted small">Loading the OpenRouter model list…</p>`;
+    if (catalog.error) return `<p class="muted small">OpenRouter model list unavailable (${escapeHtml(catalog.error)}) — enter the model id manually.</p>`;
+    if (!ref.model) return `<p class="muted small">${catalog.models.length} OpenRouter models — start typing to search.</p>`;
+    const m = catalog.models.find((x) => x.id === ref.model);
+    if (!m) return `<div class="warning-banner">"${escapeHtml(ref.model)}" is not in OpenRouter's current model list.</div>`;
+    const facts = [m.name, m.contextLength ? `${m.contextLength.toLocaleString("en-US")} context` : null, `${formatPrice(m.promptPerM)} in / ${formatPrice(m.completionPerM)} out per M tokens`]
+      .filter(Boolean)
+      .join(" · ");
+    const warn =
+      ref.structuredOutput === "native" && !m.structuredOutputs
+        ? `<div class="warning-banner">OpenRouter does not list structured outputs for this model — set Structured output to "prompt only".</div>`
+        : "";
+    return `<p class="muted small">${escapeHtml(facts)}</p>${warn}`;
+  };
+
+  const modelList = (provider) => (provider === "stub" ? `list="stub-models"` : provider === "openrouter" ? `list="openrouter-models"` : "");
+
   const modelFields = (base) => `
     <div class="grid-4">
       ${field("Provider", select(`${base}.provider`, PROVIDERS.map((p) => [p, p]), { structural: true }))}
-      ${field("Model", input(`${base}.model`, "string", `list="stub-models"`), "OpenRouter model id, Azure deployment, or stub script")}
+      ${field("Model", input(`${base}.model`, "string", `${modelList(getPath(state.draft, base)?.provider)} data-model-input`), "OpenRouter model id, Azure deployment, or stub script")}
       ${field("Temperature", input(`${base}.temperature`, "optional-number", `step="0.1" min="0" max="2"`), "blank = provider default")}
       ${field("Max output tokens", input(`${base}.maxOutputTokens`, "optional-number", `min="1"`), "blank = no cap")}
     </div>
@@ -120,6 +167,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       ${field("Structured output", select(`${base}.structuredOutput`, [["native", "native (provider-enforced schema)"], ["prompt", "prompt only"]], { structural: true }))}
       ${field("Seed", input(`${base}.seed`, "optional-number"), "best-effort, recorded only")}
     </div>
+    ${openRouterModelInfo(getPath(state.draft, base))}
     ${routingFields(base)}`;
 
   const tabBody = {
@@ -271,6 +319,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       <div class="tabs">${TABS.map(([key, label]) => `<button type="button" class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">${label}</button>`).join("")}</div>
       <div class="card editor-body" id="editor-body">${tabBody[state.tab]()}</div>
       <datalist id="stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
+      <datalist id="openrouter-models">${state.openRouter ? openRouterOptions(state.openRouter.models) : ""}</datalist>
       <datalist id="language-suggestions">${meta.languages.suggested.map((l) => `<option value="${escapeHtml(l)}">`).join("")}</datalist>
     `;
     const narratorToggle = app.querySelector('[data-path="presentation.__narratorEnabled"]');
@@ -383,6 +432,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     body.addEventListener("change", (e) => {
       const el = e.target;
       if (!el.dataset.path) return;
+      // A committed model id (typed or picked from the list) refreshes the model's catalog info.
+      if (el.dataset.modelInput !== undefined) return render();
       // Routing selects re-render too: the requireParameters warning depends on them.
       const structural = el.dataset.structural !== undefined || el.dataset.path.includes("__") || el.dataset.path.includes(".routing.");
       if (el.tagName === "SELECT" || el.type === "checkbox") {
@@ -503,4 +554,12 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
   }
 
   render();
+  // Fill the OpenRouter list in place when it arrives; re-render only if nobody is typing.
+  loadOpenRouterCatalog().then((catalog) => {
+    state.openRouter = catalog;
+    const list = document.getElementById("openrouter-models");
+    if (!list) return;
+    list.innerHTML = openRouterOptions(catalog.models);
+    if (!document.getElementById("editor-body")?.contains(document.activeElement)) render();
+  });
 }

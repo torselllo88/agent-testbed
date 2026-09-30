@@ -14,6 +14,7 @@ import { OUTCOMES } from "../experiment/outcome.js";
 import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
+import type { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
@@ -32,6 +33,8 @@ export interface AppDeps {
   service: ExperimentService;
   batches: BatchService;
   interaction: HumanInteractionService;
+  /** OpenRouter model list for the editor; omitted = not offered. */
+  openRouterModels?: OpenRouterModelCatalog;
 }
 
 interface RouteContext {
@@ -162,6 +165,19 @@ const ROUTES: Route[] = [
         humanInteraction: { profiles: HUMAN_INTERACTION_PROFILES },
         runningExperiments: deps.service.runningIds(),
       }),
+  },
+
+  {
+    method: "GET",
+    pattern: /^\/api\/providers\/openrouter\/models$/,
+    handle: async ({ res, deps }) => {
+      if (!deps.openRouterModels) throw new HttpError(404, "OpenRouter model list is not available");
+      try {
+        sendJson(res, 200, await deps.openRouterModels.get());
+      } catch (err) {
+        throw new HttpError(502, `Could not load the OpenRouter model list: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
   },
 
   // ------------------------------------------------------------ scenarios

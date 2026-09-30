@@ -3,6 +3,7 @@ import { BatchService } from "../batch/service.js";
 import { env } from "../config/env.js";
 import { ExperimentService } from "../experiment/service.js";
 import { HumanInteractionService } from "../interaction/service.js";
+import { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
@@ -34,7 +35,7 @@ if (synced.added.length || synced.updated.length) {
   console.log(`Built-in scenarios: added [${synced.added.join(", ")}], updated [${synced.updated.join(", ")}]`);
 }
 
-const server = createApp({ db, providers, evaluators, service, batches, interaction });
+const server = createApp({ db, providers, evaluators, service, batches, interaction, openRouterModels: new OpenRouterModelCatalog(env.openRouter.baseUrl) });
 
 server.listen(env.port, env.host, () => {
   console.log(`Agent testbed running at http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`);

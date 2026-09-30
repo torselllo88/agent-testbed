@@ -335,7 +335,13 @@ view, **Start & watch** opens viewer mode.
 - **Task:** name, description, task text, shared context.
 - **Agents:** id, name, role, objective, persona, provider/model/temperature/seed/max
   tokens, structured-output mode, OpenRouter routing (advanced), extra system
-  prompt, private context.
+  prompt, private context. For `openrouter`, the model field offers
+  OpenRouter's current model list: type to search by the stable model id.
+  Below it you see the model's name, context size and price per million
+  tokens. There is a warning when the model does not list structured outputs
+  but the mode is `native`, or when the id is not in the list. The list comes
+  from OpenRouter's public `/models` endpoint (no key sent) and is cached on
+  the server for 6 hours. Offline, the field is plain text.
 - **Protocol:** scheduler, start agent, router classifier, consensus rule,
   proposer, attempts, agent visibility, transport.
 - **Limits:** soft discussion limits, hard limits, runtime retries and timeouts.
@@ -835,6 +841,7 @@ The UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST` and
 | Method & path | Purpose |
 |---|---|
 | `GET /api/meta` | versions, providers (with request-gate state), stub models, evaluators (with proposal schemas), schedulers, consensus rules, outcomes, builtin scenarios |
+| `GET /api/providers/openrouter/models` | OpenRouter's model catalog for the editor: id, name, context, price per M tokens, structured-output support (cached 6 h; 502 if unreachable) |
 | `GET/POST /api/scenarios` | library (built-ins first, read-only) / create a user scenario (`{config}` or `{builtin}`) |
 | `POST /api/scenarios/validate` | schema and runnability check, without saving |
 | `GET/PUT/DELETE /api/scenarios/:id` | read / update (version bump on change) / delete |

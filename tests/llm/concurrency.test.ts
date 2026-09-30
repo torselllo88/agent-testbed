@@ -70,7 +70,8 @@ const realModelConfig = (model = "vendor/model") => {
 
 describe("provider request gate in real runs", () => {
   it("caps simultaneous provider requests below the voting fan-out, and records queue wait separately", async () => {
-    const { provider, state } = trackingProvider(15);
+    const LATENCY_MS = 60;
+    const { provider, state } = trackingProvider(LATENCY_MS);
     const h = createHarness({ providers: [provider], maxConcurrentRequests: 2 });
     const runner = h.runner(realModelConfig());
     const metrics = await runner.run();
@@ -79,8 +80,9 @@ describe("provider request gate in real runs", () => {
     expect(state.peak).toBe(2); // voting alone would fire 4 at once
     const votes = ofType(h.events(runner.id), "llm_call").filter((e) => e.payload.purpose === "vote");
     expect(votes.some((e) => (e.payload.queueWaitMs as number) > 0)).toBe(true);
-    // durationMs is provider time only — queueing is not counted as provider latency.
-    for (const e of votes) expect(e.payload.durationMs as number).toBeLessThan(15 * 3);
+    // durationMs is provider time only — queueing is not counted as provider latency. A queued vote waits
+    // one full call (≥ LATENCY_MS), so counting the wait would give ≥ 2 × LATENCY_MS; the margin absorbs timer jitter.
+    for (const e of votes) expect(e.payload.durationMs as number).toBeLessThan(LATENCY_MS * 2);
 
     const started = ofType(h.events(runner.id), "experiment_started")[0]!;
     expect(started.payload.environment).toMatchObject({ maxConcurrentRequests: 2 });

@@ -185,9 +185,14 @@ evaluator, and therefore the same `taskDefinitionHash`. On top it adds:
   interpersonal priors. A persona shapes how an agent talks, never what it
   knows. Nothing steers the room toward success: a believable coordination
   failure is as valid an ending as a rescue.
-- **Spoken, short dialogue** (v4). A shared speech style in each officer's
+- **Spoken, short dialogue** (v4, v5). A shared speech style in each officer's
   `systemPrompt`: one point per turn, usually one or two short sentences, no
-  restating, no politeness formulas. The personas give each character a
+  restating, no politeness formulas. Since v5 two more rules apply. An officer
+  PASSes instead of repeating a point or question that has already been
+  answered; this is scoped to the mission discussion, because the same prompt
+  also reaches the debrief, where there is no PASS. Officers also talk about
+  what should be done instead of reporting actions as done before the vote,
+  so the ending's "Decision locked — executing" is the moment things happen. The personas give each character a
   concrete reason to push back. This is part of the behavior layer, so it
   changes agent behavior (and `configHash`), but not the task.
 - **A narrator** (MISSION CONTROL): the opening, a few observer-only

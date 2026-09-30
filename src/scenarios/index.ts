@@ -47,7 +47,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     // v3: human interaction profile DEBRIEF (crew debrief after the mission), crew-voiced room notices.
     // v4: dramaturgy pass — short spoken dialogue (shared speech style), sharper personas, discussion 20 turns,
     //     observer-only escalation beats, the ending revealed as a paced sequence with the vote tally.
-    version: 4,
+    // v5: speech style asks to PASS rather than repeat a point or question already answered, and to
+    //     discuss what to do rather than report actions as done before the vote.
+    version: 5,
     config: () => kestrelConfig(),
   },
 ];

@@ -39,7 +39,9 @@ const SPEECH = `How you speak: this is a live emergency channel, not a written r
 - Do not restate what is already established, do not summarize the situation, do not thank or reassure anyone.
 - No politeness formulas ("I understand your concern", "that is a valid point"). If you disagree, say so and say why.
 - Call people by their first name.
-- A proposal's rationale and a vote's reason: one short sentence.`;
+- A proposal's rationale and a vote's reason: one short sentence.
+- During the mission discussion, before speaking, check whether your point or question has already been answered in the room. If it has and you have no new information or objection, PASS (pass=true) instead of repeating it.
+- Nothing is carried out until the crew has voted on a final proposal. Talk about what should be done — never report an action as already done.`;
 
 const CAST: Record<SpaceStationRoleId, CastMember> = {
   operations: {

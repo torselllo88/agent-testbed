@@ -1,12 +1,15 @@
+import { spawnSync } from "node:child_process";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { describe, expect, it } from "vitest";
+import os from "node:os";
+import { describe, expect, it, vi } from "vitest";
 import { ConfigValidationError, parseExperimentConfig } from "../../src/experiment/config.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
-import { createInMemoryDb } from "../../src/persistence/db.js";
+import { createInMemoryDb, forgetLeaseObservations, setLeaseClockForTests } from "../../src/persistence/db.js";
 import { ExperimentRepository } from "../../src/persistence/experimentRepository.js";
 import { InteractionRepository } from "../../src/persistence/interactionRepository.js";
+import { RoomRepository } from "../../src/persistence/roomRepository.js";
 import { ScenarioRepository } from "../../src/persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../../src/scenarios/index.js";
 import { kestrelConfig } from "../../src/scenarios/spaceStation/kestrel.js";
@@ -16,6 +19,8 @@ import { composeTestbed } from "../../src/server/compose.js";
 /** Regression tests for the review findings in the interaction, rooms and server layers. */
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** The pid of a process that has just exited. */
+const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid!;
 
 function testbed(latencyMs = 0) {
   const db = createInMemoryDb();
@@ -100,25 +105,47 @@ describe("rooms review fixes", () => {
 });
 
 describe("persistence and server review fixes", () => {
-  it("recovery leaves rows of another live process alone and closes those of a silent one (pid reuse cannot fool it)", () => {
+  it("recovery: a crashed owner's rows at once, a silent one's after a whole lease on our own clock; a live one's never", () => {
     const t = testbed();
     const repo = new ExperimentRepository(t.db);
-    const now = new Date().toISOString();
-    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
-    t.db.prepare(`INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES ('proc_live', ?, ?), ('proc_dead', ?, ?)`).run(process.pid, now, process.pid, stale);
-    const ids = { live: "run-of-a-live-cli", dead: "run-of-a-crashed-process", unknown: "run-without-owner" };
+    let mono = 1_000_000;
+    setLeaseClockForTests(t.db, () => mono);
+    let wall = Date.now();
+    const iso = (msAgo: number) => new Date((wall += 1) - msAgo).toISOString(); // every beat a distinct timestamp
+    const lease = t.db.prepare(`INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES (?, ?, ?, ?)`);
+    lease.run("proc_live", process.pid, os.hostname(), iso(0));
+    lease.run("proc_crashed", deadPid(), os.hostname(), iso(0)); // restarted within its lease: the pid is gone
+    lease.run("proc_silent", process.pid, os.hostname(), iso(10 * 60_000)); // stale — but its pid lives on (reused?)
+    lease.run("proc_jumped", process.pid, os.hostname(), iso(10 * 60_000)); // looks stale after a clock jump, still beating
+    const ids = { live: "run-live", crashed: "run-crashed", silent: "run-silent", jumped: "run-jumped", unknown: "run-without-owner" };
     for (const id of Object.values(ids)) repo.create({ id, config: kestrelConfig(), configHash: "h", testbedVersion: { version: "test" } as never });
-    t.db.prepare(`UPDATE experiments SET owner_id = 'proc_live' WHERE id = ?`).run(ids.live);
-    t.db.prepare(`UPDATE experiments SET owner_id = 'proc_dead' WHERE id = ?`).run(ids.dead); // same pid, but a stale heartbeat
-    t.db.prepare(`UPDATE experiments SET owner_id = NULL WHERE id = ?`).run(ids.unknown); // rows from before owners existed
-    expect(t.service.recoverInterrupted().sort()).toEqual([ids.dead, ids.unknown].sort());
-    expect(repo.getOrThrow(ids.live).finishedAt).toBeNull();
+    const own = t.db.prepare(`UPDATE experiments SET owner_id = ? WHERE id = ?`);
+    own.run("proc_live", ids.live);
+    own.run("proc_crashed", ids.crashed);
+    own.run("proc_silent", ids.silent);
+    own.run("proc_jumped", ids.jumped);
+    own.run(null, ids.unknown); // rows from before owners existed
+
+    expect(t.service.recoverInterrupted().sort()).toEqual([ids.crashed, ids.unknown].sort());
+
+    const beat = t.db.prepare(`UPDATE process_leases SET heartbeat_at = ? WHERE owner_id = ?`);
+    mono += 61_000;
+    beat.run(iso(0), "proc_live");
+    beat.run(iso(9 * 60_000), "proc_jumped"); // moved: alive, whatever the wall clock says
+    // This process was suspended meanwhile: what it saw before says nothing — everyone gets a whole lease again.
+    forgetLeaseObservations(t.db);
+    expect(t.service.recoverInterrupted()).toEqual([]);
+
+    mono += 61_000;
+    beat.run(iso(0), "proc_live");
+    beat.run(iso(8 * 60_000), "proc_jumped");
+    expect(t.service.recoverInterrupted()).toEqual([ids.silent]);
+    for (const id of [ids.live, ids.jumped]) expect(repo.getOrThrow(id).finishedAt).toBeNull();
   });
 
   it("a batch left running by a crashed owner can be closed as interrupted through cancel", async () => {
     const t = testbed();
-    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
-    t.db.prepare(`INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES ('proc_gone', 1, ?)`).run(stale);
+    t.db.prepare(`INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES ('proc_gone', ?, ?, ?)`).run(deadPid(), os.hostname(), new Date().toISOString());
     const { BatchRepository } = await import("../../src/persistence/batchRepository.js");
     const record = new BatchRepository(t.db).create("orphan", t.batches.resolve({ name: "orphan", base: { config: t.fast.config }, repetitions: 1 }));
     t.db.prepare(`UPDATE batches SET owner_id = 'proc_gone' WHERE id = ?`).run(record.id);
@@ -182,5 +209,102 @@ describe("second review round", () => {
     expect(legacy).toHaveLength(1);
     expect(legacy[0]!.payload.requestedModel).toBe("router/next-in-order"); // Kestrel's scheduler classifier
     expect(await routerCalls(null)).toHaveLength(0);
+  });
+});
+
+describe("third review round", () => {
+  const outbox = (t: ReturnType<typeof testbed>, bindingId: string) => new RoomRepository(t.db).listOutbox(bindingId, 0, 10_000);
+  const interruptedStates = (t: ReturnType<typeof testbed>, bindingId: string) =>
+    outbox(t, bindingId).filter((o) => o.type === "run.state" && o.payload.state === "interrupted").length;
+
+  it("a binding is told once that its run was interrupted — whatever followed — and a closed one never", async () => {
+    const t = testbed();
+    const binding = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!int" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    t.interaction.closeDebrief(binding.experimentId);
+    new ExperimentRepository(t.db).update(binding.experimentId, { outcome: "INTERRUPTED" });
+    expect(t.rooms.recoverInterrupted()).toBe(1);
+    // The operator debriefs the interrupted run afterwards: the last run.state is no longer "interrupted".
+    await t.interaction.openDebrief(binding.experimentId, "operator");
+    t.interaction.closeDebrief(binding.experimentId);
+    expect(t.rooms.recoverInterrupted()).toBe(0);
+    expect(t.rooms.recoverInterrupted()).toBe(0);
+    expect(interruptedStates(t, binding.bindingId)).toBe(1);
+
+    const closed = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!closed" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    t.rooms.close(closed.bindingId);
+    const before = t.rooms.view(closed.bindingId).delivery.lastSeq;
+    new ExperimentRepository(t.db).update(closed.experimentId, { outcome: "INTERRUPTED" });
+    expect(t.rooms.recoverInterrupted()).toBe(0);
+    expect(t.rooms.view(closed.bindingId).delivery.lastSeq).toBe(before);
+  });
+
+  it("a notice that cannot be posted never fails the message that caused it, nor makes a retry count twice", async () => {
+    const t = testbed();
+    const binding = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!notice" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    t.interaction.closeDebrief(binding.experimentId);
+    const post = t.rooms.post.bind(t.rooms);
+    t.rooms.post = (async (experimentId, message) => {
+      if (message.sender.kind === "notice") throw new Error("room unavailable");
+      return post(experimentId, message);
+    }) as typeof t.rooms.post;
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const message = { externalEventId: "$late", sender: { externalUserId: "@bob:example.org", displayName: "Bob" }, body: "Hello?" };
+    expect(await t.rooms.inbound(binding.bindingId, message)).toMatchObject({ status: "accepted", disposition: "spectator" });
+    expect((await t.rooms.inbound(binding.bindingId, message)).status).toBe("duplicate");
+    quiet.mockRestore();
+    const humans = new InteractionRepository(t.db).listEvents(binding.experimentId).filter((e) => e.type === "human_message");
+    expect(humans).toHaveLength(1);
+  });
+
+  it("after every debrief session, people are told again that it is closed", async () => {
+    const t = testbed();
+    const { runner, done } = t.service.start({ config: t.fast.config });
+    await done;
+    await t.interaction.settle();
+    const say = (text: string) => t.interaction.receive(runner.id, { senderId: "u1", displayName: "Nikita", text, replyTo: null, mentions: [] });
+    const unavailable = () => new InteractionRepository(t.db).listEvents(runner.id).filter((e) => e.type === "notice_posted" && e.payload.kind === "debriefUnavailable").length;
+    t.interaction.closeDebrief(runner.id);
+    await say("one");
+    await say("two");
+    expect(unavailable()).toBe(1);
+    await t.interaction.openDebrief(runner.id, "operator");
+    t.interaction.closeDebrief(runner.id);
+    await say("three");
+    expect(unavailable()).toBe(2);
+  });
+
+  it("a huge idle timeout does not close the session at once (setTimeout overflow)", async () => {
+    const t = testbed();
+    const config = structuredClone(t.fast.config) as ReturnType<typeof kestrelConfig>;
+    config.humanInteraction!.debrief.idleTimeoutMinutes = 1e9;
+    const { runner, done } = t.service.start({ config });
+    await done;
+    await t.interaction.settle();
+    await sleep(30);
+    expect(t.interaction.isDebriefOpen(runner.id)).toBe(true);
+    t.interaction.closeDebrief(runner.id);
+  });
+
+  it("a question whose routing fails still ends as failed, with the reason on record", async () => {
+    const t = testbed();
+    const { runner, done } = t.service.start({ config: t.fast.config });
+    await done;
+    await t.interaction.settle();
+    (t.interaction as unknown as { messageOf: () => never }).messageOf = () => {
+      throw new Error("database unavailable");
+    };
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    await t.interaction.receive(runner.id, { senderId: "u1", displayName: "Nikita", text: "Why?", replyTo: "some-message", mentions: [] });
+    await t.interaction.settle();
+    quiet.mockRestore();
+    const failed = new InteractionRepository(t.db).listEvents(runner.id).filter((e) => e.type === "debrief_question_failed");
+    expect(failed).toHaveLength(1);
+    expect(failed[0]!.payload).toMatchObject({ reason: "error", error: "database unavailable" });
   });
 });

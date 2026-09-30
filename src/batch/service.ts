@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ConfigValidationError, parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
+import { ConfigValidationError, configHash, parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
 import { checkRunnable, ConfigNotRunnableError, type RunnerDeps } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import type { ProviderRegistry } from "../llm/registry.js";
@@ -8,7 +8,7 @@ import { ExperimentRepository, type ExperimentRecord } from "../persistence/expe
 import { ScenarioRepository } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
 import { aggregate, type ConditionAggregate } from "./aggregate.js";
-import { BatchSpecSchema, conditionConfig, expandConditions, planRuns, variableLabel, type BatchSpec } from "./spec.js";
+import { BatchSpecSchema, conditionConfig, droppedVariable, expandConditions, planRuns, variableLabel, type BatchSpec } from "./spec.js";
 
 export class BatchValidationError extends Error {
   constructor(public readonly problems: string[]) {
@@ -106,30 +106,49 @@ export class BatchService {
     if (duplicateLabels.length) {
       throw new BatchValidationError(duplicateLabels.map((l) => `two variables share the label "${l}" — give each a distinct label`));
     }
+    // The size cap before anything is built: a large cartesian product must not exhaust the process.
+    let conditionCount = 1;
+    for (const variable of spec.variables) {
+      if (conditionCount > MAX_RUNS_PER_BATCH / (variable.values.length * spec.repetitions)) {
+        const requested = spec.variables.reduce((n, v) => n * v.values.length, 1);
+        throw new BatchValidationError([`${requested} conditions × ${spec.repetitions} repetitions requested; the limit is ${MAX_RUNS_PER_BATCH} runs`]);
+      }
+      conditionCount *= variable.values.length;
+    }
     const conditions = expandConditions(spec.variables);
-    const keys = conditions.map((c) => c.key);
-    const duplicateKeys = [...new Set(keys.filter((k, i) => keys.indexOf(k) !== i))];
-    if (duplicateKeys.length) {
-      throw new BatchValidationError(duplicateKeys.map((k) => `two conditions have the same key "${k}" — a variable lists the same value twice (e.g. 1 and "1")`));
+    const seenKeys = new Set<string>();
+    const duplicateKeys = new Set<string>();
+    for (const { key } of conditions) (seenKeys.has(key) ? duplicateKeys : seenKeys).add(key);
+    if (duplicateKeys.size) {
+      throw new BatchValidationError([...duplicateKeys].map((k) => `two conditions have the same key "${k}" — a variable lists the same value twice (e.g. 1 and "1")`));
     }
     const totalRuns = conditions.length * spec.repetitions;
-    if (totalRuns > MAX_RUNS_PER_BATCH) {
-      throw new BatchValidationError([`${totalRuns} runs requested (${conditions.length} conditions × ${spec.repetitions}); the limit is ${MAX_RUNS_PER_BATCH}`]);
-    }
 
     const providers = this.providersFor(spec);
     const problems: string[] = [];
     const conditionConfigs = new Map<string, ExperimentConfig>();
+    const byHash = new Map<string, string>();
     for (const condition of conditions) {
       try {
-        const config = parseExperimentConfig(conditionConfig(baseConfig, spec.variables, condition));
+        const raw = conditionConfig(baseConfig, spec.variables, condition);
+        const config = parseExperimentConfig(raw);
+        const dropped = spec.variables.map((v) => droppedVariable(raw, config, v)).filter((p): p is string => p !== null);
+        if (dropped.length) {
+          problems.push(...dropped.map((p) => `condition "${condition.key}": ${p}`));
+          continue;
+        }
         checkRunnable({ providers, evaluators: this.deps.evaluators }, config);
         conditionConfigs.set(condition.key, config);
+        // The last line of defence: two conditions that are one config would compare a thing with itself.
+        const hash = configHash(config);
+        const same = byHash.get(hash);
+        if (same !== undefined) problems.push(`conditions "${same}" and "${condition.key}" produce the same config — they would measure the same thing`);
+        else byHash.set(hash, condition.key);
       } catch (err) {
         problems.push(...problemsOf(err, `condition "${condition.key}"`));
       }
     }
-    if (problems.length) throw new BatchValidationError(problems);
+    if (problems.length) throw new BatchValidationError([...new Set(problems)]);
 
     return { spec, baseConfig, scenarioId, scenarioVersion, conditions, totalRuns, conditionConfigs };
   }
@@ -195,7 +214,6 @@ export class BatchService {
     }
   }
 
-  /** Starts no further runs and stops the ones in flight (they end as STOPPED_BY_OPERATOR and are excluded from rates). */
   /**
    * A batch still marked running that no live process owns (its owner crashed):
    * marks it interrupted. Returns false when it is not such an orphan.
@@ -207,6 +225,7 @@ export class BatchService {
     return true;
   }
 
+  /** Starts no further runs and stops the ones in flight (they end as STOPPED_BY_OPERATOR and are excluded from rates). */
   cancel(id: string): void {
     const state = this.active.get(id);
     if (!state) throw new BatchValidationError(["Batch is not running"]);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { configHash, parseExperimentConfig, taskDefinitionHash, type ExperimentConfig } from "../experiment/config.js";
+import { configHash, parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
 import type { Db } from "./db.js";
 
 export interface ScenarioRecord {
@@ -9,7 +9,6 @@ export interface ScenarioRecord {
   version: number;
   config: ExperimentConfig;
   configHash: string;
-  taskDefinitionHash: string;
   /** Set for a managed built-in scenario (synced from code, read-only). */
   builtin: { id: string; version: number } | null;
   createdAt: string;
@@ -45,19 +44,10 @@ function rowToRecord(row: ScenarioRow): ScenarioRecord {
     version: row.version,
     config,
     configHash: row.config_hash,
-    taskDefinitionHash: safeTaskHash(config),
     builtin: row.builtin_id ? { id: row.builtin_id, version: row.builtin_version ?? 0 } : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function safeTaskHash(config: ExperimentConfig): string {
-  try {
-    return taskDefinitionHash(config);
-  } catch {
-    return "";
-  }
 }
 
 /** Editing or deleting a managed built-in scenario — duplicate it instead. */

@@ -71,8 +71,12 @@ describe("experiment core boundary", () => {
     const metrics = await runner.run();
 
     expect(metrics.termination?.outcome).toBe("SUCCESS");
-    const errors = ofType(h.events(runner.id), "error").map((e) => String(e.payload.message));
+    const errors = ofType(h.events(runner.id), "extension_error").map((e) => String(e.payload.message));
     expect(errors).toEqual(['extension "broken" failed in onRoomOpened: boom at open', 'extension "broken" failed in onRunEnded: boom at end']);
+    // An add-on failure is an integration problem, not an experiment error — counted apart.
+    expect(metrics.errors).toBe(0);
+    expect(metrics.extensionErrors).toBe(2);
+    expect(ofType(h.events(runner.id), "error")).toHaveLength(0);
   });
 });
 
@@ -81,7 +85,8 @@ describe("generic code stays scenario- and vendor-neutral", () => {
   const files = GENERIC_DIRS.flatMap((d) => sourceFilesAny(path.resolve("src", d)));
 
   it("no scenario vocabulary or vendor names in code (comments excluded)", () => {
-    const vocabulary = /\b(research_labs|life_support|reactor|coolant|kestrel|space-station|crew|matrix|chums)\b/i;
+    // Both built-in scenario families (Space Station / Kestrel, Cascade) and the chat systems a room adapter may target.
+    const vocabulary = /\b(research_labs|life_support|reactor|coolant|kestrel|space-station|crew|beacon|thermal|r3|scram|evacuat\w*|officers?|matrix|chums|slack|discord|telegram|whatsapp)\b/i;
     const offenders = files.flatMap((file) =>
       stripComments(fs.readFileSync(file, "utf8"))
         .split("\n")

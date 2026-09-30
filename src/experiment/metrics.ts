@@ -42,6 +42,8 @@ export interface ExperimentMetrics {
   evaluation: Record<string, unknown> | null;
   protocolIncidents: Record<string, number>;
   errors: number;
+  /** Add-on (extension) failures — integration / presentation problems, not experiment errors. */
+  extensionErrors: number;
 }
 
 const inc = (map: Record<string, number>, key: string, by = 1) => {
@@ -73,6 +75,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     evaluation: null,
     protocolIncidents: {},
     errors: 0,
+    extensionErrors: 0,
   };
 
   let startedTs: string | null = null;
@@ -198,6 +201,9 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         break;
       case EventType.ERROR:
         m.errors += 1;
+        break;
+      case EventType.EXTENSION_ERROR:
+        m.extensionErrors += 1;
         break;
       default:
         break;

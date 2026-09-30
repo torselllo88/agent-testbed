@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
@@ -38,6 +39,7 @@ function applyMigrations(db: Db): void {
   ensureColumn(db, "scenarios", "builtin_version", "builtin_version INTEGER");
   // Which process owns a live row (see processOwnerId); recovery only touches rows whose owner is gone.
   db.exec(`CREATE TABLE IF NOT EXISTS process_leases (owner_id TEXT PRIMARY KEY, pid INTEGER, heartbeat_at TEXT NOT NULL)`);
+  ensureColumn(db, "process_leases", "host", "host TEXT");
   ensureColumn(db, "experiments", "owner_id", "owner_id TEXT");
   ensureColumn(db, "batches", "owner_id", "owner_id TEXT");
   db.exec(INTERACTION_SQL);
@@ -77,14 +79,26 @@ export function openDb(dataDir: string = env.dataDir, synchronous: string = env.
 /**
  * Process leases: which process owns a live run, batch or debrief session.
  * Each process that writes such rows gets a random owner id (pid numbers are
- * reused, aggressively so on Windows) and refreshes a heartbeat. Startup and
- * periodic recovery only touch rows whose owner has gone silent — so a server
- * started next to a running CLI batch on the same database leaves it alone,
- * and a crashed owner's rows are recovered even if its pid lives on.
+ * reused, aggressively so on Windows) and refreshes a heartbeat. Recovery only
+ * touches rows whose owner is gone — so a server started next to a running CLI
+ * batch on the same database leaves it alone.
+ *
+ * Invariant: recovery prefers leaving a dead owner's rows open a little longer
+ * over interrupting an owner that may still be alive (which would also collide
+ * with its next trace write). An owner is gone when
+ *  - it ran on this host and its pid no longer exists (a crash or restart is
+ *    recovered at once), or
+ *  - its heartbeat has been seen standing still for a whole lease, measured on
+ *    THIS process's monotonic clock — a wall-clock jump or a machine waking from
+ *    sleep cannot make a live owner look dead (see forgetLeaseObservations).
  */
 const HEARTBEAT_MS = 15_000;
 export const LEASE_TTL_MS = 60_000;
+const HOST = os.hostname();
 const ownerIds = new WeakMap<Db, string>();
+/** Per owner: the heartbeat last seen, and since when (monotonic ms) it has not moved. */
+const observations = new WeakMap<Db, Map<string, { heartbeatAt: string; since: number }>>();
+const leaseClocks = new WeakMap<Db, () => number>();
 
 /** This process's owner id for rows it creates in this database (starts its heartbeat on first use). */
 export function processOwnerId(db: Db): string {
@@ -95,11 +109,11 @@ export function processOwnerId(db: Db): string {
   const beat = () => {
     try {
       db.prepare(
-        `INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES (?, ?, ?)
+        `INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES (?, ?, ?, ?)
          ON CONFLICT(owner_id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at`
-      ).run(ownerId, process.pid, new Date().toISOString());
+      ).run(ownerId, process.pid, HOST, new Date().toISOString());
     } catch {
-      // database closed — nothing left to own
+      // database closed or busy — the next beat retries; a lease tolerates three missed beats
     }
   };
   beat();
@@ -107,15 +121,51 @@ export function processOwnerId(db: Db): string {
   return ownerId;
 }
 
+/** Whether a process with this pid exists. EPERM means it does (someone else's); only ESRCH means gone. */
+function pidExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
 /**
- * Whether ANOTHER live process owns a row (a fresh heartbeat). null / unknown
+ * Whether ANOTHER process that may still be alive owns a row. null / unknown
  * owners count as gone. This process's own rows are handled by the caller's
  * in-memory maps (live ones are skipped there), so here they count as gone.
  */
-export function ownerAlive(db: Db, ownerId: string | null, now = Date.now()): boolean {
+export function ownerAlive(db: Db, ownerId: string | null): boolean {
   if (!ownerId || ownerId === ownerIds.get(db)) return false;
-  const row = db.prepare(`SELECT heartbeat_at FROM process_leases WHERE owner_id = ?`).get(ownerId) as { heartbeat_at: string } | undefined;
-  return Boolean(row) && now - Date.parse(row!.heartbeat_at) < LEASE_TTL_MS;
+  const row = db.prepare(`SELECT pid, host, heartbeat_at FROM process_leases WHERE owner_id = ?`).get(ownerId) as
+    | { pid: number | null; host: string | null; heartbeat_at: string }
+    | undefined;
+  if (!row) return false;
+  if (row.host === HOST && row.pid !== null && !pidExists(row.pid)) return false;
+  const now = (leaseClocks.get(db) ?? performance.now)();
+  let seen = observations.get(db);
+  if (!seen) observations.set(db, (seen = new Map()));
+  const last = seen.get(ownerId);
+  if (!last || last.heartbeatAt !== row.heartbeat_at) {
+    seen.set(ownerId, { heartbeatAt: row.heartbeat_at, since: now });
+    return true;
+  }
+  return now - last.since < LEASE_TTL_MS;
+}
+
+/**
+ * After this process itself was suspended (its timers ran late), what it saw
+ * before says nothing about the others: start observing their heartbeats
+ * afresh, so they get a whole lease to beat again.
+ */
+export function forgetLeaseObservations(db: Db): void {
+  observations.delete(db);
+}
+
+/** Test-only: the monotonic clock ownerAlive measures a standing heartbeat with. */
+export function setLeaseClockForTests(db: Db, clock: () => number): void {
+  leaseClocks.set(db, clock);
 }
 
 /** Test-only: a fresh in-memory DB with migrations applied. */

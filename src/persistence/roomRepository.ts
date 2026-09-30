@@ -97,6 +97,19 @@ export class RoomRepository {
     return row ? toBinding(row) : null;
   }
 
+  /** Open bindings whose run ended INTERRUPTED and whose outbox does not say so yet. */
+  bindingsMissingInterrupted(): RoomBindingRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT b.* FROM room_bindings b JOIN experiments e ON e.id = b.experiment_id
+         WHERE e.outcome = 'INTERRUPTED' AND b.closed_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM room_outbox o WHERE o.binding_id = b.id AND o.type = 'run.state'
+                           AND json_extract(o.payload_json, '$.state') = 'interrupted')`
+      )
+      .all() as unknown as BindingRow[];
+    return rows.map(toBinding);
+  }
+
   bindingsForRoom(provider: string, roomId: string): RoomBindingRecord[] {
     const rows = this.db.prepare(`SELECT * FROM room_bindings WHERE provider = ? AND room_id = ? ORDER BY created_at`).all(provider, roomId) as unknown as BindingRow[];
     return rows.map(toBinding);

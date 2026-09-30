@@ -16,48 +16,50 @@ export interface Addressee {
 
 const normalize = (s: string) => s.toLowerCase().replace(/ё/g, "е");
 
+const words = (s: string) => normalize(s).split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
+
 /**
- * Every name a person might use for each character: the config name and the
- * display labels in any language, and their words. Not ids — an id such as
- * "power" is also an ordinary word; ids count only as explicit mentions.
+ * Every name a person might use for each character, as word sequences: the
+ * config name and the display labels in any language, each of their words
+ * (3+ letters: "Viktor" for "Viktor Hale"), and the scenario's aliases
+ * (humanInteraction.aliases — e.g. inflected forms: Виктору, Майей). Not ids —
+ * an id such as "power" is also an ordinary word; ids count only as explicit
+ * mentions.
  */
-export function nameVariants(config: ExperimentConfig): Map<string, string[]> {
-  const variants = new Map<string, string[]>();
+export function nameVariants(config: ExperimentConfig): Map<string, string[][]> {
+  const variants = new Map<string, string[][]>();
   for (const agent of config.agents) {
     const names = [agent.name, ...Object.values(config.presentation.strings).map((s) => s.agents[agent.id]?.name ?? "")].filter(Boolean);
-    const tokens = new Set<string>();
+    const phrases = new Map<string, string[]>();
+    const add = (w: string[]) => w.length > 0 && phrases.set(w.join(" "), w);
     for (const name of names) {
-      for (const word of normalize(name).split(/[^\p{L}\p{N}_]+/u)) if (word.length >= 3) tokens.add(word);
+      add(words(name));
+      for (const word of words(name)) if (word.length >= 3) add([word]);
     }
-    variants.set(agent.id, [...tokens]);
+    for (const alias of config.humanInteraction?.aliases?.[agent.id] ?? []) add(words(alias));
+    variants.set(agent.id, [...phrases.values()]);
   }
   return variants;
 }
 
 /**
- * Whether a word of the question is a form of a name token. Exact, or an
- * inflected form (Russian cases: Виктор → Виктору, Сара → Саре, Майя → Майей):
- * the token as a prefix, or the token minus a final vowel, with a short ending.
+ * The character named earliest in the text (the vocative usually comes first),
+ * or null. Whole words only — no stems or prefixes, so "maybe" is not Maya and
+ * "half" is not Hale; other word forms come from the scenario's aliases. At one
+ * position the longest name wins ("Maya Chen" over "Maya").
  */
-function isNameForm(word: string, token: string): boolean {
-  if (word === token) return true;
-  if (token.length < 4) return false;
-  if (word.startsWith(token) && word.length - token.length <= 3) return true;
-  if (/[aeiouyаеёиоуыэюяй]$/.test(token)) {
-    const stem = token.slice(0, -1);
-    return word.startsWith(stem) && word.length >= token.length && word.length - stem.length <= 3;
-  }
-  return false;
-}
-
-/** The character named earliest in the text (the vocative usually comes first), or null. */
 export function findNamedAgent(config: ExperimentConfig, text: string): { agentId: string; word: string } | null {
   const variants = nameVariants(config);
-  const words = normalize(text).split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
-  for (const word of words) {
-    for (const [agentId, tokens] of variants) {
-      if (tokens.some((t) => isNameForm(word, t))) return { agentId, word };
+  const tokens = words(text);
+  for (let i = 0; i < tokens.length; i++) {
+    let best: { agentId: string; phrase: string[] } | null = null;
+    for (const [agentId, phrases] of variants) {
+      for (const phrase of phrases) {
+        const fits = phrase.every((w, k) => tokens[i + k] === w);
+        if (fits && (!best || phrase.length > best.phrase.length)) best = { agentId, phrase };
+      }
     }
+    if (best) return { agentId: best.agentId, word: best.phrase.join(" ") };
   }
   return null;
 }

@@ -33,12 +33,15 @@ export const SpaceStationParamsSchema = z.object({
       external_communications: z.number().min(0).default(8),
       life_support: z.number().min(0).default(40),
     })
+    .strict()
     .default({}),
   coolantRequiredKw: z.number().min(0).default(30),
   lifeSupportRequiredKw: z.number().min(0).default(40),
   /** Coolant loops that can actually run (loop A has failed). */
   operationalLoops: z.array(z.enum(["A", "B"])).default(["B"]),
-});
+})
+  // Unknown keys are errors, not silently dropped: a typo (loopBRequiredKW) must not quietly fall back to the default.
+  .strict();
 export type SpaceStationParams = z.infer<typeof SpaceStationParamsSchema>;
 
 function check(passed: boolean, detail: string): ConstraintCheck {

@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
-import { openDb } from "../persistence/db.js";
+import { forgetLeaseObservations, openDb } from "../persistence/db.js";
 import { ScenarioRepository } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
 import { createApp } from "./app.js";
@@ -25,15 +25,33 @@ if (interruptedDebriefs > 0) console.log(`Marked ${interruptedDebriefs} debrief 
 const interruptedBindings = rooms.recoverInterrupted();
 if (interruptedBindings > 0) console.log(`Told ${interruptedBindings} external room binding(s) that their run was interrupted.`);
 
-// While the server runs, another process sharing the database (e.g. a CLI batch) may crash: once its lease
-// goes stale, close its runs, batches and debrief sessions as interrupted — without waiting for a restart.
+// While the server runs, another process sharing the database (e.g. a CLI batch) may crash: once it is gone
+// (see ownerAlive), close its runs, batches and debrief sessions as interrupted — without waiting for a restart.
+const RECOVERY_INTERVAL_MS = 60_000;
+let lastRecoveryTick = performance.now();
 setInterval(() => {
-  const runs = service.recoverInterrupted().length;
-  const orphanBatches = batches.recoverInterrupted().length;
-  const sessions = interaction.recoverInterrupted();
-  if (runs || orphanBatches || sessions) rooms.recoverInterrupted();
-  if (runs || orphanBatches || sessions) console.log(`Recovered after a crashed process: ${runs} run(s), ${orphanBatches} batch(es), ${sessions} debrief session(s).`);
-}, 60_000).unref();
+  const now = performance.now();
+  const late = now - lastRecoveryTick > RECOVERY_INTERVAL_MS * 1.5;
+  lastRecoveryTick = now;
+  if (late) {
+    // This process was suspended (e.g. the machine slept): the other owners were too, and have not had a chance
+    // to beat yet. Skip this pass rather than risk interrupting a live one.
+    forgetLeaseObservations(db);
+    return;
+  }
+  try {
+    const runs = service.recoverInterrupted().length;
+    const orphanBatches = batches.recoverInterrupted().length;
+    const sessions = interaction.recoverInterrupted();
+    if (runs || orphanBatches || sessions) {
+      rooms.recoverInterrupted();
+      console.log(`Recovered after a crashed process: ${runs} run(s), ${orphanBatches} batch(es), ${sessions} debrief session(s).`);
+    }
+  } catch (err) {
+    // E.g. the database stayed busy: the next pass retries. Never let recovery take the server down.
+    console.error("Periodic recovery failed:", err);
+  }
+}, RECOVERY_INTERVAL_MS).unref();
 
 // Built-in scenarios live in the library as read-only rows kept in sync with the code.
 const synced = new ScenarioRepository(db).syncBuiltins(BUILTIN_SCENARIOS);

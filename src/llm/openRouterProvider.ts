@@ -106,13 +106,7 @@ export class OpenRouterProvider implements LlmProvider {
     // That is an infrastructure failure, not the model's output — surface it
     // as a retryable provider error so it is never recorded as a protocol
     // (parse) failure of the agent.
-    if ((choice?.finish_reason as string | undefined) === "error") {
-      throw new ProviderError(
-        `OpenRouter (model: ${request.model}) upstream${extras.provider ? ` "${extras.provider}"` : ""} failed mid-response (finish_reason "error", generation ${completion.id})`,
-        true
-      );
-    }
-    return {
+    const result: CompletionResult = {
       text: choice?.message.content ?? "",
       requestedModel: request.model,
       servedModel: completion.model || request.model,
@@ -123,5 +117,15 @@ export class OpenRouterProvider implements LlmProvider {
       finishReason: choice?.finish_reason ?? undefined,
       providerMeta: { generationId: completion.id, ...(extras.provider ? { upstreamProvider: extras.provider } : {}) },
     };
+    if (result.finishReason === "error") {
+      // Whatever the upstream billed for the partial response still counts toward usage and cost.
+      throw new ProviderError(
+        `OpenRouter (model: ${request.model}) upstream${extras.provider ? ` "${extras.provider}"` : ""} failed mid-response (finish_reason "error", generation ${completion.id})`,
+        true,
+        undefined,
+        result
+      );
+    }
+    return result;
   }
 }

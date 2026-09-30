@@ -148,10 +148,13 @@ export function spaceStationScript(variant: SpaceStationVariant) {
 /** Space Station stand-in debrief router: routes by this scenario's subject keywords (en, ru); otherwise not confident. */
 export function spaceStationDebriefRouter(request: CompletionRequest): string {
   const q = String(request.context?.question ?? "").toLowerCase();
+  // Whole English words (and plurals); Russian stems at the start of a word — so "fair" is not "air", nor "awkward" "kw".
+  const en = (w: string) => String.raw`(?<![\p{L}\p{N}])(?:${w})s?(?![\p{L}\p{N}])`;
+  const ru = (w: string) => String.raw`(?<![\p{L}\p{N}])(?:${w})`;
   const rules: Array<[RegExp, string]> = [
-    [/reactor|coolant|scram|реактор|охлажд/, "engineering"],
-    [/power|kw|budget|мощност|квт|энерг/, "power"],
-    [/life support|air|жизнеобеспеч|воздух/, "life_support"],
+    [new RegExp(`${en("reactor|coolant|scram")}|${ru("реактор|охлажд")}`, "u"), "engineering"],
+    [new RegExp(`${en("power|kw|budget")}|${ru("мощност|квт|энерг")}`, "u"), "power"],
+    [new RegExp(`${en("life support|air")}|${ru("жизнеобеспеч|воздух")}`, "u"), "life_support"],
   ];
   const hit = rules.find(([re]) => re.test(q));
   return JSON.stringify(

@@ -19,6 +19,8 @@ export const EventType = {
   PRESENTATION_DELAY: "presentation_delay",
   /** Something an add-on wants on record about how it treated this run (e.g. pacing skipped for a headless run). */
   EXTENSION_NOTE: "extension_note",
+  /** An add-on (extension) failed. The run goes on unchanged; counted apart from the experiment's own errors. */
+  EXTENSION_ERROR: "extension_error",
   /** An agent's internal control metadata for a turn (target, intent, pass, readiness) — never shown in the room. */
   AGENT_META: "agent_meta",
   ROUTING_DECISION: "routing_decision",

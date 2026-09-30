@@ -90,7 +90,7 @@ Missing or wrong token → `401 {"error":{"code":"UNAUTHORIZED",…}}`.
 | `ACTIVE` | The run is in progress. | yes |
 | `DEBRIEF` | The run is over and its debrief is open: people can question the characters. | yes |
 | `COMPLETED` | Nothing is live any more. The outbox is still readable and must still be drained and acked. | only while events are unacked |
-| `INTERRUPTED` | The testbed restarted during the run. The outbox ends with `run.state interrupted`. | only while events are unacked |
+| `INTERRUPTED` | The process running it stopped (a crash or restart) during the run. The outbox gets exactly one `run.state interrupted` (an operator may still debrief the finished run after it). | only while events are unacked |
 | `CLOSED` | The binding was explicitly closed. Inbound is refused; the outbox stays readable. | no |
 
 Transitions: `ACTIVE` → `DEBRIEF` (if the scenario has a debrief) → `COMPLETED`.
@@ -260,8 +260,8 @@ testbed orders messages by the time it receives them.
   state can still be `ACTIVE`. It becomes `COMPLETED` once the run has ended.
   Keep draining the outbox.
 - `close` marks the binding `CLOSED` first, then stops. Nothing that follows — the
-  end of the run, a debrief — is added to its outbox, and no automatic debrief
-  opens for it.
+  end of the run, a debrief, an `interrupted` after a crash — is added to its
+  outbox, and no automatic debrief opens for it.
 
 ## 7. Outbox events
 

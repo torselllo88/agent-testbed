@@ -42,7 +42,7 @@ describe("extension isolation is enforced at runtime, not only by types", () => 
     const bare = await promptsWith(null);
     expect(tampered.prompts).toEqual(bare.prompts);
     expect(tampered.metrics.termination?.outcome).toBe("SUCCESS");
-    const errors = ofType(tampered.h.events(tampered.runner.id), "error").map((e) => String(e.payload.message));
+    const errors = ofType(tampered.h.events(tampered.runner.id), "extension_error").map((e) => String(e.payload.message));
     expect(errors.some((m) => m.startsWith('extension "mutate-config" failed in attach'))).toBe(true);
   });
 
@@ -85,7 +85,7 @@ describe("extension isolation is enforced at runtime, not only by types", () => 
     const runner = h.runner(testConfig());
     const metrics = await runner.run();
     expect(metrics.termination?.outcome).toBe("SUCCESS");
-    expect(ofType(h.events(runner.id), "error").some((e) => String(e.payload.message).includes("nested too deeply"))).toBe(true);
+    expect(ofType(h.events(runner.id), "extension_error").some((e) => String(e.payload.message).includes("nested too deeply"))).toBe(true);
   });
 
   it("nested clock holds keep the outer hold open", () => {

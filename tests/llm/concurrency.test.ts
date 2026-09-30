@@ -51,9 +51,11 @@ function trackingProvider(latencyMs = 10, failWhen?: (req: CompletionRequest) =>
       state.inFlight += 1;
       state.peak = Math.max(state.peak, state.inFlight);
       try {
+        const t0 = Date.now();
         await new Promise((r) => setTimeout(r, latencyMs));
         if (failWhen?.(req)) throw new ProviderError("503 upstream overloaded", false, 503);
-        return { text: respond(req), requestedModel: req.model, servedModel: req.model, usage: { promptTokens: 10, completionTokens: 5 } };
+        // innerMs: the time this call really spent in the provider, timer jitter included.
+        return { text: respond(req), requestedModel: req.model, servedModel: req.model, usage: { promptTokens: 10, completionTokens: 5 }, providerMeta: { innerMs: Date.now() - t0 } };
       } finally {
         state.inFlight -= 1;
       }
@@ -80,9 +82,15 @@ describe("provider request gate in real runs", () => {
     expect(state.peak).toBe(2); // voting alone would fire 4 at once
     const votes = ofType(h.events(runner.id), "llm_call").filter((e) => e.payload.purpose === "vote");
     expect(votes.some((e) => (e.payload.queueWaitMs as number) > 0)).toBe(true);
-    // durationMs is provider time only — queueing is not counted as provider latency. A queued vote waits
-    // one full call (≥ LATENCY_MS), so counting the wait would give ≥ 2 × LATENCY_MS; the margin absorbs timer jitter.
-    for (const e of votes) expect(e.payload.durationMs as number).toBeLessThan(LATENCY_MS * 2);
+    // durationMs is provider time only — queueing is not counted as provider latency. Compared with the time the
+    // provider itself measured (so timer jitter under load cancels out): counting a queued vote's wait would add
+    // a whole call (≥ LATENCY_MS) on top.
+    const queued = votes.filter((v) => (v.payload.queueWaitMs as number) >= LATENCY_MS / 2);
+    expect(queued.length).toBeGreaterThan(0);
+    for (const e of votes) {
+      const inner = (e.payload.providerMeta as { innerMs: number }).innerMs;
+      expect((e.payload.durationMs as number) - inner).toBeLessThan(LATENCY_MS / 2);
+    }
 
     const started = ofType(h.events(runner.id), "experiment_started")[0]!;
     expect(started.payload.environment).toMatchObject({ maxConcurrentRequests: 2 });

@@ -89,6 +89,10 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     dirty: false,
     rawText: null,
     rawError: null,
+    /** Form fields whose text does not parse (path -> the text as typed): kept on screen, and Save / Validate are blocked. */
+    invalid: new Map(),
+    /** Human-interaction settings put aside when the profile is switched to the default, restored when switched back. */
+    stashedInteraction: null,
     notice: null,
     openRouter: null, // { models, error? } once loaded
   };
@@ -342,9 +346,20 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         </div>
         ${checkbox(`${d}.revealEvaluation`, "Give characters the evaluator's check results (can reveal facts only another character knew)")}
         <h3>Routing of unaddressed questions</h3>
-        <p class="muted small">Replies, mentions and names are routed without a model. For the rest, a router model can pick the character; without one, the default character answers. Independent of the experiment's own scheduler.</p>
+        <p class="muted small">Replies, mentions and names are routed without a model. For the rest, a router model can pick the character; with it off, the default character answers. Independent of the experiment's own scheduler.</p>
+        ${
+          hi.debrief && !("router" in hi.debrief)
+            ? `<div class="warning-banner small">Saved before the debrief had its own router: unaddressed questions are routed by the scheduler's classifier (marked "legacy"). Saving leaves it so; turn the router on to pick a model, or on and off again for none.</div>`
+            : ""
+        }
         ${checkbox("humanInteraction.__debriefRouterEnabled", "Use a router model")}
         ${state.draft.humanInteraction?.debrief?.router ? modelFields(`${d}.router`) : ""}
+        <h3>Name aliases</h3>
+        ${field(
+          "Aliases (JSON)",
+          `<textarea class="code" data-path="humanInteraction.aliases" data-kind="json-optional" rows="5">${escapeHtml(hi.aliases ? JSON.stringify(hi.aliases, null, 2) : "")}</textarea>`,
+          'Per agent id, more names people may use — matched as whole words, e.g. {"power": ["Виктору", "Виктором"]}. The name and its localized labels count already.'
+        )}
         <p class="muted small">Notice texts: presentation strings, key <code>interaction</code>.</p>`
           : ""
       }`;
@@ -365,7 +380,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       <div class="page-header">
         <h1>${escapeHtml(state.draft.name || s.name)} ${readOnly ? badge("built-in", "info") : badge(`v${s.version}`, "neutral")} ${state.dirty ? badge("unsaved changes", "warn") : ""}</h1>
         <div class="actions">
-          ${readOnly ? "" : `<button id="btn-save" class="primary" ${state.dirty ? "" : "disabled"}>Save</button>`}
+          ${readOnly ? "" : `<button id="btn-save" class="primary" ${state.dirty && !state.invalid.size ? "" : "disabled"}>Save</button>`}
           <button id="btn-validate">Validate</button>
           <button id="btn-run" class="primary">Run</button>
           <button id="btn-duplicate">Duplicate</button>
@@ -395,14 +410,36 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     if (toggle) toggle.checked = Boolean(state.draft.scheduler.classifier);
     const routerToggle = app.querySelector('[data-path="humanInteraction.__debriefRouterEnabled"]');
     if (routerToggle) routerToggle.checked = Boolean(state.draft.humanInteraction?.debrief?.router);
+    // A re-render keeps what was typed into a field that does not parse, still marked.
+    for (const [path, raw] of state.invalid) {
+      const el = app.querySelector(`#editor-body [data-path="${CSS.escape(path)}"]`);
+      if (!el) {
+        state.invalid.delete(path); // the field is gone (e.g. its agent was removed)
+        continue;
+      }
+      el.value = raw;
+      el.classList.add("invalid");
+    }
     bind();
+  }
+
+  function invalidFieldsHtml() {
+    const n = state.invalid.size;
+    return problemsHtml(`Fix ${n} invalid field${n === 1 ? "" : "s"} first:`, [...state.invalid.keys()].map((p) => `${p}: not a valid value (nothing was applied)`));
+  }
+
+  function refreshSave() {
+    const save = document.getElementById("btn-save");
+    if (save) {
+      save.disabled = !state.dirty || state.invalid.size > 0;
+      save.title = state.invalid.size ? "Fix the invalid fields first" : "";
+    }
   }
 
   function markDirty() {
     if (!state.dirty) {
       state.dirty = true;
-      const save = document.getElementById("btn-save");
-      if (save) save.disabled = false;
+      refreshSave();
       const h1 = app.querySelector(".page-header h1");
       if (h1 && !h1.innerHTML.includes("unsaved")) h1.insertAdjacentHTML("beforeend", ` ${badge("unsaved changes", "warn")}`);
     }
@@ -433,11 +470,14 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     } else if (path === "humanInteraction.__debriefRouterEnabled") {
       state.draft.humanInteraction.debrief.router = value ? { provider: "stub", model: "router/next-in-order", structuredOutput: "native" } : null;
     } else if (path === "humanInteraction.__profile") {
-      if (!value) delete state.draft.humanInteraction;
-      else
+      if (!value) {
+        state.stashedInteraction = state.draft.humanInteraction ?? state.stashedInteraction;
+        delete state.draft.humanInteraction;
+      } else
         state.draft.humanInteraction = {
+          ...(state.draft.humanInteraction ?? state.stashedInteraction ?? {}),
           profile: value,
-          debrief: state.draft.humanInteraction?.debrief ?? {
+          debrief: state.draft.humanInteraction?.debrief ?? state.stashedInteraction?.debrief ?? {
             router: null,
             maxOutputTokens: 250,
             maxPendingPerUser: 3,
@@ -516,9 +556,15 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       if (!el.dataset.path || el.dataset.structural !== undefined || el.type === "checkbox") return;
       const result = coerce(el);
       el.classList.toggle("invalid", !result.ok);
-      if (!result.ok) return;
+      if (!result.ok) {
+        state.invalid.set(el.dataset.path, el.value);
+        markDirty();
+        return refreshSave();
+      }
+      state.invalid.delete(el.dataset.path);
       assign(el.dataset.path, result.value);
       markDirty();
+      refreshSave();
     });
 
     body.addEventListener("change", (e) => {
@@ -554,6 +600,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     app.querySelectorAll(".tab").forEach((btn) =>
       btn.addEventListener("click", () => {
         if (state.tab === "raw" && state.rawError) return; // don't leave the raw view with unparsed edits
+        if (state.invalid.size) return setNotice(invalidFieldsHtml()); // nor a tab with a field that does not parse
         state.tab = btn.dataset.tab;
         // Deep-linkable tab, without triggering the hash router.
         history.replaceState(null, "", `#/scenarios/${encodeURIComponent(state.scenario.id)}?tab=${state.tab}`);
@@ -584,6 +631,10 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
 
   async function save() {
     if (state.rawError) return setNotice(problemsHtml(state.rawError));
+    if (state.invalid.size) {
+      setNotice(invalidFieldsHtml());
+      return false;
+    }
     try {
       const { scenario } = await apiDetailed(`/api/scenarios/${encodeURIComponent(state.scenario.id)}`, {
         method: "PUT",
@@ -603,6 +654,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
   }
 
   async function validate() {
+    if (state.rawError) return setNotice(problemsHtml(state.rawError));
+    if (state.invalid.size) return setNotice(invalidFieldsHtml());
     try {
       const result = await api("/api/scenarios/validate", { method: "POST", body: JSON.stringify({ config: state.draft }) });
       setNotice(result.ok ? `<div class="success-banner">Config is valid and runnable.</div>` : problemsHtml("Config has problems:", result.problems));

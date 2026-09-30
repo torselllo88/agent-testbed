@@ -19,12 +19,17 @@ import {
 } from "./debriefPrompt.js";
 import { agentDisplayName, type NoticeKind } from "./strings.js";
 
+/** The longest delay setTimeout honours (2^31 - 1 ms); above it, the timer fires after 1 ms. */
+const MAX_TIMER_MS = 2_147_483_647;
+
 /** What a session needs from the service that owns it: its log, the room, and the finished run. */
+
 export interface DebriefSessionContext {
   experimentId: string;
   config: ExperimentConfig;
   providers: ProviderRegistry;
   log(type: string, payload: Record<string, unknown>, agentId?: string | null): void;
+  /** Best effort: never rejects (a notice that could not be posted is logged by the service). */
   notice(kind: NoticeKind, vars?: Record<string, unknown>, inResponseTo?: string | null): Promise<void>;
   /** Posts a character's answer; `replyTo` is the question's internal message id. */
   postAnswer(agentId: string, text: string, replyTo: string): Promise<string>;
@@ -163,7 +168,7 @@ export class DebriefSession {
     this.idleTimer = setTimeout(() => {
       if (this.current || this.queue.length) return this.armIdleTimer();
       this.close("idle");
-    }, this.settings.idleTimeoutMinutes * 60_000);
+    }, Math.min(this.settings.idleTimeoutMinutes * 60_000, MAX_TIMER_MS));
     this.idleTimer.unref?.();
   }
 
@@ -200,24 +205,26 @@ export class DebriefSession {
       this.close("budget");
       return;
     }
-    this.ctx.log("debrief_question_processing", { questionId: question.messageId });
-
-    const route = await this.route(question);
-    if (this.current) this.current.agentId = route.agentId;
-    this.ctx.log("debrief_route_decided", { questionId: question.messageId, ...route }, route.agentId);
-
-    const agent = this.ctx.config.agents.find((a) => a.id === route.agentId)!;
-    const llm = this.caller(question.messageId);
-    // A reply is only meaningful with what it replies to — and the asker, not that message's author, is who gets the answer.
-    const replied = question.replyTo ? this.ctx.messageOf(question.replyTo) : null;
-    const inReplyTo = replied
-      ? {
-          authorName: replied.agentId ? (this.ctx.config.agents.find((a) => a.id === replied.agentId)?.name ?? replied.agentId) : null,
-          own: replied.agentId === agent.id,
-          text: replied.text,
-        }
-      : null;
+    // Every question ends answered or failed — whatever step fails, routing included.
+    let agentId: string | null = null;
     try {
+      this.ctx.log("debrief_question_processing", { questionId: question.messageId });
+      const route = await this.route(question);
+      agentId = route.agentId;
+      if (this.current) this.current.agentId = route.agentId;
+      this.ctx.log("debrief_route_decided", { questionId: question.messageId, ...route }, route.agentId);
+
+      const agent = this.ctx.config.agents.find((a) => a.id === route.agentId)!;
+      const llm = this.caller(question.messageId);
+      // A reply is only meaningful with what it replies to — and the asker, not that message's author, is who gets the answer.
+      const replied = question.replyTo ? this.ctx.messageOf(question.replyTo) : null;
+      const inReplyTo = replied
+        ? {
+            authorName: replied.agentId ? (this.ctx.config.agents.find((a) => a.id === replied.agentId)?.name ?? replied.agentId) : null,
+            own: replied.agentId === agent.id,
+            text: replied.text,
+          }
+        : null;
       const result = await llm.call({
         category: "agent",
         purpose: "debrief_answer",
@@ -253,8 +260,8 @@ export class DebriefSession {
       );
     } catch (err) {
       this.usage.failed += 1;
-      this.ctx.log("debrief_question_failed", { questionId: question.messageId, reason: "error", error: errorMessage(err) }, agent.id);
-      if (this.open) await this.ctx.notice("answerFailed", { agent: agentDisplayName(this.ctx.config, agent.id) }, question.messageId);
+      this.ctx.log("debrief_question_failed", { questionId: question.messageId, reason: "error", error: errorMessage(err) }, agentId);
+      if (this.open && agentId) await this.ctx.notice("answerFailed", { agent: agentDisplayName(this.ctx.config, agentId) }, question.messageId);
     }
   }
 

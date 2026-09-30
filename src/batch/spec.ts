@@ -134,6 +134,30 @@ function setAtPath(target: unknown, keys: string[], value: unknown, fullPath: st
   setAtPath(container[key], rest, value, fullPath);
 }
 
+/**
+ * A variable's path that the validated config does not carry the value at —
+ * a typo in the last segment, or a setting this configuration does not use —
+ * so the zod schemas dropped (or changed) it. null when every value landed.
+ */
+export function droppedVariable(raw: unknown, parsed: ExperimentConfig, variable: BatchVariable): string | null {
+  if (variable.path === "$agents") return null;
+  const keys = variable.path.split(".");
+  const applied = valuesAtPath(raw, keys);
+  const landed = valuesAtPath(parsed, keys);
+  const same = landed.length === applied.length && landed.every((v, i) => v !== undefined && canonicalJson(v) === canonicalJson(applied[i]));
+  return same
+    ? null
+    : `"${variable.path}" is not a setting of this config — the value was dropped or changed when the config was validated (a typo, or a setting this configuration does not use)`;
+}
+
+function valuesAtPath(target: unknown, keys: string[]): unknown[] {
+  const [key, ...rest] = keys;
+  if (key === undefined) return [target];
+  if (target === null || typeof target !== "object") return [undefined];
+  if (key === "*") return Array.isArray(target) ? target.flatMap((item) => valuesAtPath(item, rest)) : [undefined];
+  return valuesAtPath((target as Record<string, unknown>)[key], rest);
+}
+
 export function conditionConfig(base: ExperimentConfig, variables: BatchVariable[], condition: BatchCondition): unknown {
   const config = structuredClone(base) as unknown as Record<string, unknown>;
   for (const variable of variables) applyVariable(config, variable.path, condition.values[variableLabel(variable)]);

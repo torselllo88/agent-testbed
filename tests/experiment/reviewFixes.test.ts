@@ -101,7 +101,7 @@ describe("core review fixes", () => {
     expect(tampered.seen).toEqual(bare.seen);
     expect(tampered.metrics.termination?.outcome).toBe("SUCCESS");
     expect(ofType(tampered.events, "message_posted").some((e) => e.payload.text === "TAMPERED")).toBe(false);
-    expect(ofType(tampered.events, "error").some((e) => String(e.payload.message).startsWith('extension "tamper" failed in beforePublish'))).toBe(true);
+    expect(ofType(tampered.events, "extension_error").some((e) => String(e.payload.message).startsWith('extension "tamper" failed in beforePublish'))).toBe(true);
   });
 
   it("a stop during the ending presentation cuts it short without counting as an intervention; other commands are refused", async () => {

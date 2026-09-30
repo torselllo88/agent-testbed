@@ -190,6 +190,12 @@ export class ExperimentRunner {
   /** Agent-visible messages published so far (the experiment transcript). */
   private transcriptLength = 0;
   private publishDepth = 0;
+  /** Extension hooks currently running (holdClock is only valid inside one), and clock holds they left open. */
+  private hookDepth = 0;
+  private openHolds = 0;
+  private holdEpoch = 0;
+  /** The experiment's own figures, fixed when the outcome is decided: add-on work at the ending is not experiment time. */
+  private atOutcome: { usage: ReturnType<BudgetTracker["totals"]>; turns: number; activeElapsedMs: number; pausedMs: number } | null = null;
   private readonly environment: RunEnvironment;
   private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
@@ -245,12 +251,20 @@ export class ExperimentRunner {
         if (!EXTENSION_EVENT_TYPES.has(type)) throw new Error(`extensions may only log add-on events (${[...EXTENSION_EVENT_TYPES].join(", ")}), not "${type}"`);
         this.log.append(type, payload);
       },
+      // Only while the core waits on a hook: a hold started anywhere else could overlap agents' LLM calls.
       holdClock: async (fn) => {
+        if (this.hookDepth === 0) throw new Error("holdClock may only be used inside an extension hook");
+        const epoch = this.holdEpoch;
         this.budget.beginHold();
+        this.openHolds += 1;
         try {
           return await fn();
         } finally {
-          this.budget.endHold();
+          // A hold that outlived its hook was already ended when the hook returned.
+          if (epoch === this.holdEpoch) {
+            this.openHolds -= 1;
+            this.budget.endHold();
+          }
         }
       },
       stopSignal: this.abort.signal,
@@ -277,7 +291,7 @@ export class ExperimentRunner {
       scenarioVersion: options.scenarioVersion,
       config: this.config,
       configHash: configHash(this.config),
-      taskDefinitionHash: taskDefinitionHash(this.config),
+      taskDefinitionHash: taskDefinitionHash(this.config, this.evaluator.version),
       batchId: options.batchId,
       conditionKey: options.conditionKey,
       repetition: options.repetition,
@@ -288,7 +302,7 @@ export class ExperimentRunner {
       try {
         ext.attach?.(this.extensionContext);
       } catch (err) {
-        this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in attach: ${err instanceof Error ? err.message : String(err)}` });
+        this.extensionError(ext, "attach", err);
       }
     }
   }
@@ -312,6 +326,7 @@ export class ExperimentRunner {
       }
     }
     this.outcomeDecided = true;
+    this.atOutcome = { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
     await this.notifyExtensions("onRunEnded", (ext) =>
       ext.onRunEnded?.(this.extensionContext, {
         termination: outcome,
@@ -404,7 +419,7 @@ export class ExperimentRunner {
     this.log.append(EventType.EXPERIMENT_STARTED, {
       config,
       configHash: configHash(config),
-      taskDefinitionHash: taskDefinitionHash(config),
+      taskDefinitionHash: taskDefinitionHash(config, this.evaluator.version),
       testbedVersion: getTestbedVersion(),
       environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
@@ -754,12 +769,13 @@ export class ExperimentRunner {
     this.finished = outcome;
     this.currentAgentId = null;
     if (this.phase !== Phase.FINISHED) this.transition(Phase.FINISHED, { outcome: outcome.outcome });
+    const at = this.atOutcome ?? { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
     this.log.append(EventType.EXPERIMENT_FINISHED, {
       termination: outcome,
-      usage: this.budget.totals(),
-      turns: this.budget.turnsUsed(),
-      activeElapsedMs: this.budget.activeElapsedMs(),
-      pausedMs: this.budget.pausedMs(),
+      usage: at.usage,
+      turns: at.turns,
+      activeElapsedMs: at.activeElapsedMs,
+      pausedMs: at.pausedMs,
       presentationDelayMs: this.budget.heldMs(),
     });
 
@@ -813,13 +829,7 @@ export class ExperimentRunner {
 
   /** Runs one lifecycle hook on every extension; an extension failure is logged and never changes the run. */
   private async notifyExtensions(hook: string, call: (ext: RunExtension) => Promise<void> | undefined): Promise<void> {
-    for (const ext of this.extensions) {
-      try {
-        await call(ext);
-      } catch (err) {
-        this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in ${hook}: ${err instanceof Error ? err.message : String(err)}` });
-      }
-    }
+    for (const ext of this.extensions) await this.guarded(ext, hook, () => call(ext));
   }
 
   /**
@@ -852,20 +862,36 @@ export class ExperimentRunner {
       sender.kind === "agent" ? sender.agentId : null
     );
     const result = index === null ? posted : { ...posted, index };
-    const frozen = Object.freeze({ ...result, sender: Object.freeze({ ...result.sender }) });
+    // Extensions only ever get a detached, deeply frozen copy: nothing they hold is what the room or agents read.
+    const detached = deepFreeze(structuredClone(result));
     for (const ext of this.extensions) {
-      if (ext.afterPublish) await this.guarded(ext, "afterPublish", () => ext.afterPublish!(frozen, this.extensionContext));
+      if (ext.afterPublish) await this.guarded(ext, "afterPublish", () => ext.afterPublish!(detached, this.extensionContext));
     }
-    return result;
+    return detached;
   }
 
   /** Runs one extension hook; a failure is logged and never changes the run. */
   private async guarded(ext: RunExtension, hook: string, call: () => Promise<void> | void): Promise<void> {
+    this.hookDepth += 1;
     try {
       await call();
     } catch (err) {
-      this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in ${hook}: ${err instanceof Error ? err.message : String(err)}` });
+      this.extensionError(ext, hook, err);
+    } finally {
+      this.hookDepth -= 1;
+      if (this.hookDepth === 0 && this.openHolds > 0) {
+        // A hold not awaited by its hook: end it now, before the core goes on.
+        for (; this.openHolds > 0; this.openHolds -= 1) this.budget.endHold();
+        this.holdEpoch += 1;
+        this.extensionError(ext, hook, new Error("a clock hold outlived its hook and was ended with it"));
+      }
     }
+  }
+
+  /** An add-on's failure: on record as its own event type, never counted as an experiment error. */
+  private extensionError(ext: RunExtension, hook: string, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.log.append(EventType.EXTENSION_ERROR, { extension: ext.name, hook, message: `extension "${ext.name}" failed in ${hook}: ${message}` });
   }
 
   private logReadinessChanges(changes: ReadinessChange[], cause: "declared" | "invalidated", atIndex: number): void {

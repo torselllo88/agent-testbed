@@ -6,7 +6,7 @@ import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
-import { ConfigValidationError, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, type RunOverrides } from "../experiment/config.js";
+import { ConfigValidationError, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, taskDefinitionHash, type RunOverrides } from "../experiment/config.js";
 import { COMMON_LANGUAGES } from "../experiment/languages.js";
 import { AUTHORED_PROTOCOL_LANGUAGES } from "../experiment/protocolStrings.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
@@ -90,7 +90,8 @@ async function body<T>(req: http.IncomingMessage, schema: z.ZodType<T>): Promise
   return parsed.data;
 }
 
-function scenarioSummary(s: ScenarioRecord) {
+function scenarioSummary(s: ScenarioRecord, evaluators: EvaluatorRegistry) {
+  const evaluator = evaluators.list().find((e) => e.id === s.config.evaluator?.id);
   const builtin = s.builtin ? BUILTIN_SCENARIOS.find((b) => b.id === s.builtin!.id) : undefined;
   return {
     id: s.id,
@@ -100,7 +101,8 @@ function scenarioSummary(s: ScenarioRecord) {
     readOnly: Boolean(s.builtin),
     summary: builtin?.summary ?? s.config.description ?? "",
     configHash: s.configHash,
-    taskDefinitionHash: s.taskDefinitionHash,
+    // With the evaluator version that would judge a run started now — what its runs record.
+    taskDefinitionHash: taskDefinitionHash(s.config, evaluator?.version ?? null),
     agents: s.config.agents?.length ?? 0,
     agentNames: (s.config.agents ?? []).map((a) => a.name),
     scheduler: s.config.scheduler?.type,
@@ -189,7 +191,7 @@ const ROUTES: Route[] = [
   {
     method: "GET",
     pattern: /^\/api\/scenarios$/,
-    handle: ({ res, scenarios }) => sendJson(res, 200, { scenarios: scenarios.list().map(scenarioSummary) }),
+    handle: ({ res, scenarios, deps }) => sendJson(res, 200, { scenarios: scenarios.list().map((s) => scenarioSummary(s, deps.evaluators)) }),
   },
   {
     method: "POST",
@@ -432,10 +434,11 @@ const ROUTES: Route[] = [
     pattern: new RegExp(`^/api/batches/${ID}/cancel$`),
     handle: ({ res, params, deps }) => {
       const id = decodeRouteParam(params[0]!);
-      deps.batches.view(id); // 404 for an unknown batch
+      const { batch } = deps.batches.view(id); // 404 for an unknown batch
       if (!deps.batches.isRunning(id)) {
         // Marked running in the database, but its owner is gone: record it as interrupted.
         if (deps.batches.closeOrphan(id)) return sendJson(res, 200, { ok: true, interrupted: true });
+        if (batch.status === "running") throw new HttpError(409, "Batch is running in another process (e.g. a CLI batch) — stop it there");
         throw new HttpError(409, "Batch is not running");
       }
       deps.batches.cancel(id);

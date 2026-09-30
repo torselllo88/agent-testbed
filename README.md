@@ -276,24 +276,31 @@ has to be communicated.
 
 The proposal is `{ recovery_path, actions[] (ordered), life_support_power_kw }`.
 Every unsafe plan stays expressible. Order matters only where physics says so
-(evaluator v3):
+(evaluator v4):
 
 - the beacon goes to battery before comms go off;
 - power counts only from loads shut down *before* it is routed;
-- a system is powered before it is started or activated;
+- every system the plan runs — the declared path or one started on the side —
+  is powered before it is started or activated;
 - R3 is evacuated before it is isolated — on any path — and for C, before the
   dump fires.
 
 Any other order is accepted.
 Each failure mode is its own check, with its own grounded ending: C chosen,
-B with 22 kW, beacon unprotected, life support diverted, no SCRAM. Stub
+B with 22 kW, beacon unprotected, life support diverted, no SCRAM. An ending
+explains exactly the check that failed, with that check's own figures — a
+power shortfall reports what was available when that system was routed, and a
+system that was never powered is a start failure, not "30 kW available,
+30 kW required". Stub
 variants `cascade/cooperative` (success) and `cascade/dump-c` (failure) let it
 run keyless.
 
 **Two hashes.** `configHash` identifies the exact configuration.
 `taskDefinitionHash` identifies the underlying problem: task text, each
 agent's id, role, objective and private context, the decision protocol and
-the evaluator with its parameters. Runs of Kestrel in English, Kestrel in
+the evaluator — its id, **version** and parameters. Two evaluator versions
+that judge one proposal differently are two tasks, so equal hashes always mean
+equal rules of success. Runs of Kestrel in English, Kestrel in
 Russian and the benchmark share a `taskDefinitionHash`, but they are **not**
 the same experimental condition: persona, models and language change
 behavior.
@@ -331,8 +338,11 @@ the runner: the outcome, metrics, proposal, votes and evaluation are frozen.
   most one LLM call in flight. When something is already in progress, the
   asker is told their question is queued (with position).
 - **Who answers.** In order: an explicit reply to a character's message; an
-  explicit mention; a character's name in the text (either language,
-  including Russian case forms: *Виктору*, *Саре*); the debrief's own router
+  explicit mention; a character's name in the text, as a whole word or phrase —
+  the name, its words and its localized labels, plus the scenario's
+  `humanInteraction.aliases` (Kestrel lists the Russian case forms:
+  *Виктору*, *Саре*). No stems or prefixes, so *maybe* is not Maya and *майор*
+  not Майя. Then the debrief's own router
   model (`debrief.router`, independent of the experiment's scheduler), if
   confident. Scenarios saved before the field existed still use their
   scheduler's classifier, marked "legacy" in the routing decision; an explicit
@@ -677,8 +687,11 @@ tagged with its batch, condition and repetition.
   virtual `$agents`, whose value is the list of agent ids to keep (to vary the
   number of agents).
 - **Validation up front:** every condition is validated before anything runs.
-  One broken condition rejects the whole batch, naming the condition. The limit
-  is 2000 runs per batch.
+  One broken condition rejects the whole batch, naming the condition. A path
+  whose value the validated config does not carry (a typo such as
+  `model.temprature`, or a setting the configuration does not use) is an
+  error, and so are two conditions that come out as the same config. The limit
+  is 2000 runs per batch, checked before any condition is built.
 - **`order: "interleaved"`** (the default) runs repetition 1 of every condition,
   then repetition 2, and so on, so provider drift over time spreads evenly
   across conditions.
@@ -741,7 +754,7 @@ Event types, in the order they typically appear:
 | `phase_changed` | from, to, why (e.g. `discussionEnd: all_ready`) |
 | `routing_decision` | chosen agent, source, reason, details (invalid target, classifier failure) |
 | `turn_started` / `turn_completed` | turn number, kind, result |
-| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown), duration, request-queue wait, parse result, temperature, seed |
+| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown) — for a failed attempt too, when the provider billed it (e.g. an upstream failure mid-response), duration, request-queue wait, parse result, temperature, seed |
 | `message_posted` | a public room message: agent, moderator notice, or narration (with its source template and language; never shown to agents) |
 | `presentation_delay` | a viewer-pacing wait before a visible message: waited, target gap, time since the previous message |
 | `agent_meta` | the hidden control metadata of a turn |
@@ -750,7 +763,8 @@ Event types, in the order they typically appear:
 | `vote_cast` / `consensus_result` | each vote references the proposal id and hash |
 | `evaluation_result` | outcome, every check with detail, derived values |
 | `operator_intervention` | every operator command; `flowAltering` marks the ones that make the run non-autonomous |
-| `protocol_incident` / `error` | recoverable protocol problems / unexpected errors |
+| `protocol_incident` / `error` | recoverable protocol problems / unexpected errors (`metrics.errors`) |
+| `extension_error` | an add-on (narration, pacing, …) failed; the run goes on unchanged. Counted apart, in `metrics.extensionErrors` — an integration problem, not an experiment error |
 | `experiment_finished` | termination (outcome, category, status, reason, detail), usage totals |
 
 **Credentials never enter the trace.** Configured keys are scrubbed from every
@@ -834,19 +848,26 @@ interface, `RunExtension` ([src/experiment/extensions.ts](src/experiment/extensi
   - append trace events;
   - observe the trace as it is written (read-only; a throwing listener is
     isolated);
-  - hold the experiment clock (excluded from active time, like a pause);
+  - hold the experiment clock (excluded from active time, like a pause) —
+    only inside a hook, while the core waits on it;
   - see the stop signal;
   - read the run's add-on options (`headless`).
 
   This is enforced at runtime, not only by the types:
   - the run's config is frozen;
   - `post` accepts only narrator messages, and caller metadata cannot
-    overwrite the message's own fields;
+    overwrite the message's own fields; what it returns (like every message an
+    extension gets) is a detached, deeply frozen copy;
   - `log` accepts only add-on events (`presentation_delay`, `extension_note`);
-  - runaway posting from a publish hook is cut off.
+  - `holdClock` outside a hook throws, and a hold its hook did not await ends
+    with the hook;
+  - runaway posting from a publish hook is cut off;
+  - the experiment's duration, usage and turns are fixed when the outcome is
+    decided: whatever an extension does at the ending is not experiment time.
 
 Extensions cannot touch turns, proposals, votes, evaluation or the outcome. A
-failing extension is logged and changes nothing. The composition roots
+failing extension is logged as `extension_error` and changes nothing — not
+even `metrics.errors`. The composition roots
 (server, CLI, batch) attach `presentationExtensions`; without extensions the
 runner is the bare core.
 
@@ -881,8 +902,10 @@ A test enforces the boundary: no core module imports `src/presentation/` or
 **A new scenario.** Add a folder next to [src/scenarios/spaceStation/](src/scenarios/spaceStation/):
 
 1. `evaluator.ts` — a `ScenarioEvaluator` with a `proposalSchema` (zod; *structure
-   only*, so that unsafe plans remain expressible), a `paramsSchema` and a
-   deterministic `evaluate()` that returns per-check results.
+   only*, so that unsafe plans remain expressible), a `.strict()` `paramsSchema`
+   (an unknown key must be an error, not silently replaced by a default) and a
+   deterministic `evaluate()` that returns per-check results. Bump its
+   `version` whenever a proposal could be judged differently.
 2. `config.ts` — the default experiment config (pure data). Keep the task
    definition in shared constants (see `spaceStation/task.ts`) if several
    scenarios should share one underlying task, as the benchmark and Kestrel do.
@@ -1026,9 +1049,15 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
   server process; a restart ends them (they are recorded as `INTERRUPTED`).
   There is no distributed runtime. Each run, batch and debrief records the
   process that owns it, and every process renews a lease in the database every
-  15 s. Recovery touches only rows whose owner's lease has expired (60 s), so a
-  server started next to a running CLI batch on the same database leaves that
-  batch alone, even if the operating system has reused its pid.
+  15 s. Recovery (at startup and every minute) touches only rows whose owner
+  is gone: its pid no longer exists on this host — so a crash or restart is
+  recovered at once — or its heartbeat has stood still for a whole lease
+  (60 s) as measured on the recovering process's own monotonic clock. A clock
+  jump or a machine waking from sleep cannot make a live owner look dead: after
+  its own timers ran late, the server skips a recovery pass. Recovery prefers
+  leaving a dead owner's rows open a minute longer over interrupting a live one.
+  So a server started next to a running CLI batch on the same database leaves
+  that batch alone.
 - **External rooms (v1)** assume the room already exists and the identities are in it. Delivery is by long-polling rather than SSE or push. There are no typing indicators, and the bearer token is not encryption (see the [contract](docs/external-room-api.md)).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs

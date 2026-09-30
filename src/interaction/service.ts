@@ -166,7 +166,7 @@ export class HumanInteractionService {
     const cooldownMs = settingsOf(config).debrief.spectatorNoticeCooldownSeconds * 1000;
     if (this.now() - gate.lastAt < cooldownMs) return;
     gate.lastAt = this.now();
-    await this.postNotice(experimentId, config, null, kind, { name: message.displayName }, message.messageId);
+    await this.bestEffortNotice(experimentId, config, null, kind, { name: message.displayName }, message.messageId);
   }
 
   // ---------------------------------------------------------------- debrief lifecycle
@@ -205,7 +205,7 @@ export class HumanInteractionService {
           if (!this.forgotten.has(experimentId)) this.log(experimentId, created.id, type, payload, agentId ?? null);
         },
         notice: async (kind, vars, inResponseTo) => {
-          if (!this.forgotten.has(experimentId)) await this.postNotice(experimentId, config, created.id, kind, vars ?? {}, inResponseTo ?? null);
+          if (!this.forgotten.has(experimentId)) await this.bestEffortNotice(experimentId, config, created.id, kind, vars ?? {}, inResponseTo ?? null);
         },
         postAnswer: (agentId, text, replyTo) => this.outlet.post(experimentId, { sender: { kind: "agent", agentId }, text, replyTo }),
         // The experiment is frozen: its record is read once and never changes.
@@ -223,11 +223,13 @@ export class HumanInteractionService {
       settingsOf(config).debrief,
       () => {
         if (this.sessions.get(experimentId) === session) this.sessions.delete(experimentId);
+        // After this session, "the debrief is closed" is news again — also to people told after an earlier one.
+        this.clearNoticeGates(experimentId, "after");
       }
     );
     this.sessions.set(experimentId, session);
     this.log(experimentId, created.id, "debrief_started", { sessionId: created.id, number: created.number, openedBy, outcome: record.outcome });
-    await this.postNotice(experimentId, config, created.id, "debriefOpened", {}, null);
+    await this.bestEffortNotice(experimentId, config, created.id, "debriefOpened", {}, null);
     return created;
   }
 
@@ -267,7 +269,12 @@ export class HumanInteractionService {
     this.forgotten.add(experimentId); // before closing: the session's own writes are skipped from now on
     this.sessions.get(experimentId)?.close("experiment deleted", "CLOSED", false);
     this.sessions.delete(experimentId);
-    for (const key of this.noticeGates.keys()) if (key.startsWith(`${experimentId}:`)) this.noticeGates.delete(key);
+    this.clearNoticeGates(experimentId);
+  }
+
+  private clearNoticeGates(experimentId: string, state?: string): void {
+    const prefix = state ? `${experimentId}:${state}:` : `${experimentId}:`;
+    for (const key of this.noticeGates.keys()) if (key.startsWith(prefix)) this.noticeGates.delete(key);
   }
 
   /** Resolves when every pending debrief open and every queued question has been handled (tests, shutdown). */
@@ -324,6 +331,19 @@ export class HumanInteractionService {
     if (fromMission) return { agentId: fromMission.sender.kind === "agent" ? fromMission.sender.agentId : null, text: fromMission.text };
     const answer = this.repo.listEvents(experimentId).find((e) => e.type === "debrief_answer_published" && e.payload.messageId === messageId);
     return answer ? { agentId: String(answer.payload.agentId), text: String(answer.payload.text) } : null;
+  }
+
+  /**
+   * Notices are informational: one that cannot be posted (the room or the
+   * database failing) is logged and never fails what triggered it — the
+   * human message is already recorded, the session already open or closed.
+   */
+  private async bestEffortNotice(...args: Parameters<HumanInteractionService["postNotice"]>): Promise<void> {
+    try {
+      await this.postNotice(...args);
+    } catch (err) {
+      console.error(`notice "${args[3]}" for experiment ${args[0]} could not be posted:`, err);
+    }
   }
 
   private async postNotice(

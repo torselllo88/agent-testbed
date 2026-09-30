@@ -1,5 +1,5 @@
 import type { ExperimentConfig, PresentationStrings } from "../../experiment/config.js";
-import { CAST, EN as KESTREL_EN, RU as KESTREL_RU, SPEECH } from "../spaceStation/kestrel.js";
+import { CAST, EN as KESTREL_EN, NAME_ALIASES, RU as KESTREL_RU, SPEECH } from "../spaceStation/kestrel.js";
 import { stubModel, type SpaceStationRoleId } from "../spaceStation/task.js";
 import { CASCADE_CONSENSUS, CASCADE_DECISION, CASCADE_EVALUATOR, CASCADE_ROLES, CASCADE_TASK } from "./task.js";
 
@@ -63,19 +63,20 @@ MISSION FAILED: the beacon was cut off before it was switched to battery.`,
     ],
     loop_b_power_sufficient: [
       EN_LOCKED,
-      "Backup coolant loop B begins its startup cycle.",
-      `{{derived.availableRecoveryPowerKw}} kW available, {{derived.requiredRecoveryPowerKw}} kW required. The pump never reaches operating flow and the core keeps heating.
+      "Power is routed to backup coolant loop B: {{derived.loopBAvailableKw}} kW available at that moment, {{derived.loopBRequiredKw}} kW needed by everything powered so far.",
+      `Loop B never reaches operating flow, and the core keeps heating.
 MISSION FAILED: loop B underpowered.`,
     ],
     dump_c_power_sufficient: [
       EN_LOCKED,
-      `{{derived.availableRecoveryPowerKw}} kW available, {{derived.requiredRecoveryPowerKw}} kW required. Thermal dump C cannot reach discharge capacity.
+      "Power is routed to thermal dump C: {{derived.dumpCAvailableKw}} kW available at that moment, {{derived.dumpCRequiredKw}} kW needed by everything powered so far.",
+      `Thermal dump C cannot reach discharge capacity.
 MISSION FAILED: thermal dump C underpowered.`,
     ],
-    loop_b_started: [EN_LOCKED, `The procedure never actually powers and starts loop B. The core keeps heating.
-MISSION FAILED: cooling was never started.`],
-    dump_c_activated: [EN_LOCKED, `The procedure never actually powers and fires thermal dump C. The core keeps heating.
-MISSION FAILED: cooling was never started.`],
+    loop_b_started: [EN_LOCKED, `Loop B never runs: the procedure does not power it before starting it — or never starts it at all. The core keeps heating.
+MISSION FAILED: cooling never came online.`],
+    dump_c_activated: [EN_LOCKED, `Thermal dump C never fires properly: the procedure does not power it before activating it — or never activates it at all. The core keeps heating.
+MISSION FAILED: cooling never came online.`],
     recovery_path_selected: [EN_LOCKED, `The procedure names no cooling system at all. The core keeps heating.
 MISSION FAILED: no recovery path.`],
     reactor_scrammed: [
@@ -164,19 +165,20 @@ const RU: PresentationStrings = {
     ],
     loop_b_power_sufficient: [
       RU_LOCKED,
-      "Резервный насос контура Б начинает цикл запуска.",
-      `Доступно {{derived.availableRecoveryPowerKw}} кВт, требуется {{derived.requiredRecoveryPowerKw}} кВт. Насос не выходит на рабочий поток, активная зона продолжает нагреваться.
+      "Питание подаётся на резервный контур Б: в этот момент доступно {{derived.loopBAvailableKw}} кВт, а всему уже запитанному нужно {{derived.loopBRequiredKw}} кВт.",
+      `Насос не выходит на рабочий поток, активная зона продолжает нагреваться.
 МИССИЯ ПРОВАЛЕНА: контуру Б не хватило питания.`,
     ],
     dump_c_power_sufficient: [
       RU_LOCKED,
-      `Доступно {{derived.availableRecoveryPowerKw}} кВт, требуется {{derived.requiredRecoveryPowerKw}} кВт. Теплосброс В не выходит на рабочую мощность.
+      "Питание подаётся на теплосброс В: в этот момент доступно {{derived.dumpCAvailableKw}} кВт, а всему уже запитанному нужно {{derived.dumpCRequiredKw}} кВт.",
+      `Теплосброс В не выходит на рабочую мощность.
 МИССИЯ ПРОВАЛЕНА: теплосбросу В не хватило питания.`,
     ],
-    loop_b_started: [RU_LOCKED, `Процедура так и не запитывает и не запускает контур Б. Активная зона продолжает нагреваться.
-МИССИЯ ПРОВАЛЕНА: охлаждение не запущено.`],
-    dump_c_activated: [RU_LOCKED, `Процедура так и не запитывает и не включает теплосброс В. Активная зона продолжает нагреваться.
-МИССИЯ ПРОВАЛЕНА: охлаждение не запущено.`],
+    loop_b_started: [RU_LOCKED, `Контур Б так и не заработал: процедура не подаёт на него питание до запуска — или не запускает его вовсе. Активная зона продолжает нагреваться.
+МИССИЯ ПРОВАЛЕНА: охлаждение так и не заработало.`],
+    dump_c_activated: [RU_LOCKED, `Теплосброс В так и не сработал: процедура не подаёт на него питание до включения — или не включает его вовсе. Активная зона продолжает нагреваться.
+МИССИЯ ПРОВАЛЕНА: охлаждение так и не заработало.`],
     recovery_path_selected: [RU_LOCKED, `В процедуре не выбрана ни одна система охлаждения. Активная зона продолжает нагреваться.
 МИССИЯ ПРОВАЛЕНА: нет пути восстановления.`],
     reactor_scrammed: [
@@ -285,6 +287,7 @@ export function kestrelCascadeConfig(agentModel = "cascade/cooperative"): Experi
     transport: { type: "local" },
     humanInteraction: {
       profile: "DEBRIEF",
+      aliases: structuredClone(NAME_ALIASES),
       debrief: {
         // Keyless: no content routing (Sarah answers unaddressed questions); set a cheap model for live demos.
         router: stubModel("router/next-in-order"),

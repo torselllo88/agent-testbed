@@ -368,6 +368,12 @@ export type DebriefConfig = z.infer<typeof DebriefConfigSchema>;
 export const HumanInteractionConfigSchema = z.object({
   profile: z.enum(["OBSERVE", "DEBRIEF", "ADVISORY", "TAKE_ROLE"]).default("OBSERVE"),
   debrief: DebriefConfigSchema.default({}),
+  /**
+   * Per agent id: more names people may call that character by, matched as
+   * whole words or phrases — nicknames, other spellings, inflected forms
+   * (Виктору, Майей). The name and its localized labels count already.
+   */
+  aliases: z.record(z.array(z.string().min(1))).optional(),
 });
 export type HumanInteractionConfig = z.infer<typeof HumanInteractionConfigSchema>;
 
@@ -413,6 +419,9 @@ export const ExperimentConfigSchema = z
     const start = cfg.scheduler.startAgentId;
     if (start !== undefined && !ids.has(start)) {
       ctx.addIssue({ code: "custom", path: ["scheduler", "startAgentId"], message: `unknown agent "${start}"` });
+    }
+    for (const id of Object.keys(cfg.humanInteraction?.aliases ?? {})) {
+      if (!cfg.agents.some((a) => a.id === id)) ctx.addIssue({ code: "custom", path: ["humanInteraction", "aliases", id], message: `unknown agent "${id}"` });
     }
     const debriefDefault = cfg.humanInteraction?.debrief.defaultAgentId;
     if (debriefDefault !== undefined && !ids.has(debriefDefault)) {
@@ -464,8 +473,9 @@ export function configHash(config: ExperimentConfig): string {
 /**
  * The part of a config that defines the underlying coordination task: shared
  * task facts, each agent's operational role, objective and private
- * information, the decision protocol, and the evaluator with its
- * environment parameters. Excludes identity (display names), persona and
+ * information, the decision protocol, and the evaluator — its id, version and
+ * environment parameters (two evaluator versions that judge one proposal
+ * differently define two different tasks). Excludes identity (display names), persona and
  * free-form system prompts, models, language, presentation, scheduling,
  * limits and runtime settings.
  *
@@ -473,7 +483,7 @@ export function configHash(config: ExperimentConfig): string {
  * NOT necessarily the same experimental condition — persona, models and
  * language change behavior; configHash identifies the exact configuration.
  */
-export function taskDefinition(config: ExperimentConfig): unknown {
+export function taskDefinition(config: ExperimentConfig, evaluatorVersion: string | null): unknown {
   return {
     task: config.task,
     agents: [...config.agents]
@@ -481,12 +491,13 @@ export function taskDefinition(config: ExperimentConfig): unknown {
       .map((a) => ({ id: a.id, role: a.role, objective: a.objective, privateContext: a.privateContext })),
     decision: config.decision,
     consensus: config.consensus,
-    evaluator: config.evaluator,
+    evaluator: { ...config.evaluator, version: evaluatorVersion },
   };
 }
 
-export function taskDefinitionHash(config: ExperimentConfig): string {
-  return sha256(canonicalJson(taskDefinition(config)));
+/** evaluatorVersion: the version of the evaluator registered under config.evaluator.id (null if none is). */
+export function taskDefinitionHash(config: ExperimentConfig, evaluatorVersion: string | null): string {
+  return sha256(canonicalJson(taskDefinition(config, evaluatorVersion)));
 }
 
 /** Per-run settings that override the saved scenario without editing or versioning it. */

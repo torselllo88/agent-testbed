@@ -31,6 +31,7 @@ const DEBUG_TYPES = new Set([
   "protocol_incident",
   "operator_intervention",
   "error",
+  "extension_error",
 ]);
 
 function readDebugPref() {

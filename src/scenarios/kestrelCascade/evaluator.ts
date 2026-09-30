@@ -52,6 +52,7 @@ export const CascadeParamsSchema = z.object({
       research_labs: z.number().min(0).default(12),
       external_communications: z.number().min(0).default(8),
     })
+    .strict()
     .default({}),
   /** Life support's current allocation, and the minimum it must keep. */
   lifeSupportKw: z.number().min(0).default(40),
@@ -61,7 +62,9 @@ export const CascadeParamsSchema = z.object({
   r3Crew: z.number().int().min(0).default(6),
   r3EvacuationMinutes: z.number().min(0).default(6),
   reactorSafeWindowMinutes: z.number().min(0).default(4),
-});
+})
+  // Unknown keys are errors, not silently dropped: a typo (loopBRequiredKW) must not quietly fall back to the default.
+  .strict();
 export type CascadeParams = z.infer<typeof CascadeParamsSchema>;
 
 const NOT_APPLICABLE = "not applicable to the chosen path";
@@ -103,7 +106,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
     { key: "loop_b", used: loopBUsed, route: at("route_power_to_loop_b"), kw: params.loopBRequiredKw, label: "loop B" },
     { key: "thermal_dump_c", used: dumpCUsed, route: at("route_power_to_thermal_dump_c"), kw: params.dumpCRequiredKw, label: "dump C" },
   ];
-  const power = new Map<string, { ok: boolean; availableKw: number; requiredKw: number; detail: string }>();
+  const power = new Map<string, { ok: boolean; availableKw: number | null; requiredKw: number | null; detail: string }>();
   let routedKw = 0;
   for (const s of systems.filter((x) => x.used && x.route >= 0).sort((a, b) => a.route - b.route)) {
     routedKw += s.kw;
@@ -115,12 +118,13 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
       detail: `${availableKw} kW available when power is routed to ${s.label}, ${routedKw} kW required`,
     });
   }
+  // Never routed: no power figure to judge — that failure belongs to the start / activate check (powered before use).
   for (const s of systems) {
-    if (s.used && s.route < 0) power.set(s.key, { ok: false, availableKw: finalKw, requiredKw: s.kw, detail: `power is never routed to ${s.label}` });
+    if (s.used && s.route < 0) power.set(s.key, { ok: true, availableKw: null, requiredKw: null, detail: `power is never routed to ${s.label} (see its start check)` });
   }
-  const shortfall = [...power.values()].find((p) => !p.ok);
-  const primary = power.get(path) ?? null;
-  const shownAvailableKw = shortfall?.availableKw ?? primary?.availableKw ?? finalKw;
+  // Once everything is routed: what a successful ending reports.
+  const lastRouted = systems.filter((x) => x.used && x.route >= 0).sort((a, b) => b.route - a.route)[0];
+  const allRoutedKw = lastRouted ? availableAt(lastRouted.route) : finalKw;
 
   // With comms still on, the beacon never loses station power.
   const beaconProtected = !commsOff || before("switch_beacon_to_battery", "shutdown_external_communications");
@@ -128,14 +132,17 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
   const r3ClearBeforeDump = before("evacuate_r3", "activate_thermal_dump_c") && before("isolate_r3", "activate_thermal_dump_c");
   const loopBStartedAfterPower = before("route_power_to_loop_b", "start_loop_b");
   const dumpCActivatedAfterPower = before("route_power_to_thermal_dump_c", "activate_thermal_dump_c");
+  // Powered before use applies to every system the plan runs — the declared path or one started on the side.
+  const loopBRuns = loopB || has("start_loop_b");
+  const dumpCRuns = dumpC || has("activate_thermal_dump_c");
 
   const checks: Record<string, ConstraintCheck> = {
     recovery_path_selected: check(path !== "none", path === "none" ? "no cooling system chosen" : `recovery path: ${path}`),
-    loop_b_started: loopB
+    loop_b_started: loopBRuns
       ? check(loopBStartedAfterPower, loopBStartedAfterPower ? "loop B powered, then started" : "loop B is not powered before it is started (or never started)")
       : check(true, NOT_APPLICABLE),
     loop_b_power_sufficient: loopBUsed ? check(power.get("loop_b")!.ok, power.get("loop_b")!.detail) : check(true, NOT_APPLICABLE),
-    dump_c_activated: dumpC
+    dump_c_activated: dumpCRuns
       ? check(dumpCActivatedAfterPower, dumpCActivatedAfterPower ? "dump C powered, then activated" : "dump C is not powered before it is activated (or never activated)")
       : check(true, NOT_APPLICABLE),
     dump_c_power_sufficient: dumpCUsed ? check(power.get("thermal_dump_c")!.ok, power.get("thermal_dump_c")!.detail) : check(true, NOT_APPLICABLE),
@@ -167,9 +174,14 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
     violated,
     derived: {
       selectedRecoveryPath: path,
-      // At the moment power is routed (the first shortfall, else the chosen path) — what the narration reports.
-      availableRecoveryPowerKw: shownAvailableKw,
+      // With everything routed — what a successful ending reports.
+      availableRecoveryPowerKw: allRoutedKw,
       requiredRecoveryPowerKw: requiredKw || null,
+      // At the moment each system is routed (null: never routed) — what its own power failure reports.
+      loopBAvailableKw: power.get("loop_b")?.availableKw ?? null,
+      loopBRequiredKw: power.get("loop_b")?.requiredKw ?? null,
+      dumpCAvailableKw: power.get("thermal_dump_c")?.availableKw ?? null,
+      dumpCRequiredKw: power.get("thermal_dump_c")?.requiredKw ?? null,
       releasedFromLifeSupport,
       lifeSupportKept,
       r3Crew: params.r3Crew,
@@ -186,7 +198,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
 
 export const kestrelCascadeEvaluator: ScenarioEvaluator<CascadeProposal, CascadeParams> = {
   id: "kestrel-cascade",
-  version: "3",
+  version: "4",
   description:
     "Station Kestrel: Cascade — the committed procedure must run a feasible emergency cooling path with enough (actually available) power: loop B needs 30 kW; thermal dump C needs 18 kW and a service ring R3 evacuated and isolated before it fires, within the reactor's safe window. It must also protect the service craft's approach beacon (battery before comms shutdown), SCRAM the reactor and keep life support at its required allocation.",
   proposalSchema: CascadeProposalSchema,

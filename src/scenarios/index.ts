@@ -54,7 +54,8 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     // v5: speech style asks to PASS rather than repeat a point or question already answered, and to
     //     discuss what to do rather than report actions as done before the vote.
     // v6: the debrief has its own router model (humanInteraction.debrief.router) instead of borrowing the scheduler's.
-    version: 6,
+    // v7: name aliases for the debrief (humanInteraction.aliases: Russian case forms); whole-word keyword routing.
+    version: 7,
     config: () => kestrelConfig(),
   },
   {
@@ -63,7 +64,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     summary: "Harder demo with the Kestrel crew — two recovery paths, facts split across all four officers (en, ru)",
     // v1: initial. v2: evaluator v2 (judges what the plan does, not only its declared path); own debrief router.
     // v3: evaluator v3 (physical order: power before start, shutdowns before routing, evacuate before isolate).
-    version: 3,
+    // v4: evaluator v4 (powered-before-use for every system the plan runs; each failure narrates its own figures);
+    //     name aliases for the debrief (Russian case forms).
+    version: 4,
     config: () => kestrelCascadeConfig(),
   },
 ];

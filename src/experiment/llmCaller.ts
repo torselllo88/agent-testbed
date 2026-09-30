@@ -166,6 +166,7 @@ export class LlmCaller {
         messages,
       };
 
+      const signal = this.callSignal();
       try {
         const result = await provider.complete({
           model: spec.modelRef.model,
@@ -175,7 +176,7 @@ export class LlmCaller {
           maxOutputTokens: spec.modelRef.maxOutputTokens,
           responseFormat: native ? { name: spec.response.name, schema: spec.response.jsonSchema } : undefined,
           routing: routing ?? undefined,
-          signal: this.callSignal(),
+          signal,
           context: spec.context,
         });
         release();
@@ -202,18 +203,23 @@ export class LlmCaller {
         // or the time limit, which a real provider may still have billed.
         const stopped = this.runSignal.aborted;
         const outOfTime = !stopped && this.budget.checkTimeLimit() !== null;
-        const providerError =
-          err instanceof ProviderError
-            ? err
-            : stopped
-              ? new ProviderError("Call aborted: experiment stopped by operator", false)
-              : outOfTime
-                ? new ProviderError("Call aborted: experiment time limit reached", false)
+        // Our own signals first: a provider SDK may wrap the abort in its own error type.
+        const timedOut = !stopped && !outOfTime && signal.aborted;
+        const providerError = stopped
+          ? new ProviderError("Call aborted: experiment stopped by operator", false)
+          : outOfTime
+            ? new ProviderError("Call aborted: experiment time limit reached", false)
+            : timedOut
+              ? new ProviderError(`Call timed out after ${this.runtime.callTimeoutSeconds}s`, true)
+              : err instanceof ProviderError
+                ? err
                 : isAbortError(err)
                   ? new ProviderError(`Call timed out after ${this.runtime.callTimeoutSeconds}s`, true)
                   : new ProviderError(err instanceof Error ? err.message : String(err), true);
+        const billed = err instanceof ProviderError ? err.billed : undefined;
+        const billedCost = billed ? resolveCost(billed) : { costUsd: undefined, costSource: "unknown" as const };
 
-        this.budget.recordCall(spec.category, null, undefined);
+        this.budget.recordCall(spec.category, billed?.usage ?? null, billedCost.costUsd);
         this.log.append(
           EventType.LLM_CALL,
           {
@@ -224,9 +230,10 @@ export class LlmCaller {
               retryable: providerError.retryable,
               aborted: stopped || outOfTime,
             },
-            usage: null,
-            costUsd: null,
-            costSource: "unknown",
+            usage: billed?.usage ?? null,
+            costUsd: billedCost.costUsd ?? null,
+            costSource: billedCost.costSource,
+            ...(billed ? { servedModel: billed.servedModel, finishReason: billed.finishReason ?? null, providerMeta: billed.providerMeta ?? null } : {}),
             durationMs: Date.now() - startedAt,
           },
           spec.agentId

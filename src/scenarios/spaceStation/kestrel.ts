@@ -43,6 +43,14 @@ export const SPEECH = `How you speak: this is a live emergency channel, not a wr
 - During the mission discussion, before speaking, check whether your point or question has already been answered in the room. If it has and you have no new information or objection, PASS (pass=true) instead of repeating it.
 - Nothing is carried out until the crew has voted on a final proposal. Talk about what should be done — never report an action as already done.`;
 
+/** Other forms of the crew's names people use in a debrief (Russian cases, a common spelling) — matched as whole words. */
+export const NAME_ALIASES: Record<SpaceStationRoleId, string[]> = {
+  operations: ["Sara", "Сары", "Саре", "Сару", "Сарой", "Окафора", "Окафору", "Окафором", "Окафоре"],
+  engineering: ["Джона", "Джону", "Джоном", "Джоне", "Мерсера", "Мерсеру", "Мерсером", "Мерсере"],
+  power: ["Victor", "Виктора", "Виктору", "Виктором", "Викторе", "Хейла", "Хейлу", "Хейлом", "Хейле"],
+  life_support: ["Майи", "Майе", "Майю", "Майей"],
+};
+
 export const CAST: Record<SpaceStationRoleId, CastMember> = {
   operations: {
     name: "Sarah Okafor",
@@ -356,6 +364,7 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
     // Spectators during the mission; a crew debrief once the outcome is final.
     humanInteraction: {
       profile: "DEBRIEF",
+      aliases: structuredClone(NAME_ALIASES),
       debrief: {
         // Keyless runs route by subject keywords; with real models, point this at a cheap model.
         router: stubModel("space-station/debrief-router"),

@@ -73,7 +73,9 @@ export class ProviderError extends Error {
     message: string,
     /** Transient failures (rate limit, 5xx, network) are worth retrying; a 4xx request error is not. */
     public readonly retryable: boolean,
-    public readonly status?: number
+    public readonly status?: number,
+    /** A failed response that was still billed (e.g. upstream failure mid-response): its usage and cost count. */
+    public readonly billed?: CompletionResult
   ) {
     super(message);
     this.name = "ProviderError";

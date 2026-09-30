@@ -268,20 +268,15 @@ export class ExternalRoomService implements RoomOutlet {
   }
 
   /**
-   * Startup: a run cut off by a restart has no final message from the
-   * runner, so bound runs get an explicit run.state "interrupted".
+   * After recovery: a run cut off by a crash has no final message from the
+   * runner, so its binding gets an explicit run.state "interrupted" — once,
+   * whatever followed it (an operator's debrief on the finished run). A closed
+   * binding's outbox is final and gets nothing.
    */
   recoverInterrupted(): number {
-    let n = 0;
-    for (const e of this.experimentsRepo.list({}).filter((x) => x.outcome === "INTERRUPTED")) {
-      const binding = this.rooms.bindingForExperiment(e.id);
-      if (!binding) continue;
-      const last = this.rooms.listOutbox(binding.id, 0, 100_000).filter((o) => o.type === "run.state").at(-1);
-      if (last?.payload.state === "interrupted") continue;
-      this.appendState(binding, "interrupted", { outcome: "INTERRUPTED" });
-      n += 1;
-    }
-    return n;
+    const bindings = this.rooms.bindingsMissingInterrupted();
+    for (const binding of bindings) this.appendState(binding, "interrupted", { outcome: "INTERRUPTED" });
+    return bindings.length;
   }
 
   /** Before an experiment is deleted: its binding, outbox and inbound record go with it. */
@@ -494,7 +489,7 @@ export class ExternalRoomService implements RoomOutlet {
   /** @internal used by RunProjector */
   appendState(bindingRecord: RoomBindingRecord, state: string, data?: Record<string, unknown>): void {
     const binding = this.rooms.getBinding(bindingRecord.id);
-    if (!binding || (binding.closedAt && state !== "interrupted")) return;
+    if (!binding || binding.closedAt) return; // a closed binding's outbox is final
     this.rooms.appendOutbox(binding.id, {
       messageId: `os_${randomUUID()}`,
       type: "run.state",

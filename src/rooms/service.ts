@@ -4,7 +4,7 @@ import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import { parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
 import type { ExperimentEvent } from "../experiment/events.js";
 import type { RunExtension, RunExtensionContext, RunExtensionFactory } from "../experiment/extensions.js";
-import { checkRunnable, ConfigNotRunnableError } from "../experiment/runner.js";
+import { checkRunnable, ConfigNotRunnableError, InvalidCommandError } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import type { HumanInteractionService, OutletMessage, RoomOutlet } from "../interaction/service.js";
 import { agentDisplayName, noticeSenderName } from "../interaction/strings.js";
@@ -182,12 +182,11 @@ export class ExternalRoomService implements RoomOutlet {
     const given = input.participants.map((p) => p.participantId);
     const unknown = given.filter((id) => !declared.includes(id));
     const missing = declared.filter((id) => !given.includes(id));
-    const duplicates = [
-      ...new Set(given.filter((id, i) => given.indexOf(id) !== i)),
-      ...new Set(input.participants.map((p) => p.externalUserId).filter((u, i, all) => all.indexOf(u) !== i)),
-    ];
+    // Several participants may share one external identity (a room system that can only post as one bot);
+    // each participant id must still be mapped exactly once.
+    const duplicates = [...new Set(given.filter((id, i) => given.indexOf(id) !== i))];
     if (unknown.length || missing.length || duplicates.length) {
-      throw new RoomApiError(400, "INVALID_PARTICIPANTS", "participants must map every declared participant id to a distinct external user id", {
+      throw new RoomApiError(400, "INVALID_PARTICIPANTS", "participants must map every declared participant id exactly once", {
         missing,
         unknown,
         duplicates,
@@ -242,16 +241,28 @@ export class ExternalRoomService implements RoomOutlet {
   /** Ends whatever is live — the mission or the debrief — leaving the binding readable (COMPLETED). */
   stop(bindingId: string) {
     const binding = this.binding(bindingId);
-    const state = this.stateOf(binding);
-    if (state === "ACTIVE") this.deps.experiments.control(binding.experimentId, { type: "stop" });
-    else if (state === "DEBRIEF") this.deps.interaction.closeDebrief(binding.experimentId, "external stop");
+    if (this.deps.experiments.isRunning(binding.experimentId)) {
+      try {
+        this.deps.experiments.control(binding.experimentId, { type: "stop" });
+      } catch (err) {
+        if (!(err instanceof InvalidCommandError)) throw err; // it finished in the meantime — nothing to stop
+      }
+    }
+    if (this.deps.interaction.isDebriefOpen(binding.experimentId)) this.deps.interaction.closeDebrief(binding.experimentId, "external stop");
     return this.view(bindingId);
+  }
+
+  /** An automatic debrief after the run opens only while the binding is not closed. */
+  mayOpenDebrief(experimentId: string): boolean {
+    const binding = this.rooms.bindingForExperiment(experimentId);
+    return !binding?.closedAt;
   }
 
   /** Closes the binding for good: stops anything live; inbound is refused afterwards. The outbox stays readable. */
   close(bindingId: string) {
-    this.stop(bindingId);
+    // Closed first, so nothing that the stop triggers (an ending, a debrief) lands in this binding's outbox.
     this.rooms.closeBinding(bindingId, new Date(this.now()).toISOString());
+    this.stop(bindingId);
     this.notify(bindingId);
     return this.view(bindingId);
   }
@@ -372,14 +383,20 @@ export class ExternalRoomService implements RoomOutlet {
 
     const replyTo = input.replyToExternalEventId ? this.internalIdOf(bindingId, input.replyToExternalEventId) : null;
     const mentions = (input.mentions ?? []).flatMap((u) => binding.participants.filter((p) => p.externalUserId === u).map((p) => p.participantId));
-    const received = await this.deps.interaction.receive(binding.experimentId, {
-      messageId,
-      senderId: input.sender.externalUserId,
-      displayName: input.sender.displayName,
-      text: input.body,
-      replyTo,
-      mentions,
-    });
+    let received: Awaited<ReturnType<HumanInteractionService["receive"]>>;
+    try {
+      received = await this.deps.interaction.receive(binding.experimentId, {
+        messageId,
+        senderId: input.sender.externalUserId,
+        displayName: input.sender.displayName,
+        text: input.body,
+        replyTo,
+        mentions,
+      });
+    } catch (err) {
+      this.rooms.deleteInbound(bindingId, input.externalEventId);
+      throw err;
+    }
     const result = {
       status: "accepted",
       messageId,
@@ -403,7 +420,7 @@ export class ExternalRoomService implements RoomOutlet {
   async post(experimentId: string, message: OutletMessage): Promise<string> {
     const binding = this.rooms.bindingForExperiment(experimentId);
     const messageId = `om_${randomUUID()}`;
-    if (!binding) return messageId; // not externally bound: the local viewer reads the interaction log
+    if (!binding || binding.closedAt) return messageId; // not (or no longer) externally bound: the local viewer reads the interaction log
     const config = configOf(this.experimentsRepo.getOrThrow(experimentId));
     const agent = message.sender.kind === "agent" ? message.sender.agentId : null;
     const replyToExternalEventId = message.replyTo ? (this.rooms.inboundByInternalId(binding.id, message.replyTo)?.externalEventId ?? null) : null;
@@ -428,20 +445,18 @@ export class ExternalRoomService implements RoomOutlet {
   private projection(): RunExtension {
     return {
       name: "external-room",
-      wrapTransport: (transport, ctx) => {
+      attach: (ctx) => {
         const binding = this.rooms.bindingForExperiment(ctx.experimentId);
-        if (binding) {
-          const projector = new RunProjector(binding, ctx, this);
-          ctx.subscribe((event) => projector.observe(event));
-        }
-        return transport;
+        if (!binding) return;
+        const projector = new RunProjector(binding, ctx, this);
+        ctx.subscribe((event) => projector.observe(event));
       },
     };
   }
 
   /** @internal used by RunProjector */
   appendMessage(
-    binding: RoomBindingRecord,
+    bindingRecord: RoomBindingRecord,
     m: {
       messageId?: string;
       internalMessageId: string | null;
@@ -453,6 +468,8 @@ export class ExternalRoomService implements RoomOutlet {
       data?: Record<string, unknown>;
     }
   ): void {
+    const binding = this.rooms.getBinding(bindingRecord.id);
+    if (!binding || binding.closedAt) return; // a closed binding's outbox is final
     const externalUserId = binding.participants.find((p) => p.participantId === m.participantId)?.externalUserId ?? null;
     this.rooms.appendOutbox(binding.id, {
       messageId: m.messageId ?? `om_${randomUUID()}`,
@@ -472,7 +489,9 @@ export class ExternalRoomService implements RoomOutlet {
   }
 
   /** @internal used by RunProjector */
-  appendState(binding: RoomBindingRecord, state: string, data?: Record<string, unknown>): void {
+  appendState(bindingRecord: RoomBindingRecord, state: string, data?: Record<string, unknown>): void {
+    const binding = this.rooms.getBinding(bindingRecord.id);
+    if (!binding || (binding.closedAt && state !== "interrupted")) return;
     this.rooms.appendOutbox(binding.id, {
       messageId: `os_${randomUUID()}`,
       type: "run.state",
@@ -517,11 +536,13 @@ export class ExternalRoomService implements RoomOutlet {
 
   private waitFor(bindingId: string, ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve) => {
+      if (signal?.aborted) return resolve();
       const set = this.waiters.get(bindingId) ?? new Set<() => void>();
       this.waiters.set(bindingId, set);
       const done = () => {
         clearTimeout(timer);
         set.delete(done);
+        if (set.size === 0 && this.waiters.get(bindingId) === set) this.waiters.delete(bindingId);
         signal?.removeEventListener("abort", done);
         resolve();
       };
@@ -551,9 +572,9 @@ class RunProjector {
       case "phase_changed": {
         if (!this.started && p.to === "DISCUSSION") {
           this.started = true;
-          this.rooms.appendState(this.binding, "mission_started");
+          this.rooms.appendState(this.binding, "run_started");
         }
-        // FINISHED is announced as mission_finished (with the outcome) on experiment_finished.
+        // FINISHED is announced as run_finished (with the outcome) on experiment_finished.
         if (p.to !== "FINISHED") this.rooms.appendState(this.binding, String(p.to).toLowerCase());
         return;
       }
@@ -564,7 +585,7 @@ class RunProjector {
         this.lastConsensus = p as ConsensusResult;
         return;
       case "experiment_finished":
-        this.rooms.appendState(this.binding, "mission_finished", { outcome: p.termination?.outcome, status: p.termination?.status });
+        this.rooms.appendState(this.binding, "run_finished", { outcome: p.termination?.outcome, status: p.termination?.status });
         return;
       case "message_posted":
         break;

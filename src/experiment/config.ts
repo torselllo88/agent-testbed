@@ -82,7 +82,10 @@ export function effectiveOpenRouterRouting(ref: ModelRef): OpenRouterRouting | n
 }
 
 export const AgentConfigSchema = z.object({
-  id: z.string().regex(idPattern, "agent id must be a lowercase slug"),
+  id: z
+    .string()
+    .regex(idPattern, "agent id must be a lowercase slug")
+    .refine((id) => id !== "system", 'agent id "system" is reserved for the room\'s system voice'),
   /** Identity: the display name other participants and viewers see. */
   name: z.string().min(1),
   /** Operational role — part of the task definition. */
@@ -334,6 +337,12 @@ export function supportedProfiles(): HumanInteractionProfile[] {
 }
 
 export const DebriefConfigSchema = z.object({
+  /**
+   * Model that picks who answers a question addressed to nobody in particular
+   * (after replies, mentions and names). null = no model routing: the default
+   * character answers. Independent of the experiment's own scheduler.
+   */
+  router: ModelRefSchema.nullable().default(null),
   /** Who answers a question addressed to nobody in particular when routing is inconclusive. Default: the proposer. */
   defaultAgentId: z.string().optional(),
   /** Per-answer output cap; answers use each character's own mission model. */
@@ -483,11 +492,6 @@ export const RunOverridesSchema = z
   .object({
     /** Conversation language for this run only. */
     language: LanguageCodeSchema.optional(),
-    /**
-     * "off" disables viewer pacing for this run (headless CLI and batch runs
-     * default to it: nobody is watching, and pacing would only add wall time).
-     */
-    pacing: z.enum(["scenario", "off"]).optional(),
   })
   .strict();
 export type RunOverrides = z.infer<typeof RunOverridesSchema>;
@@ -497,6 +501,5 @@ export function applyRunOverrides(config: ExperimentConfig, overrides: RunOverri
   if (!overrides || Object.keys(overrides).length === 0) return config;
   const next = structuredClone(config);
   if (overrides.language) next.conversation = { ...next.conversation, language: overrides.language };
-  if (overrides.pacing === "off") next.presentation = { ...next.presentation, pacing: { ...next.presentation.pacing, minVisibleIntervalMs: 0, perCharMs: 0, ...(next.presentation.pacing.sequencePauseMs ? { sequencePauseMs: 0 } : {}) } };
   return next;
 }

@@ -1,6 +1,5 @@
 import { EventType, type ExperimentEvent } from "../experiment/events.js";
 import type { RunExtension, RunExtensionContext } from "../experiment/extensions.js";
-import type { RoomMessage, RoomParticipant, RoomSender, Transport } from "../transport/transport.js";
 import { beatNarration, endingNarration, narratorName, openingNarration, type Narration } from "./narration.js";
 
 /**
@@ -18,12 +17,16 @@ export function narratorExtension(): RunExtension {
   let beats: BeatTracker | null = null;
   return {
     name: "narrator",
-    wrapTransport(transport, ctx) {
+    attach(ctx) {
       const configured = ctx.config.presentation.beats ?? [];
-      if (!ctx.config.presentation.narrator || configured.length === 0) return transport;
+      if (!ctx.config.presentation.narrator || configured.length === 0) return;
       beats = new BeatTracker(ctx);
       ctx.subscribe((event) => beats!.observe(event));
-      return new BeatTransport(transport, beats);
+    },
+    // Due beats are shown just before the next visible (non-narrator) message.
+    // They are posted through the run (ctx.post), so they are paced and recorded like any narration.
+    async beforePublish(message) {
+      if (beats && message.sender.kind !== "narrator") await beats.flush();
     },
     async onRoomOpened(ctx) {
       await post(ctx, openingNarration(ctx.config, ctx.config.conversation.language));
@@ -38,7 +41,8 @@ export function narratorExtension(): RunExtension {
 async function post(ctx: RunExtensionContext, narration: Narration | null): Promise<void> {
   const name = narratorName(ctx.config, ctx.config.conversation.language);
   if (!narration || !name) return;
-  const pauseMs = ctx.config.presentation.pacing.sequencePauseMs ?? 0;
+  // Headless runs (nobody watching) skip the reveal pauses; the parts are still posted.
+  const pauseMs = ctx.options.headless ? 0 : (ctx.config.presentation.pacing.sequencePauseMs ?? 0);
   for (const [i, part] of narration.parts.entries()) {
     if (i > 0 && pauseMs > 0) await hold(ctx, pauseMs);
     await ctx.post({ kind: "narrator", name }, part, {
@@ -104,35 +108,5 @@ class BeatTracker {
 
   async flush(): Promise<void> {
     for (const id of this.take()) await post(this.ctx, beatNarration(this.ctx.config, this.ctx.config.conversation.language, id));
-  }
-}
-
-/** Shows due beats just before the next visible (non-narrator) message. */
-class BeatTransport implements Transport {
-  constructor(
-    private readonly inner: Transport,
-    private readonly beats: BeatTracker
-  ) {}
-
-  get kind(): string {
-    return this.inner.kind;
-  }
-
-  open(room: { experimentId: string; participants: RoomParticipant[] }): Promise<void> {
-    return this.inner.open(room);
-  }
-
-  history(): Promise<RoomMessage[]> {
-    return this.inner.history();
-  }
-
-  close(): Promise<void> {
-    return this.inner.close();
-  }
-
-  async publish(message: { sender: RoomSender; text: string }): Promise<RoomMessage> {
-    // Beats are posted through the run (ctx.post → this transport again, as narrator), so they are paced and recorded like any narration.
-    if (message.sender.kind !== "narrator") await this.beats.flush();
-    return this.inner.publish(message);
   }
 }

@@ -19,7 +19,7 @@ import { ExternalRoomService } from "../rooms/service.js";
  */
 export function composeTestbed(deps: { db: Db; providers: ProviderRegistry; evaluators: EvaluatorRegistry; externalScenarios?: string[] }) {
   let rooms: ExternalRoomService | null = null;
-  const extensions: RunExtensionFactory = (config) => [...presentationExtensions(config), ...(rooms?.extensions(config) ?? [])];
+  const extensions: RunExtensionFactory = (config, options) => [...presentationExtensions(config, options), ...(rooms?.extensions(config, options) ?? [])];
   const service = new ExperimentService({ db: deps.db, providers: deps.providers, evaluators: deps.evaluators, extensions });
   const batches = new BatchService({ db: deps.db, providers: deps.providers, evaluators: deps.evaluators, service });
   const interaction = new HumanInteractionService({
@@ -27,6 +27,7 @@ export function composeTestbed(deps: { db: Db; providers: ProviderRegistry; eval
     providers: deps.providers,
     experiments: service,
     outlet: { post: (experimentId, message) => rooms!.post(experimentId, message) },
+    mayOpenDebrief: (experimentId) => rooms?.mayOpenDebrief(experimentId) ?? true,
   });
   rooms = new ExternalRoomService({
     db: deps.db,

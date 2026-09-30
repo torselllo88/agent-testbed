@@ -7,7 +7,7 @@ import { renderTranscript } from "../experiment/protocol.js";
 import type { RoomMessage } from "../transport/transport.js";
 
 /**
- * What a character is given in the debrief. The mission is recorded history
+ * What a character is given in the debrief. The finished run is recorded history
  * (read from the experiment's trace, which is the source of truth); each
  * character keeps its own perspective — its own private information and its
  * own vote, plus everything that was public — and never gains another
@@ -27,8 +27,8 @@ export const DEBRIEF_ROUTE_JSON_SCHEMA = toJsonSchema(
   "debrief_route"
 );
 
-/** The finished mission as the room experienced it, derived from the experiment's own events. */
-export interface MissionRecord {
+/** The finished run as the room experienced it, derived from the experiment's own events. */
+export interface FinishedRun {
   transcript: RoomMessage[];
   outcome: string;
   /** The ending narration as announced in the room, if the scenario has a narrator. */
@@ -39,15 +39,15 @@ export interface MissionRecord {
   evaluation: { outcome: string; checks: Record<string, { passed: boolean; detail: string }> } | null;
 }
 
-export function missionRecord(events: ExperimentEvent[]): MissionRecord {
+export function finishedRun(events: ExperimentEvent[]): FinishedRun {
   const transcript: RoomMessage[] = [];
   let endingNarration: string | null = null;
   let outcome = "UNKNOWN";
-  let evaluation: MissionRecord["evaluation"] = null;
+  let evaluation: FinishedRun["evaluation"] = null;
   let committedId: string | null = null;
   const proposals = new Map<string, { proposerId: string; body: unknown; rationale: string }>();
-  const voteRounds: MissionRecord["voteRounds"] = [];
-  const votes: MissionRecord["votes"] = [];
+  const voteRounds: FinishedRun["voteRounds"] = [];
+  const votes: FinishedRun["votes"] = [];
 
   for (const e of events) {
     const p = e.payload as Record<string, any>;
@@ -97,8 +97,8 @@ export function renderDebriefSystemPrompt(config: ExperimentConfig, agent: Agent
     agent.persona.trim() ? `Your character — let it shape how you talk, never what facts you report:\n${agent.persona.trim()}` : "",
     agent.systemPrompt.trim(),
     [
-      "The mission is over. This is the post-mission debrief: people who watched the mission are asking the crew questions in the room.",
-      "- The mission transcript below is recorded history. The final decision and the outcome are fixed; nothing said now can change them.",
+      "The session is over. This is the debrief: people who watched it are asking the participants questions in the room.",
+      "- The transcript below is recorded history. The final decision and the outcome are fixed; nothing said now can change them.",
       "- Speak from your own perspective. You know your own private information, everything that was said publicly in the room, the final decision and the outcome as announced. You do not know other participants' private information unless they shared it in the room — do not claim to.",
       "- Keep apart what you knew at the time, what you learned from the outcome, and what you are only inferring now.",
       "- Never claim that you, or anyone, said or did something the transcript does not show. If asked what you would do differently, you may speculate — as hindsight, not as a rewrite of what happened.",
@@ -117,7 +117,7 @@ function names(config: ExperimentConfig): Map<string, string> {
 export function renderDebriefQuestionPrompt(
   config: ExperimentConfig,
   agent: AgentConfig,
-  mission: MissionRecord,
+  mission: FinishedRun,
   history: DebriefExchange[],
   question: {
     askerName: string;
@@ -137,7 +137,7 @@ export function renderDebriefQuestionPrompt(
     : "FINAL DECISION: no plan was committed.";
   const evaluation =
     options.revealEvaluation && mission.evaluation
-      ? `POST-MISSION ANALYSIS (published after the mission):\n${Object.entries(mission.evaluation.checks)
+      ? `EVALUATION (published after the session):\n${Object.entries(mission.evaluation.checks)
           .map(([name, c]) => `- ${name}: ${c.passed ? "passed" : "FAILED"} — ${c.detail}`)
           .join("\n")}`
       : "";
@@ -146,10 +146,10 @@ export function renderDebriefQuestionPrompt(
     : "(no questions yet)";
 
   return [
-    `THE MISSION TASK:\n${config.task.description.trim()}`,
+    `THE TASK:\n${config.task.description.trim()}`,
     config.task.sharedContext.trim() ? `SHARED CONTEXT (known to everyone):\n${config.task.sharedContext.trim()}` : "",
-    `YOUR PRIVATE INFORMATION DURING THE MISSION (only you had it):\n${agent.privateContext.trim() || "(none)"}`,
-    `MISSION TRANSCRIPT (recorded history, oldest first):\n${renderTranscript(mission.transcript, config, agent.id)}`,
+    `YOUR PRIVATE INFORMATION DURING THE SESSION (only you had it):\n${agent.privateContext.trim() || "(none)"}`,
+    `TRANSCRIPT (recorded history, oldest first):\n${renderTranscript(mission.transcript, config, agent.id)}`,
     rounds ? `VOTING:\n${rounds}` : "",
     ownVotes.length ? `YOUR OWN VOTES:\n${ownVotes.map((v) => `${v.vote}${v.reason ? ` — ${v.reason}` : ""}`).join("\n")}` : "",
     decision,
@@ -176,9 +176,9 @@ export function renderDebriefRouterPrompt(
   const nameOf = names(config);
   return {
     system:
-      "You route questions in a post-mission debrief to the one crew member best placed to answer. Pick the person the question is about or whose area it concerns. If it is addressed to the crew in general or you are unsure, set confident to false.",
+      "You route questions in a debrief after a finished session to the one participant best placed to answer. Pick the participant the question is about or whose area it concerns. If it is addressed to everyone in general or you are unsure, set confident to false.",
     user: [
-      `CREW:\n${config.agents.map((a) => `- ${a.id}: ${a.name} — ${a.role}`).join("\n")}`,
+      `PARTICIPANTS:\n${config.agents.map((a) => `- ${a.id}: ${a.name} — ${a.role}`).join("\n")}`,
       history.length
         ? `RECENT DEBRIEF:\n${history
             .slice(-4)
@@ -186,7 +186,7 @@ export function renderDebriefRouterPrompt(
             .join("\n")}`
         : "",
       `QUESTION from ${question.askerName}:\n${question.text}`,
-      'Fields: "agentId" = the crew member id, or null; "confident" = whether the choice is clear; "reason" = one short sentence.',
+      'Fields: "agentId" = the participant id, or null; "confident" = whether the choice is clear; "reason" = one short sentence.',
       `Respond with ONLY a single JSON object matching this JSON Schema — no other text:\n${JSON.stringify(DEBRIEF_ROUTE_JSON_SCHEMA)}`,
     ]
       .filter(Boolean)

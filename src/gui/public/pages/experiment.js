@@ -374,7 +374,7 @@ export async function renderExperiment(experimentId) {
         </div>
         <p class="muted small">Kept outside the experiment: none of this reaches the agents during the run, nor its metrics, cost or trace. Profile ${escapeHtml(view.profile)}.</p>
         <dl class="kv">
-          <dt>Spectators</dt><dd>${summary.spectatorMessagesDuringMission} message(s) during the run, ${summary.spectatorMessages} in total, from ${summary.spectators} person(s) — human assistance: none</dd>
+          <dt>Spectators</dt><dd>${summary.spectatorMessagesDuringRun} message(s) during the run, ${summary.spectatorMessages} in total, from ${summary.spectators} person(s) — human assistance: none</dd>
           <dt>Debrief</dt><dd>${summary.questions} question(s), ${summary.answers} answer(s)</dd>
         </dl>
         ${rows ? `<div class="overflow-x"><table><thead><tr><th>Session</th><th>Status</th><th>Opened by</th><th>Opened</th><th>Closed</th><th>Answered / failed / rejected</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}

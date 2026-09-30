@@ -145,24 +145,9 @@ export function spaceStationScript(variant: SpaceStationVariant) {
   };
 }
 
-/** Deterministic stand-in for an LLM router: the next agent after the last speaker, in config order. */
-export function nextInOrderRouter(request: CompletionRequest): string {
-  const ctx = request.context ?? {};
-  if (ctx.purpose === "debrief_router") return debriefRouter(String(ctx.question ?? ""));
-  const order = (ctx.order as string[] | undefined) ?? [];
-  const candidates = (ctx.candidates as string[] | undefined) ?? [];
-  const last = ctx.lastSpeakerId as string | null;
-  const start = last ? order.indexOf(last) : -1;
-  for (let i = 1; i <= order.length; i++) {
-    const id = order[(start + i) % order.length]!;
-    if (candidates.includes(id)) return JSON.stringify({ nextAgentId: id, reason: `next after ${last ?? "start"} in room order` });
-  }
-  return JSON.stringify({ nextAgentId: candidates[0] ?? "", reason: "first candidate" });
-}
-
-/** Stand-in debrief router: routes by subject keywords (en, ru); otherwise not confident. */
-function debriefRouter(question: string): string {
-  const q = question.toLowerCase();
+/** Space Station stand-in debrief router: routes by this scenario's subject keywords (en, ru); otherwise not confident. */
+export function spaceStationDebriefRouter(request: CompletionRequest): string {
+  const q = String(request.context?.question ?? "").toLowerCase();
   const rules: Array<[RegExp, string]> = [
     [/reactor|coolant|scram|реактор|охлажд/, "engineering"],
     [/power|kw|budget|мощност|квт|энерг/, "power"],
@@ -178,5 +163,5 @@ export function registerSpaceStationStubs(stub: StubProvider): void {
   for (const variant of ["cooperative", "insufficient-power", "life-support-veto"] as const) {
     stub.register(`space-station/${variant}`, spaceStationScript(variant));
   }
-  stub.register("router/next-in-order", nextInOrderRouter);
+  stub.register("space-station/debrief-router", spaceStationDebriefRouter);
 }

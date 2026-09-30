@@ -22,21 +22,32 @@ const TurnStrict = z.object({
   intent: z.string().nullable(),
   readyToCommit: z.boolean(),
 });
-export const TurnResponseSchema = z.object({
-  message: z.string().default(""),
-  pass: z.boolean().default(false),
-  target: z.string().nullable().default(null),
-  intent: z.string().nullable().default(null),
-  readyToCommit: z.boolean().default(false),
-});
+// Lenient about omitted null fields, but an object with neither "message" nor "pass" is not a turn
+// (e.g. {"reply": "..."}): it must count as unparseable, not as a silent PASS.
+export const TurnResponseSchema = z
+  .object({
+    message: z.string().default(""),
+    pass: z.boolean().default(false),
+    target: z.string().nullable().default(null),
+    intent: z.string().nullable().default(null),
+    readyToCommit: z.boolean().default(false),
+  })
+  .and(z.custom<object>((v) => v !== null && typeof v === "object" && ("message" in v || "pass" in v), { message: 'expected a turn with "message" or "pass"' }))
+  .transform((v) => v as { message: string; pass: boolean; target: string | null; intent: string | null; readyToCommit: boolean });
 export type TurnResponse = z.infer<typeof TurnResponseSchema>;
 export const TURN_JSON_SCHEMA = toJsonSchema(TurnStrict, "agent_turn");
 
-/** Envelope only — the proposal body is validated against the scenario's schema separately, so "unparseable" and "schema-invalid" stay distinct outcomes. */
-export const ProposalEnvelopeSchema = z.object({
-  rationale: z.string().default(""),
-  proposal: z.unknown(),
-});
+/**
+ * Envelope only — the proposal body is validated against the scenario's schema separately, so "unparseable" and "schema-invalid" stay distinct outcomes.
+ * The "proposal" key must be present: only an explicit null is a deliberate decline; a missing key (a bare body, a wrong key) is a format error.
+ */
+export const ProposalEnvelopeSchema = z
+  .object({
+    rationale: z.string().default(""),
+    proposal: z.unknown(),
+  })
+  .and(z.custom<object>((v) => v !== null && typeof v === "object" && "proposal" in v, { message: 'missing "proposal" (use null to decline)' }))
+  .transform((v) => v as { rationale: string; proposal: unknown });
 export type ProposalEnvelope = z.infer<typeof ProposalEnvelopeSchema>;
 export function proposalJsonSchema(proposalSchema: z.ZodTypeAny): Record<string, unknown> {
   return toJsonSchema(z.object({ rationale: z.string(), proposal: proposalSchema.nullable() }), "final_proposal");

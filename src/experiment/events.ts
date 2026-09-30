@@ -17,6 +17,8 @@ export const EventType = {
   MESSAGE_POSTED: "message_posted",
   /** Viewer pacing wait before a visible message — excluded from provider latency and active experiment time. */
   PRESENTATION_DELAY: "presentation_delay",
+  /** Something an add-on wants on record about how it treated this run (e.g. pacing skipped for a headless run). */
+  EXTENSION_NOTE: "extension_note",
   /** An agent's internal control metadata for a turn (target, intent, pass, readiness) — never shown in the room. */
   AGENT_META: "agent_meta",
   ROUTING_DECISION: "routing_decision",
@@ -90,7 +92,14 @@ export class EventLog {
       payload: JSON.parse(serialized) as Record<string, unknown>,
     };
     this.repo.insert(this.experimentId, event, serialized);
-    for (const listener of this.listeners) listener(event);
+    // A listener (an add-on observing the run) that throws must never break the run or its bookkeeping.
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        console.error(`event listener failed on ${event.type} (experiment ${this.experimentId}):`, err);
+      }
+    }
     return event;
   }
 

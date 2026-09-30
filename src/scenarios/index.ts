@@ -1,6 +1,7 @@
 import type { ExperimentConfig } from "../experiment/config.js";
 import { EvaluatorRegistry } from "../evaluation/registry.js";
 import type { StubProvider } from "../llm/stubProvider.js";
+import { registerGenericStubs } from "../llm/stubRouters.js";
 import { spaceStationConfig } from "./spaceStation/config.js";
 import { spaceStationEvaluator } from "./spaceStation/evaluator.js";
 import { kestrelConfig } from "./spaceStation/kestrel.js";
@@ -52,15 +53,16 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     //     observer-only escalation beats, the ending revealed as a paced sequence with the vote tally.
     // v5: speech style asks to PASS rather than repeat a point or question already answered, and to
     //     discuss what to do rather than report actions as done before the vote.
-    version: 5,
+    // v6: the debrief has its own router model (humanInteraction.debrief.router) instead of borrowing the scheduler's.
+    version: 6,
     config: () => kestrelConfig(),
   },
   {
     id: "station-kestrel-cascade",
     name: "Station Kestrel: Cascade",
     summary: "Harder demo with the Kestrel crew — two recovery paths, facts split across all four officers (en, ru)",
-    // v1: initial.
-    version: 1,
+    // v1: initial. v2: evaluator v2 (judges what the plan does, not only its declared path); own debrief router.
+    version: 2,
     config: () => kestrelCascadeConfig(),
   },
 ];
@@ -70,6 +72,7 @@ export function createEvaluatorRegistry(): EvaluatorRegistry {
 }
 
 export function registerBuiltinStubs(stub: StubProvider): StubProvider {
+  registerGenericStubs(stub);
   registerSpaceStationStubs(stub);
   registerCascadeStubs(stub);
   return stub;

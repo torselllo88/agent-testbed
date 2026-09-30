@@ -28,7 +28,7 @@ import {
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { NarratorSender, RunExtension, RunExtensionContext, RunExtensionFactory } from "./extensions.js";
 import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
-import { EventLog, EventType } from "./events.js";
+import { EventLog, EventType, redactSecrets } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
 import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
 import { termination, TerminateRun, type Termination } from "./outcome.js";
@@ -71,6 +71,11 @@ export interface RunOptions {
   origin?: RunEnvironment["origin"];
   /** Per-run settings applied on top of the scenario config (e.g. conversation language). */
   overrides?: RunOverrides;
+  /**
+   * Nobody watches this run live (batch, CLI). Passed to extensions only
+   * (e.g. no viewer pacing); it never changes the experiment or its config.
+   */
+  headless?: boolean;
 }
 
 /** Recorded on experiment_started. The stub latency matters: it changes every duration metric. */
@@ -86,8 +91,8 @@ export interface RunEnvironment {
   conversationLanguage: string;
   languageOverridden: boolean;
   scenarioDefaultLanguage: string;
-  /** True when the scenario defines viewer pacing but this run disabled it (e.g. batch/CLI). */
-  pacingDisabled: boolean;
+  /** Nobody watched this run live (batch, CLI): add-ons such as viewer pacing were told so. */
+  headless: boolean;
 }
 
 export type OperatorCommand =
@@ -168,6 +173,8 @@ export class ExperimentRunner {
   private phase: Phase = Phase.INITIALIZING;
   private started = false;
   private finished: Termination | null = null;
+  /** The outcome is decided (execute() settled); only the add-ons' ending (e.g. narration) is still running. */
+  private outcomeDecided = false;
   private currentAgentId: string | null = null;
   private lastTurn: LastTurn | null = null;
   private lastRouting: RoutingDecision | null = null;
@@ -216,10 +223,12 @@ export class ExperimentRunner {
     this.llm = new LlmCaller(deps.providers, this.log, this.budget, this.config.runtime, this.abort.signal);
     this.scheduler = createScheduler(this.config.scheduler, { llm: this.llm });
     this.consensus = createConsensusRule(this.config.consensus);
-    this.extensions = deps.extensions?.(this.config) ?? [];
+    const headless = options.headless ?? false;
+    this.extensions = deps.extensions?.(this.config, { headless }) ?? [];
     this.extensionContext = {
       experimentId: this.id,
       config: this.config,
+      options: { headless },
       post: (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => this.publish(sender, text, meta),
       log: (type, payload) => {
         this.log.append(type, payload);
@@ -235,8 +244,8 @@ export class ExperimentRunner {
       stopSignal: this.abort.signal,
       subscribe: (listener) => this.log.subscribe(listener),
     };
-    const baseTransport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
-    this.transport = this.extensions.reduce((t, ext) => ext.wrapTransport?.(t, this.extensionContext) ?? t, baseTransport);
+    // The experiment's own room. Extensions never get hold of it, so they cannot change what agents read.
+    this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
     this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
     this.environment = {
@@ -247,9 +256,7 @@ export class ExperimentRunner {
       conversationLanguage: this.config.conversation.language,
       languageOverridden: this.config.conversation.language !== scenarioConfig.conversation.language,
       scenarioDefaultLanguage: scenarioConfig.conversation.language,
-      pacingDisabled:
-        overrides?.pacing === "off" &&
-        (scenarioConfig.presentation.pacing.minVisibleIntervalMs > 0 || scenarioConfig.presentation.pacing.perCharMs > 0),
+      headless,
     };
 
     this.experiments.create({
@@ -264,6 +271,14 @@ export class ExperimentRunner {
       repetition: options.repetition,
       testbedVersion: getTestbedVersion(),
     });
+    // After the run record exists, so an extension's failure can be traced.
+    for (const ext of this.extensions) {
+      try {
+        ext.attach?.(this.extensionContext);
+      } catch (err) {
+        this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in attach: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
   }
 
   // ---------------------------------------------------------------- public API
@@ -284,6 +299,7 @@ export class ExperimentRunner {
         outcome = termination("ERROR", message);
       }
     }
+    this.outcomeDecided = true;
     await this.notifyExtensions("onRunEnded", (ext) =>
       ext.onRunEnded?.(this.extensionContext, {
         termination: outcome,
@@ -298,6 +314,14 @@ export class ExperimentRunner {
 
   control(command: OperatorCommand): void {
     if (this.finished) throw new InvalidCommandError("Experiment has already finished");
+    if (this.outcomeDecided) {
+      // Only the ending presentation is still running: stop just cuts it short. Not an intervention.
+      if (command.type !== "stop") throw new InvalidCommandError("The outcome is already decided");
+      this.stopRequested = true;
+      this.abort.abort(new TerminateRun(termination("STOPPED_BY_OPERATOR", "Stopped by operator")));
+      this.log.append(EventType.OPERATOR_INTERVENTION, { command, turn: this.budget.turnsUsed(), flowAltering: false, afterOutcome: true });
+      return;
+    }
     switch (command.type) {
       case "pause":
         if (this.paused) throw new InvalidCommandError("Already paused");
@@ -306,6 +330,7 @@ export class ExperimentRunner {
       case "resume":
         if (!this.paused) throw new InvalidCommandError("Not paused");
         this.paused = false;
+        this.stepsAllowed = 0; // an unused step never carries over into a later pause
         break;
       case "step":
         if (!this.paused) throw new InvalidCommandError("Step is only available while paused");
@@ -568,7 +593,7 @@ export class ExperimentRunner {
       }
 
       const envelope = result.value;
-      if (envelope.proposal === null || envelope.proposal === undefined) {
+      if (envelope.proposal === null) {
         this.log.append(EventType.PROPOSAL_DECLINED, { attempt: this.proposalAttempt, rationale: envelope.rationale }, proposer.id);
         if (envelope.rationale.trim()) await this.publish({ kind: "agent", agentId: proposer.id }, envelope.rationale.trim());
         this.completeTurn(proposer.id, turn, { kind: "proposal", result: "declined" });
@@ -732,7 +757,10 @@ export class ExperimentRunner {
       phase: Phase.FINISHED,
       status: outcome.status,
       outcome: outcome.outcome,
-      outcomeDetail: { category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) },
+      // Provider error texts end up here too: scrub credentials as the event log does.
+      outcomeDetail: JSON.parse(
+        redactSecrets(JSON.stringify({ category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) }), this.deps.providers.secretValues())
+      ) as Record<string, unknown>,
       finishedAt: new Date().toISOString(),
       summary: metrics as unknown as Record<string, unknown>,
     });
@@ -787,6 +815,10 @@ export class ExperimentRunner {
    * agentHistory); narration has none — `index` is null in its event.
    */
   private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
+    const message = Object.freeze({ sender: Object.freeze({ ...sender }), text });
+    for (const ext of this.extensions) {
+      if (ext.beforePublish) await this.guarded(ext, "beforePublish", () => ext.beforePublish!(message, this.extensionContext));
+    }
     const posted = await this.transport.publish({ sender, text });
     const index = sender.kind === "narrator" ? null : ++this.transcriptLength;
     this.log.append(
@@ -794,7 +826,21 @@ export class ExperimentRunner {
       { index, messageId: posted.id, sender: posted.sender, text: posted.text, ...extra },
       sender.kind === "agent" ? sender.agentId : null
     );
-    return index === null ? posted : { ...posted, index };
+    const result = index === null ? posted : { ...posted, index };
+    const frozen = Object.freeze({ ...result, sender: Object.freeze({ ...result.sender }) });
+    for (const ext of this.extensions) {
+      if (ext.afterPublish) await this.guarded(ext, "afterPublish", () => ext.afterPublish!(frozen, this.extensionContext));
+    }
+    return result;
+  }
+
+  /** Runs one extension hook; a failure is logged and never changes the run. */
+  private async guarded(ext: RunExtension, hook: string, call: () => Promise<void> | void): Promise<void> {
+    try {
+      await call();
+    } catch (err) {
+      this.log.append(EventType.ERROR, { message: `extension "${ext.name}" failed in ${hook}: ${err instanceof Error ? err.message : String(err)}` });
+    }
   }
 
   private logReadinessChanges(changes: ReadinessChange[], cause: "declared" | "invalidated", atIndex: number): void {
@@ -874,6 +920,7 @@ export function checkRunnable(
 
   const modelRefs: Array<[string, ExperimentConfig["agents"][number]["model"]]> = config.agents.map((a) => [`agent "${a.id}"`, a.model]);
   if (config.scheduler.type === "hybrid" && config.scheduler.classifier) modelRefs.push(["router classifier", config.scheduler.classifier]);
+  if (config.humanInteraction?.debrief.router) modelRefs.push(["debrief router", config.humanInteraction.debrief.router]);
   for (const [who, ref] of modelRefs) {
     if (!deps.providers.has(ref.provider)) {
       problems.push(`${who}: LLM provider "${ref.provider}" is not configured`);

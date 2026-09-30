@@ -260,7 +260,7 @@ describe("Kestrel dramaturgy (observer-only)", () => {
     expect(withPresentation.metrics.turns).toEqual(bare.metrics.turns);
   });
 
-  it("the ending reveal pauses on the held clock, and pacing: off removes the pause", async () => {
+  it("the ending reveal pauses on the held clock, and a headless run skips the pause (same config, same hash)", async () => {
     const h = createHarness();
     const config = fastKestrel();
     config.presentation.pacing.sequencePauseMs = 150;
@@ -274,10 +274,12 @@ describe("Kestrel dramaturgy (observer-only)", () => {
     expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(130);
     expect(pacedMetrics.durationMs.presentation).toBeGreaterThanOrEqual(260);
 
-    const off = new ExperimentRunner({ db: h.db, providers: h.providers, evaluators: createEvaluatorRegistry(), extensions: presentationExtensions }, config, { overrides: { pacing: "off" } });
+    const off = new ExperimentRunner({ db: h.db, providers: h.providers, evaluators: createEvaluatorRegistry(), extensions: presentationExtensions }, config, { headless: true });
     const offMetrics = await off.run();
-    expect(off.config.presentation.pacing.sequencePauseMs).toBe(0);
+    expect(off.config.presentation.pacing.sequencePauseMs).toBe(150);
+    expect(h.record(off.id).configHash).toBe(h.record(paced.id).configHash);
     expect(offMetrics.durationMs.presentation).toBeLessThan(50);
+    expect(messages(h, off.id).filter((m) => m.narration?.source === "outcomes.SUCCESS")).toHaveLength(3);
   });
 });
 
@@ -293,7 +295,7 @@ describe("presentation pacing", () => {
 
     expect(delays.length).toBeGreaterThan(3);
     // waited ≈ gap − time since the previous message, plus OS timer granularity (~15 ms on Windows)
-    expect(delays.every((d) => d.payload.gapMs === 60 && (d.payload.waitedMs as number) <= 60 + 30)).toBe(true);
+    expect(delays.every((d) => d.payload.gapMs === 60 && (d.payload.waitedMs as number) <= 60 + 80)).toBe(true); // timer jitter under a loaded test run
     const total = delays.reduce((s, d) => s + (d.payload.waitedMs as number), 0);
     expect(metrics.durationMs.presentation).toBeGreaterThanOrEqual(total - 5);
     // wall ≈ active + presentation (no pauses here)

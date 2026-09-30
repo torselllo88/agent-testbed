@@ -36,6 +36,8 @@ export interface AppDeps {
   interaction: HumanInteractionService;
   /** External room bindings; optional so the operator app can run without them (tests). */
   rooms?: ExternalRoomService;
+  /** Host names served besides loopback (GUI_ALLOWED_HOSTS) — e.g. the machine's name when bound to 0.0.0.0. */
+  allowedHosts?: string[];
   /** OpenRouter model list for the editor; omitted = not offered. */
   openRouterModels?: OpenRouterModelCatalog;
 }
@@ -479,6 +481,20 @@ function errorStatusAndMessage(err: unknown): { status: number; body: Record<str
   return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } };
 }
 
+/**
+ * DNS-rebinding guard for this unauthenticated API: a page on another domain
+ * that rebinds its name to 127.0.0.1 is same-origin to the browser, but its
+ * requests still carry that domain in Host. Only loopback names (any port)
+ * and explicitly configured names are served.
+ */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+export function hostAllowed(hostHeader: string | undefined, extraHosts: readonly string[] = []): boolean {
+  if (!hostHeader) return false;
+  const host = hostHeader.trim().toLowerCase().replace(/:\d+$/, "");
+  return LOOPBACK_HOSTS.has(host) || extraHosts.some((h) => h.toLowerCase() === host);
+}
+
 export function createApp(deps: AppDeps): http.Server {
   const repos = {
     scenarios: new ScenarioRepository(deps.db),
@@ -491,6 +507,9 @@ export function createApp(deps: AppDeps): http.Server {
 
     void (async () => {
       try {
+        if (!hostAllowed(req.headers.host, deps.allowedHosts)) {
+          return sendJson(res, 421, { error: `Host "${req.headers.host ?? ""}" is not served. Add it to GUI_ALLOWED_HOSTS if you reach the testbed under that name.` });
+        }
         if (req.method === "POST" || req.method === "PUT") requireJsonContentType(req);
 
         for (const route of ROUTES) {

@@ -205,11 +205,57 @@ describe("batch with a presentation-oriented scenario", () => {
     expect(new Set(runs.map((r) => r.taskDefinitionHash)).size).toBe(1);
     for (const run of runs) {
       const started = new EventRepository(db).list(run.id).find((e) => e.type === "experiment_started")!;
-      expect(started.payload.environment).toMatchObject({ pacingDisabled: true, origin: "batch" });
-      expect(run.config.presentation.pacing.minVisibleIntervalMs).toBe(0);
+      expect(started.payload.environment).toMatchObject({ headless: true, origin: "batch" });
+      // Headless is an add-on option: the experiment config (and its hash) keeps the scenario's pacing.
+      expect(run.config.presentation.pacing.minVisibleIntervalMs).toBeGreaterThan(0);
+      const note = new EventRepository(db).list(run.id).find((e) => e.type === "extension_note")!;
+      expect(note.payload).toMatchObject({ extension: "pacing", pacing: "off", reason: "headless" });
     }
     const ru = runs.find((r) => r.config.conversation.language === "ru")!;
     const ending = new EventRepository(db).list(ru.id).filter((e) => e.type === "message_posted").at(-1)!;
     expect(String(ending.payload.text)).toContain("Миссия выполнена");
+  });
+});
+
+describe("batch review fixes", () => {
+  it("rejects ambiguous specs: two variables with one label, or values that format to the same condition key", () => {
+    const { batches } = setup();
+    const base = { config: fastBase() };
+    const problems = (spec: unknown) => {
+      try {
+        batches.resolve(spec);
+      } catch (err) {
+        return (err as BatchValidationError).problems.join(" ");
+      }
+      return "";
+    };
+    expect(
+      problems({
+        name: "labels",
+        base,
+        repetitions: 1,
+        variables: [
+          { path: "agents.*.model.model", label: "model", values: ["space-station/cooperative"] },
+          { path: "scheduler.classifier.model", label: "model", values: ["router/next-in-order"] },
+        ],
+      })
+    ).toMatch(/share the label "model"/);
+    expect(problems({ name: "keys", base, repetitions: 1, variables: [{ path: "limits.discussionTurnLimit", values: [5, "5"] }] })).toMatch(/same key/);
+  });
+
+  it("a run that cannot be started ends the batch as interrupted, never leaving it running", async () => {
+    const { db, providers } = (() => {
+      const s = setup();
+      return { db: s.db, providers: new ProviderRegistry([], registerBuiltinStubs(new StubProvider())) };
+    })();
+    const failing = { start: () => { throw new Error("database is locked"); } } as unknown as ExperimentService;
+    const quiet = console.error;
+    console.error = () => {};
+    const batches = new BatchService({ db, providers, evaluators: createEvaluatorRegistry(), service: failing });
+    const batch = batches.start({ name: "b", base: { config: fastBase() }, repetitions: 3 });
+    await batches.settle(batch.id);
+    console.error = quiet;
+    expect(new BatchRepository(db).get(batch.id)?.status).toBe("interrupted");
+    expect(batches.isRunning(batch.id)).toBe(false);
   });
 });

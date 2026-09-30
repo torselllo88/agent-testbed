@@ -2,7 +2,7 @@ import type { TestbedVersion } from "../config/version.js";
 import type { ExperimentConfig } from "../experiment/config.js";
 import type { Outcome, RunStatus } from "../experiment/outcome.js";
 import type { Phase } from "../experiment/phases.js";
-import type { Db } from "./db.js";
+import { processAlive, type Db } from "./db.js";
 
 export interface ExperimentRecord {
   id: string;
@@ -116,8 +116,8 @@ export class ExperimentRepository {
       .prepare(
         `INSERT INTO experiments
           (id, scenario_id, scenario_version, config_snapshot_json, config_hash, task_definition_hash, batch_id, condition_key,
-           repetition, phase, intervened, testbed_version_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?)`
+           repetition, phase, intervened, testbed_version_json, created_at, owner_pid)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'INITIALIZING', 0, ?, ?, ?)`
       )
       .run(
         input.id,
@@ -130,7 +130,8 @@ export class ExperimentRepository {
         input.conditionKey ?? null,
         input.repetition ?? null,
         JSON.stringify(input.testbedVersion),
-        new Date().toISOString()
+        new Date().toISOString(),
+        process.pid
       );
     return this.getOrThrow(input.id);
   }
@@ -181,9 +182,10 @@ export class ExperimentRepository {
   }
 
   /** On server start: any run that never finished was cut off by a restart/crash. Returns the affected ids. */
+  /** Unfinished runs whose owning process is gone (a crash or restart), not ones another live process is running. */
   listUnfinishedIds(): string[] {
-    const rows = this.db.prepare(`SELECT id FROM experiments WHERE finished_at IS NULL`).all() as Array<{ id: string }>;
-    return rows.map((r) => r.id);
+    const rows = this.db.prepare(`SELECT id, owner_pid FROM experiments WHERE finished_at IS NULL`).all() as Array<{ id: string; owner_pid: number | null }>;
+    return rows.filter((r) => !processAlive(r.owner_pid)).map((r) => r.id);
   }
 
   delete(id: string): void {

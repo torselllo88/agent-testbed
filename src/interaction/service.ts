@@ -9,7 +9,7 @@ import { ExperimentRepository, type ExperimentRecord } from "../persistence/expe
 import { InteractionRepository, type DebriefSessionRecord, type InteractionEvent } from "../persistence/interactionRepository.js";
 import type { HumanRoomMessage } from "../transport/humans.js";
 import { DebriefSession } from "./debrief.js";
-import { missionRecord, type DebriefExchange, type MissionRecord } from "./debriefPrompt.js";
+import { finishedRun, type DebriefExchange, type FinishedRun } from "./debriefPrompt.js";
 import { noticeSenderName, noticeText, type NoticeKind } from "./strings.js";
 
 /**
@@ -50,6 +50,8 @@ export interface HumanInteractionDeps {
   providers: ProviderRegistry;
   experiments: Pick<ExperimentService, "isRunning" | "onRunFinished">;
   outlet?: RoomOutlet;
+  /** Whether an automatic debrief may open for this finished run (e.g. not when its external room binding is closed). */
+  mayOpenDebrief?: (experimentId: string) => boolean;
   now?: () => number;
 }
 
@@ -73,7 +75,7 @@ export interface ReceiveResult {
   rejected?: string | null;
 }
 
-export type InteractionMode = "mission" | "debrief" | "closed" | "observe";
+export type InteractionMode = "active" | "debrief" | "closed" | "observe";
 
 /**
  * The human side of an experiment's room — everything people do there that
@@ -103,6 +105,8 @@ export class HumanInteractionService {
   private readonly sessions = new Map<string, DebriefSession>();
   /** Spectator-notice suppression, per experiment and room state. */
   private readonly noticeGates = new Map<string, { notified: Set<string>; lastAt: number }>();
+  /** Experiments being deleted: a debrief call still in flight for one of them must not write anything. */
+  private readonly forgotten = new Set<string>();
   private readonly pending = new Set<Promise<unknown>>();
   private readonly listeners = new Set<InteractionListener>();
 
@@ -133,7 +137,7 @@ export class HumanInteractionService {
     const running = this.deps.experiments.isRunning(experimentId);
     const session = running ? undefined : this.sessions.get(experimentId);
     const disposition: Disposition = session?.isOpen ? "question" : "spectator";
-    this.log(experimentId, session?.record.id ?? null, "human_message", { ...message, disposition, during: running ? "mission" : "after" });
+    this.log(experimentId, session?.record.id ?? null, "human_message", { ...message, disposition, during: running ? "active" : "after" });
 
     if (disposition === "question") {
       const result = session!.enqueue(message);
@@ -144,7 +148,7 @@ export class HumanInteractionService {
 
     const debriefEnabled = this.debriefEnabled(record);
     const kind: NoticeKind = running ? (debriefEnabled ? "spectatorNotice" : "observeNotice") : debriefEnabled ? "debriefUnavailable" : "observeNotice";
-    await this.spectatorNotice(experimentId, config, running ? "mission" : "after", kind, message);
+    await this.spectatorNotice(experimentId, config, running ? "active" : "after", kind, message);
     return { messageId: message.messageId, disposition };
   }
 
@@ -171,6 +175,10 @@ export class HumanInteractionService {
     const record = this.experiments.get(experimentId);
     // An interrupted run, or one the operator stopped, gets no automatic debrief (an operator can still open one).
     if (!record || !this.debriefEnabled(record) || record.outcome === "INTERRUPTED" || record.outcome === "STOPPED_BY_OPERATOR") return;
+    const stopRequested = this.events
+      .list(experimentId)
+      .some((e) => e.type === "operator_intervention" && (e.payload.command as { type?: string } | undefined)?.type === "stop");
+    if (stopRequested || this.deps.mayOpenDebrief?.(experimentId) === false) return;
     await this.openDebrief(experimentId, "auto");
   }
 
@@ -186,22 +194,30 @@ export class HumanInteractionService {
     if (this.sessions.get(experimentId)?.isOpen) throw new InteractionError("A debrief session is already open");
 
     const created = this.repo.createSession({ id: randomUUID(), experimentId, openedBy, openedAt: new Date(this.now()).toISOString() });
-    let mission: MissionRecord | null = null;
+    let mission: FinishedRun | null = null;
     const session = new DebriefSession(
       created,
       {
         experimentId,
         config,
         providers: this.deps.providers,
-        log: (type, payload, agentId) => this.log(experimentId, created.id, type, payload, agentId ?? null),
-        notice: (kind, vars, inResponseTo) => this.postNotice(experimentId, config, created.id, kind, vars ?? {}, inResponseTo ?? null),
+        log: (type, payload, agentId) => {
+          if (!this.forgotten.has(experimentId)) this.log(experimentId, created.id, type, payload, agentId ?? null);
+        },
+        notice: async (kind, vars, inResponseTo) => {
+          if (!this.forgotten.has(experimentId)) await this.postNotice(experimentId, config, created.id, kind, vars ?? {}, inResponseTo ?? null);
+        },
         postAnswer: (agentId, text, replyTo) => this.outlet.post(experimentId, { sender: { kind: "agent", agentId }, text, replyTo }),
         // The experiment is frozen: its record is read once and never changes.
-        mission: () => (mission ??= missionRecord(this.events.list(experimentId))),
+        finishedRun: () => (mission ??= finishedRun(this.events.list(experimentId))),
         history: () => this.history(experimentId),
-        messageOf: (messageId) => this.messageOf(experimentId, messageId, (mission ??= missionRecord(this.events.list(experimentId)))),
-        saveUsage: (usage) => this.repo.updateUsage(created.id, usage),
-        markClosed: (status, reason) => this.repo.closeSession(created.id, status, reason, new Date(this.now()).toISOString()),
+        messageOf: (messageId) => this.messageOf(experimentId, messageId, (mission ??= finishedRun(this.events.list(experimentId)))),
+        saveUsage: (usage) => {
+          if (!this.forgotten.has(experimentId)) this.repo.updateUsage(created.id, usage);
+        },
+        markClosed: (status, reason) => {
+          if (!this.forgotten.has(experimentId)) this.repo.closeSession(created.id, status, reason, new Date(this.now()).toISOString());
+        },
         now: this.now,
       },
       settingsOf(config).debrief,
@@ -248,6 +264,7 @@ export class HumanInteractionService {
 
   /** Before an experiment is deleted: stop its open session (its rows go with the experiment). */
   forget(experimentId: string): void {
+    this.forgotten.add(experimentId); // before closing: the session's own writes are skipped from now on
     this.sessions.get(experimentId)?.close("experiment deleted", "CLOSED", false);
     this.sessions.delete(experimentId);
     for (const key of this.noticeGates.keys()) if (key.startsWith(`${experimentId}:`)) this.noticeGates.delete(key);
@@ -269,7 +286,7 @@ export class HumanInteractionService {
     const session = this.sessions.get(experimentId);
     const open = !running && session?.isOpen ? session : null;
     const debriefEnabled = this.debriefEnabled(record);
-    const mode: InteractionMode = running ? "mission" : open ? "debrief" : debriefEnabled ? "closed" : "observe";
+    const mode: InteractionMode = running ? "active" : open ? "debrief" : debriefEnabled ? "closed" : "observe";
     return {
       profile: settingsOf(config).profile,
       debriefEnabled,
@@ -302,7 +319,7 @@ export class HumanInteractionService {
   }
 
   /** A room message by id — a mission message or a debrief answer — with its author (null for moderator notices). */
-  private messageOf(experimentId: string, messageId: string, mission: MissionRecord): { agentId: string | null; text: string } | null {
+  private messageOf(experimentId: string, messageId: string, mission: FinishedRun): { agentId: string | null; text: string } | null {
     const fromMission = mission.transcript.find((m) => m.id === messageId);
     if (fromMission) return { agentId: fromMission.sender.kind === "agent" ? fromMission.sender.agentId : null, text: fromMission.text };
     const answer = this.repo.listEvents(experimentId).find((e) => e.type === "debrief_answer_published" && e.payload.messageId === messageId);
@@ -363,10 +380,10 @@ function settingsOf(config: ExperimentConfig): HumanInteractionConfig {
 /** Derived counts for the experiment page — never part of experiment metrics. */
 function summarize(events: InteractionEvent[]) {
   const spectators = events.filter((e) => e.type === "human_message" && e.payload.disposition === "spectator");
-  const duringMission = spectators.filter((e) => e.payload.during === "mission");
+  const duringMission = spectators.filter((e) => e.payload.during === "active");
   return {
     spectatorMessages: spectators.length,
-    spectatorMessagesDuringMission: duringMission.length,
+    spectatorMessagesDuringRun: duringMission.length,
     spectators: new Set(spectators.map((e) => e.payload.senderId)).size,
     // By construction: nothing a person writes reaches a running experiment.
     humanAssistance: false,

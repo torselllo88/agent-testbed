@@ -87,8 +87,8 @@ Missing or wrong token → `401 {"error":{"code":"UNAUTHORIZED",…}}`.
 
 | State | Meaning | Room busy? |
 |---|---|---|
-| `ACTIVE` | The mission is running. | yes |
-| `DEBRIEF` | The mission is over and the post-mission debrief is open: people can question the characters. | yes |
+| `ACTIVE` | The run is in progress. | yes |
+| `DEBRIEF` | The run is over and its debrief is open: people can question the characters. | yes |
 | `COMPLETED` | Nothing is live any more. The outbox is still readable and must still be drained and acked. | only while events are unacked |
 | `INTERRUPTED` | The testbed restarted during the run. The outbox ends with `run.state interrupted`. | only while events are unacked |
 | `CLOSED` | The binding was explicitly closed. Inbound is refused; the outbox stays readable. | no |
@@ -104,7 +104,7 @@ stop or close it explicitly. There is no implicit replace.
 
 ## 6. Endpoints
 
-All paths are relative to `/api/external`.
+All paths are relative to `/api/external`. The examples use the built-in Kestrel scenario; its participants and texts are scenario data, not part of the API.
 
 ### `GET /scenarios`
 
@@ -152,6 +152,9 @@ rejected.
   "overrides": { "conversationLanguage": "ru" }
 }
 ```
+
+Every declared participant must be mapped exactly once. Several participants
+may share one `externalUserId` (see section 10).
 
 `201 {"binding": <binding view>}`. The binding exists before the run starts,
 so the run's first visible message is always outbox `seq` 1.
@@ -242,7 +245,7 @@ testbed orders messages by the time it receives them.
 
 | Response | Meaning |
 |---|---|
-| `202 {"status":"accepted","messageId":"h_…","disposition":"spectator"}` | Shown to people only. Mission running, no debrief, or debrief closed. |
+| `202 {"status":"accepted","messageId":"h_…","disposition":"spectator"}` | Shown to people only. The run is in progress, there is no debrief, or the debrief is closed. |
 | `202 {"status":"accepted","disposition":"question","queued":{"position":1}}` | A debrief question. It will be answered in order. |
 | `202 {"status":"accepted","disposition":"question","rejected":"user_limit"}` | Too many pending questions from this person; the room gets a notice. |
 | `200 {"status":"duplicate", …first result…}` | You sent this `externalEventId` before. No second effect. |
@@ -251,9 +254,13 @@ testbed orders messages by the time it receives them.
 
 ### `POST /bindings/:id/stop` and `POST /bindings/:id/close`
 
-- `stop` ends whatever is live: it stops the mission (no debrief follows) or
-  closes the debrief. The state becomes `COMPLETED`; keep draining the outbox.
-- `close` also stops, then marks the binding `CLOSED`.
+- `stop` ends whatever is live: it stops the run (no debrief follows) or
+  closes the debrief. The run may need a moment to wind down, so the returned
+  state can still be `ACTIVE`. It becomes `COMPLETED` once the run has ended.
+  Keep draining the outbox.
+- `close` marks the binding `CLOSED` first, then stops. Nothing that follows — the
+  end of the run, a debrief — is added to its outbox, and no automatic debrief
+  opens for it.
 
 ## 7. Outbox events
 
@@ -285,10 +292,10 @@ today. **Ignore types you do not know, but ack them.**
 
   | `kind` | What it is |
   |---|---|
-  | `agent_message` | A character speaking during the mission. |
+  | `agent_message` | A character speaking during the run. |
   | `narration` | The narrator. `data.source` says which part: `opening`, `beats.<id>`, `outcomes.<OUTCOME>`, … Endings may come in parts (`data.part` / `data.of`). |
   | `protocol_notice` | The run's own notices: a proposal was submitted, or a vote failed. |
-  | `room_notice` | Notices for people: "the crew cannot answer now", "your question is queued", "debrief open/closed", … |
+  | `room_notice` | Notices for people: "the participants cannot answer now", "your question is queued", "debrief open/closed", … |
   | `debrief_answer` | A character answering a human question. It is a reply to the question. |
 
 - **`data` is optional structure** for richer UI. For `protocol_notice`,
@@ -300,13 +307,13 @@ today. **Ignore types you do not know, but ack them.**
 ### `type: "run.state"` — optional, never required
 
 ```json
-{ "seq": 20, "messageId": "os_…", "type": "run.state", "state": "mission_finished", "data": { "outcome": "SUCCESS", "status": "SUCCESS" } }
+{ "seq": 20, "messageId": "os_…", "type": "run.state", "state": "run_finished", "data": { "outcome": "SUCCESS", "status": "SUCCESS" } }
 ```
 
 `state` is a free-form string. Not every scenario emits every state, and new
 ones may appear: **ignore states you do not know.** Current values are
-`mission_started`, the run's phases (`discussion`, `proposal`, `voting`,
-`committed`, `evaluation`), `mission_finished`, `debrief_open`,
+`run_started`, the run's phases (`discussion`, `proposal`, `voting`,
+`committed`, `evaluation`), `run_finished`, `debrief_open`,
 `debrief_closed` and `interrupted`. The room experience never depends on these
 events, because narrator messages already tell the story. Use them for UI
 state only, for example to show a "LIVE" or "DEBRIEF OPEN" badge.
@@ -355,16 +362,19 @@ state only, for example to show a "LIVE" or "DEBRIEF OPEN" badge.
   ack) goes to that character in the debrief, deterministically. `mentions`
   (bound `externalUserId`s) and names in the text are fallbacks.
 - **Timing decides the meaning.** During a run, human messages are spectator
-  chat: they never reach the agents, and one notice explains that the crew
-  will be available after the mission. Messages sent during the mission are
+  chat: they never reach the agents, and one notice explains that the
+  participants will be available after the run. Messages sent during the run are
   not queued for the debrief.
 - Human text is **never a command**. "STOP" is just chat. Controls are the
   `stop` and `close` endpoints.
 
 ## 10. Adapter responsibilities (room side)
 
-- **Distinct identities.** Each `externalUserId` must be able to post as
-  itself. Do not use one bot with name prefixes.
+- **Identities.** Best: each participant has its own identity that posts as
+  itself. Replies, mentions and the room UX then work naturally. If your room
+  system can post only as one bot, you may map several participants to the
+  same `externalUserId`. Use `sender.displayName` to show who speaks; replies
+  still map correctly, because they go by event id.
 - **Suppress autonomous behavior.** While a binding is `ACTIVE` or `DEBRIEF`,
   the bound identities must not generate replies of their own in that room —
   not to messages, and not to mentions. Otherwise a character answers twice:
@@ -408,7 +418,7 @@ Adapter                                             Testbed
    │ POST /acks [{om_1, $e1}]                          │
    │──────────────────────────────────────────────────►│
    │ GET events?after=1&waitMs=20000                   │  (paced: messages arrive at viewing speed)
-   │◄──────── [2] run.state mission_started …           │
+   │◄──────── [2] run.state run_started …           │
    │◄──────── [4] agent_message from @sarah             │
    │ …publish, ack…                                    │
    │                                                   │
@@ -419,7 +429,7 @@ Adapter                                             Testbed
    │◄──────── [5] room_notice, reply to $h1             │
    │                                                   │
    │◄──────── … proposal, vote, ending in parts …       │
-   │◄──────── run.state mission_finished, debrief_open  │
+   │◄──────── run.state run_finished, debrief_open  │
    │◄──────── room_notice "debrief is open"             │
    │                                                   │
    │ Alice replies to Viktor's message ($e7)           │

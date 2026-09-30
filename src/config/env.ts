@@ -66,6 +66,14 @@ export const env = {
   /** Loopback by default — a plain `npm start` should never be reachable from the network. */
   host: process.env.GUI_HOST || "127.0.0.1",
   /**
+   * Host names the operator UI answers to besides loopback (DNS-rebinding guard).
+   * Needed only when it is reached under another name, e.g. bound to 0.0.0.0.
+   */
+  allowedHosts: (process.env.GUI_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  /**
    * External Room API (docs/external-room-api.md): a separate listener that
    * serves only /api/external/*, so the operator UI can stay on loopback.
    * Disabled unless a token is set. The token is plain bearer auth: put TLS

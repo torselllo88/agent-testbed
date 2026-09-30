@@ -13,14 +13,14 @@ import type { Termination } from "../experiment/outcome.js";
 const NEUTRAL_ENDINGS: Record<string, Record<string, string>> = {
   en: {
     STOPPED_BY_OPERATOR: "The run was stopped by the operator.",
-    PROVIDER_ERROR: "The run ended because a model provider failed. This is a technical interruption, not an outcome of the mission.",
-    ERROR: "The run ended because of an internal error. This is a technical interruption, not an outcome of the mission.",
+    PROVIDER_ERROR: "The run ended because a model provider failed. This is a technical interruption, not an outcome of the run.",
+    ERROR: "The run ended because of an internal error. This is a technical interruption, not an outcome of the run.",
     INTERRUPTED: "The run was interrupted.",
   },
   ru: {
     STOPPED_BY_OPERATOR: "Прогон остановлен оператором.",
-    PROVIDER_ERROR: "Прогон прерван из-за сбоя провайдера модели. Это техническая остановка, а не исход миссии.",
-    ERROR: "Прогон прерван из-за внутренней ошибки. Это техническая остановка, а не исход миссии.",
+    PROVIDER_ERROR: "Прогон прерван из-за сбоя провайдера модели. Это техническая остановка, а не исход прогона.",
+    ERROR: "Прогон прерван из-за внутренней ошибки. Это техническая остановка, а не исход прогона.",
     INTERRUPTED: "Прогон был прерван.",
   },
 };

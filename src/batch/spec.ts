@@ -20,7 +20,13 @@ export const BatchVariableSchema = z.object({
 });
 export type BatchVariable = z.infer<typeof BatchVariableSchema>;
 
-export const BatchSpecSchema = z.object({
+export const BatchSpecSchema = z.preprocess(
+  // Older specs said pacing: "scenario" | "off"; that is now headless: false | true.
+  (raw) =>
+    raw && typeof raw === "object" && "pacing" in raw && !("headless" in raw)
+      ? { ...(raw as Record<string, unknown>), headless: (raw as { pacing?: unknown }).pacing !== "scenario" }
+      : raw,
+  z.object({
   name: z.string().min(1),
   base: z.union([
     z.object({ scenarioId: z.string().min(1) }),
@@ -44,12 +50,14 @@ export const BatchSpecSchema = z.object({
    */
   order: z.enum(["interleaved", "sequential"]).default("interleaved"),
   /**
-   * Viewer pacing of the scenario (e.g. Kestrel's). "off" by default: batch
-   * runs are headless, and pacing would only add wall time (it never counts
-   * as experiment time). "scenario" keeps it — e.g. to record demo-like runs.
+   * Nobody watches batch runs live, so by default they are headless: add-ons
+   * skip what only matters to a live viewer (e.g. viewer pacing, which would
+   * only add wall time). false keeps it — e.g. to record demo-like runs.
+   * Never part of the experiment config or its hash.
    */
-  pacing: z.enum(["off", "scenario"]).default("off"),
-});
+  headless: z.boolean().default(true),
+})
+);
 export type BatchSpec = z.infer<typeof BatchSpecSchema>;
 
 export interface BatchCondition {

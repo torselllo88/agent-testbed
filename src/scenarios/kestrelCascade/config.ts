@@ -275,6 +275,8 @@ export function kestrelCascadeConfig(agentModel = "cascade/cooperative"): Experi
     humanInteraction: {
       profile: "DEBRIEF",
       debrief: {
+        // Keyless: no content routing (Sarah answers unaddressed questions); set a cheap model for live demos.
+        router: stubModel("router/next-in-order"),
         defaultAgentId: "operations",
         maxOutputTokens: 250,
         maxPendingPerUser: 3,

@@ -357,6 +357,8 @@ export function kestrelConfig(agentModel = "space-station/cooperative"): Experim
     humanInteraction: {
       profile: "DEBRIEF",
       debrief: {
+        // Keyless runs route by subject keywords; with real models, point this at a cheap model.
+        router: stubModel("space-station/debrief-router"),
         // Sarah answers questions put to "the crew" in general.
         defaultAgentId: "operations",
         maxOutputTokens: 250,

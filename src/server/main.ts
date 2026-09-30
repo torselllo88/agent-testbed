@@ -31,7 +31,7 @@ if (synced.added.length || synced.updated.length) {
   console.log(`Built-in scenarios: added [${synced.added.join(", ")}], updated [${synced.updated.join(", ")}]`);
 }
 
-const server = createApp({ db, providers, evaluators, service, batches, interaction, rooms, openRouterModels: new OpenRouterModelCatalog(env.openRouter.baseUrl) });
+const server = createApp({ db, providers, evaluators, service, batches, interaction, rooms, allowedHosts: env.allowedHosts, openRouterModels: new OpenRouterModelCatalog(env.openRouter.baseUrl) });
 
 server.listen(env.port, env.host, () => {
   console.log(`Agent testbed running at http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`);

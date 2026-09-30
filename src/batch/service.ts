@@ -8,7 +8,7 @@ import { ExperimentRepository, type ExperimentRecord } from "../persistence/expe
 import { ScenarioRepository } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
 import { aggregate, type ConditionAggregate } from "./aggregate.js";
-import { BatchSpecSchema, conditionConfig, expandConditions, planRuns, type BatchSpec } from "./spec.js";
+import { BatchSpecSchema, conditionConfig, expandConditions, planRuns, variableLabel, type BatchSpec } from "./spec.js";
 
 export class BatchValidationError extends Error {
   constructor(public readonly problems: string[]) {
@@ -99,7 +99,19 @@ export class BatchService {
       throw new BatchValidationError(problemsOf(err, "base config"));
     }
 
+    // Conditions are keyed by variable label and formatted value: both must be unambiguous,
+    // or two variables would share one value / two conditions one config and one aggregate.
+    const labels = spec.variables.map(variableLabel);
+    const duplicateLabels = [...new Set(labels.filter((l, i) => labels.indexOf(l) !== i))];
+    if (duplicateLabels.length) {
+      throw new BatchValidationError(duplicateLabels.map((l) => `two variables share the label "${l}" — give each a distinct label`));
+    }
     const conditions = expandConditions(spec.variables);
+    const keys = conditions.map((c) => c.key);
+    const duplicateKeys = [...new Set(keys.filter((k, i) => keys.indexOf(k) !== i))];
+    if (duplicateKeys.length) {
+      throw new BatchValidationError(duplicateKeys.map((k) => `two conditions have the same key "${k}" — a variable lists the same value twice (e.g. 1 and "1")`));
+    }
     const totalRuns = conditions.length * spec.repetitions;
     if (totalRuns > MAX_RUNS_PER_BATCH) {
       throw new BatchValidationError([`${totalRuns} runs requested (${conditions.length} conditions × ${spec.repetitions}); the limit is ${MAX_RUNS_PER_BATCH}`]);
@@ -144,12 +156,15 @@ export class BatchService {
     const providers = this.providersFor(spec);
     const queue = planRuns(conditions, spec.repetitions, spec.order);
 
+    let failure: unknown = null;
     const worker = async () => {
       for (;;) {
-        if (state.cancelled) return;
+        if (state.cancelled || failure) return;
         const next = queue.shift();
         if (!next) return;
-        const { runner, done } = this.deps.service.start({
+        let started: ReturnType<ExperimentService["start"]>;
+        try {
+          started = this.deps.service.start({
           config: configs.get(next.condition.key)!,
           providers,
           scenarioId,
@@ -158,16 +173,26 @@ export class BatchService {
           conditionKey: next.condition.key,
           repetition: next.repetition,
           origin: "batch",
-          overrides: spec.pacing === "off" ? { pacing: "off" } : undefined,
-        });
-        state.running.add(runner.id);
-        await done.catch(() => undefined);
-        state.running.delete(runner.id);
+          headless: spec.headless,
+          });
+        } catch (err) {
+          // A run that cannot even be created (e.g. the database is locked): stop starting more — the batch ends interrupted.
+          failure = err;
+          console.error(`Batch ${batch.id}: could not start a run for "${next.condition.key}" #${next.repetition}:`, err);
+          return;
+        }
+        state.running.add(started.runner.id);
+        await started.done.catch(() => undefined);
+        state.running.delete(started.runner.id);
       }
     };
 
-    await Promise.all(Array.from({ length: spec.concurrency }, worker));
-    this.batches.finish(batch.id, state.cancelled ? "cancelled" : "completed");
+    try {
+      await Promise.all(Array.from({ length: spec.concurrency }, worker));
+    } finally {
+      // Always leave the batch in a terminal state — never "running" with nothing behind it.
+      this.batches.finish(batch.id, failure ? "interrupted" : state.cancelled ? "cancelled" : "completed");
+    }
   }
 
   /** Starts no further runs and stops the ones in flight (they end as STOPPED_BY_OPERATOR and are excluded from rates). */

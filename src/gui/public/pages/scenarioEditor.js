@@ -305,7 +305,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         `<textarea class="code" data-path="presentation.beats" data-kind="json-optional" rows="6">${escapeHtml(p.beats ? JSON.stringify(p.beats, null, 2) : "")}</textarea>`,
         'Observer-only lines during the run, e.g. [{"id": "urgent", "when": {"discussionProgress": 0.75}}, {"id": "rejected", "when": {"planRejected": true}}]; texts in strings.<lang>.beats. Empty = none.'
       )}
-      ${field("Mission-failure priority", csvInput("presentation.missionFailurePriority", "e.g. power_feasible, life_support_preserved"), "Evaluator checks in narrative priority; the first violated one picks the ending")}
+      ${field("Mission-failure priority", csvInput("presentation.missionFailurePriority", "evaluator check names, most important first"), "Evaluator checks in narrative priority; the first violated one picks the ending")}
       <h3>Pacing</h3>
       <div class="grid-3">
         ${field("Minimum visible interval (ms)", input("presentation.pacing.minVisibleIntervalMs", "number", `min="0"`), "0 = no pacing (research runs)")}
@@ -333,7 +333,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
           ? `<h3>Debrief</h3>
         <div class="grid-3">
           ${field("Default character", optionalSelect(`${d}.defaultAgentId`, state.draft.agents.map((a) => a.id), `default (proposer: ${state.draft.decision.proposerId})`), "answers questions addressed to nobody in particular")}
-          ${field("Answer max tokens", input(`${d}.maxOutputTokens`, "number", `min="1"`), "each character uses its own mission model")}
+          ${field("Answer max tokens", input(`${d}.maxOutputTokens`, "number", `min="1"`), "each character answers with its own model from the run")}
           ${field("Cost cap per session (USD)", input(`${d}.costCapUsd`, "nullable-number", `step="0.01" min="0"`), "blank = none")}
           ${field("Pending questions per person", input(`${d}.maxPendingPerUser`, "number", `min="1"`))}
           ${field("Pending questions in total", input(`${d}.maxPendingTotal`, "number", `min="1"`))}
@@ -341,6 +341,10 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
           ${field("Spectator notice cooldown (s)", input(`${d}.spectatorNoticeCooldownSeconds`, "number", `min="0"`))}
         </div>
         ${checkbox(`${d}.revealEvaluation`, "Give characters the evaluator's check results (can reveal facts only another character knew)")}
+        <h3>Routing of unaddressed questions</h3>
+        <p class="muted small">Replies, mentions and names are routed without a model. For the rest, a router model can pick the character; without one, the default character answers. Independent of the experiment's own scheduler.</p>
+        ${checkbox("humanInteraction.__debriefRouterEnabled", "Use a router model")}
+        ${state.draft.humanInteraction?.debrief?.router ? modelFields(`${d}.router`) : ""}
         <p class="muted small">Notice texts: presentation strings, key <code>interaction</code>.</p>`
           : ""
       }`;
@@ -389,6 +393,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     // Synthetic checkbox: the classifier toggle maps to classifier null vs. a model ref.
     const toggle = app.querySelector('[data-path="scheduler.__classifierEnabled"]');
     if (toggle) toggle.checked = Boolean(state.draft.scheduler.classifier);
+    const routerToggle = app.querySelector('[data-path="humanInteraction.__debriefRouterEnabled"]');
+    if (routerToggle) routerToggle.checked = Boolean(state.draft.humanInteraction?.debrief?.router);
     bind();
   }
 
@@ -424,12 +430,15 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         value === "hybrid" ? { type: "hybrid", startAgentId, classifier: null, classifierWindow: 12 } : { type: "round_robin", startAgentId };
     } else if (path === "scheduler.__classifierEnabled") {
       state.draft.scheduler.classifier = value ? { provider: "stub", model: meta.stubModels.find((m) => m.startsWith("router/")) ?? "", structuredOutput: "native" } : null;
+    } else if (path === "humanInteraction.__debriefRouterEnabled") {
+      state.draft.humanInteraction.debrief.router = value ? { provider: "stub", model: "router/next-in-order", structuredOutput: "native" } : null;
     } else if (path === "humanInteraction.__profile") {
       if (!value) delete state.draft.humanInteraction;
       else
         state.draft.humanInteraction = {
           profile: value,
           debrief: state.draft.humanInteraction?.debrief ?? {
+            router: null,
             maxOutputTokens: 250,
             maxPendingPerUser: 3,
             maxPendingTotal: 20,

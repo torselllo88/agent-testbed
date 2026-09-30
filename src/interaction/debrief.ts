@@ -15,11 +15,11 @@ import {
   renderDebriefRouterPrompt,
   renderDebriefSystemPrompt,
   type DebriefExchange,
-  type MissionRecord,
+  type FinishedRun,
 } from "./debriefPrompt.js";
 import { agentDisplayName, type NoticeKind } from "./strings.js";
 
-/** What a session needs from the service that owns it: its log, the room, and the finished mission. */
+/** What a session needs from the service that owns it: its log, the room, and the finished run. */
 export interface DebriefSessionContext {
   experimentId: string;
   config: ExperimentConfig;
@@ -28,10 +28,10 @@ export interface DebriefSessionContext {
   notice(kind: NoticeKind, vars?: Record<string, unknown>, inResponseTo?: string | null): Promise<void>;
   /** Posts a character's answer; `replyTo` is the question's internal message id. */
   postAnswer(agentId: string, text: string, replyTo: string): Promise<string>;
-  mission(): MissionRecord;
+  finishedRun(): FinishedRun;
   /** Every public debrief exchange of this experiment so far (all sessions), oldest first. */
   history(): DebriefExchange[];
-  /** A room message by id (mission message or debrief answer) and the character who posted it, if any. */
+  /** A room message by id (run message or debrief answer) and the character who posted it, if any. */
   messageOf(messageId: string): { agentId: string | null; text: string } | null;
   saveUsage(usage: DebriefUsage): void;
   markClosed(status: "CLOSED" | "INTERRUPTED", reason: string): void;
@@ -180,7 +180,10 @@ export class DebriefSession {
           this.ctx.saveUsage(this.usage);
         }
       }
-    })().finally(() => {
+    })()
+      // Never let a failed question take the process down (an unhandled rejection would).
+      .catch((err: unknown) => console.error(`debrief session ${this.record.id} failed:`, err))
+      .finally(() => {
       this.draining = null;
       if (this.open) this.armIdleTimer();
     });
@@ -216,7 +219,7 @@ export class DebriefSession {
         category: "agent",
         purpose: "debrief_answer",
         agentId: agent.id,
-        // The character's own mission model, with the debrief's output cap.
+        // The character's own model from the run, with the debrief's output cap.
         modelRef: { ...agent.model, maxOutputTokens: this.settings.maxOutputTokens },
         messages: [
           { role: "system", content: renderDebriefSystemPrompt(this.ctx.config, agent) },
@@ -225,7 +228,7 @@ export class DebriefSession {
             content: renderDebriefQuestionPrompt(
               this.ctx.config,
               agent,
-              this.ctx.mission(),
+              this.ctx.finishedRun(),
               this.ctx.history(),
               { askerName: question.displayName, text: question.text, inReplyTo },
               { revealEvaluation: this.settings.revealEvaluation }
@@ -259,7 +262,7 @@ export class DebriefSession {
     if (direct) return direct;
 
     const fallback = this.settings.defaultAgentId ?? config.decision.proposerId;
-    const routerModel = config.scheduler.type === "hybrid" ? config.scheduler.classifier : null;
+    const routerModel = this.settings.router;
     if (!routerModel) return { agentId: fallback, source: "default", detail: "no addressee; no router model" };
     try {
       const prompt = renderDebriefRouterPrompt(config, this.ctx.history(), { askerName: question.displayName, text: question.text });

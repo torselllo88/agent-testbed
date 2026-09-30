@@ -65,7 +65,7 @@ export function findNamedAgent(config: ExperimentConfig, text: string): { agentI
 export function resolveAddressee(
   config: ExperimentConfig,
   question: { text: string; replyTo: string | null; mentions: string[] },
-  /** Room message id -> the character who posted it (mission messages and debrief answers). */
+  /** Room message id -> the character who posted it (run messages and debrief answers). */
   authorOf: (messageId: string) => string | null
 ): Addressee | null {
   if (question.replyTo) {

@@ -8,4 +8,5 @@ import { pacingExtension } from "./pacing.js";
  * the run's config itself, so scenarios without narration or pacing get no
  * observable behavior from it.
  */
-export const presentationExtensions: RunExtensionFactory = () => [pacingExtension(), narratorExtension()];
+// Order matters: the narrator posts due beats first (each paced like any message), then pacing holds the message itself.
+export const presentationExtensions: RunExtensionFactory = () => [narratorExtension(), pacingExtension()];

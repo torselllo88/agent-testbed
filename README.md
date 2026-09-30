@@ -324,10 +324,11 @@ the runner: the outcome, metrics, proposal, votes and evaluation are frozen.
   asker is told their question is queued (with position).
 - **Who answers.** In order: an explicit reply to a character's message; an
   explicit mention; a character's name in the text (either language,
-  including Russian case forms: *Виктору*, *Саре*); the scenario's router
-  model (hybrid scheduler classifier), if confident; the scenario's
+  including Russian case forms: *Виктору*, *Саре*); the debrief's own router
+  model (`debrief.router`, independent of the experiment's scheduler), if
+  confident; the scenario's
   `debrief.defaultAgentId` (Kestrel: Sarah), else the proposer.
-- **Perspective.** A character answers with its own mission model
+- **Perspective.** A character answers with its own model from the run
   (`debrief.maxOutputTokens` caps the answer). It gets its persona and role,
   **its own** private information and votes, the public transcript, the
   committed decision, the outcome as announced, and the debrief so far. It
@@ -463,7 +464,7 @@ npm run batch -- path/to/batch-spec.json [--db <dataDir>] [--out results.json] [
 
 Both use the same engine and database as the UI, so CLI runs appear in the UI
 as well. `--language` overrides the conversation language for that run. CLI
-runs are headless, so viewer pacing is off unless you pass `--pacing scenario`. `Ctrl+C` stops the experiment, or cancels the batch. The summary JSON
+runs are headless, so viewer pacing and reveal pauses are skipped unless you pass `--watch`. `Ctrl+C` stops the experiment, or cancels the batch. The summary JSON
 goes to stdout and progress to stderr; add `-s` (`npm run -s experiment …`) so
 npm's own banner does not mix into the JSON.
 
@@ -673,10 +674,13 @@ tagged with its batch, condition and repetition.
   across conditions.
 - **`stubLatencyMs`** defaults to 0. Batches never inherit the web demo's
   `STUB_LATENCY_MS`.
-- **`pacing`** is `"off"` by default: batch runs are headless, so a scenario's
-  viewer pacing (e.g. Kestrel's) is disabled for them and recorded as
-  `pacingDisabled` in the run environment. Use `"scenario"` to keep it.
-  Narration is still posted and traced either way.
+- **`headless`** is `true` by default: nobody watches batch runs live, so
+  add-ons skip what only matters to a live viewer. Viewer pacing and reveal
+  pauses are skipped; the trace records an `extension_note`, and the run
+  environment has `headless: true`. Set `false` to keep them. Narration is
+  posted and traced either way. This is an add-on option, never part of the
+  experiment config, so `configHash` does not change. (Older specs with
+  `pacing: "scenario"` are read as `headless: false`.)
 - **`concurrency`** limits simultaneous *experiments*. What limits simultaneous
   *provider requests* is the process-wide `LLM_MAX_CONCURRENT_REQUESTS`,
   because one experiment's voting step alone issues one request per agent.
@@ -771,7 +775,7 @@ src/
   transport/    Transport interface · LocalTransport (the experiment's own room) · HumanRoomMessage
   evaluation/   ScenarioEvaluator interface · registry
   scenarios/    scenario packages (config + evaluator + stub scripts) · registries
-  presentation/ run extensions: narrator (opening / grounded endings) · PacedTransport (viewer pacing)
+  presentation/ run extensions: narrator (opening · beats · grounded endings) · viewer pacing
   interaction/  HumanInteractionService (people in the room) · DebriefSession (FIFO queue) · addressing · debrief prompts
   rooms/        ExternalRoomService — External Room API: bindings, persistent outbox, inbound (docs/external-room-api.md)
   batch/        spec & condition expansion · BatchService · aggregates
@@ -808,12 +812,20 @@ change behavior.
 Everything for human observers is outside the core and attaches through one
 interface, `RunExtension` ([src/experiment/extensions.ts](src/experiment/extensions.ts)):
 
-- `wrapTransport` — e.g. `PacedTransport`;
-- `onRoomOpened` / `onRunEnded` — e.g. the narrator;
-- a context that can post observer-only messages, append trace events,
-  observe the trace as it is written (read-only; e.g. narration beats), hold
-  the experiment clock (excluded from active time, like a pause) and see the
-  stop signal.
+- `attach` — once, before anything is published;
+- `beforePublish` / `afterPublish` — around each room message, which the
+  extension receives only as a **frozen copy**. It can wait (viewer pacing)
+  or post narration first (beats), but it can never change a message or
+  what agents read: the room itself is never handed out.
+- `onRoomOpened` / `onRunEnded` — for example, the narrator's opening and ending;
+- a context that can:
+  - post observer-only messages;
+  - append trace events;
+  - observe the trace as it is written (read-only; a throwing listener is
+    isolated);
+  - hold the experiment clock (excluded from active time, like a pause);
+  - see the stop signal;
+  - read the run's add-on options (`headless`).
 
 Extensions cannot touch turns, proposals, votes, evaluation or the outcome. A
 failing extension is logged and changes nothing. The composition roots
@@ -927,7 +939,7 @@ The UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST` and
 | `POST /api/experiments/:id/rerun` | same config snapshot, new run |
 | `GET /api/experiments/:id/export` | record + every event |
 | `DELETE /api/experiments/:id` | delete a finished run (and its debrief data) |
-| `GET /api/experiments/:id/interaction?after=N` | the room's human side: profile, mode (mission / debrief / closed / observe), open session with queue state, all sessions, derived counts, interaction events |
+| `GET /api/experiments/:id/interaction?after=N` | the room's human side: profile, mode (active / debrief / closed / observe), open session with queue state, all sessions, derived counts, interaction events |
 | `POST /api/experiments/:id/room/messages` | a person's text message `{senderId, displayName, text, replyTo?, mentions?}`; chat only, never a command |
 | `POST /api/experiments/:id/debrief` | operator: `{action: open}` (always a new session) or `{action: close}` |
 | `POST /api/batches/preview` | expand and validate a spec without running |
@@ -960,6 +972,7 @@ See [.env.example](.env.example). All variables are optional.
 | `DATA_DIR` | `./data` | Where the SQLite database lives |
 | `GUI_PORT` / `PORT` | `3939` | Web UI port |
 | `GUI_HOST` | `127.0.0.1` | Bind address. **There is no authentication**; only use `0.0.0.0` deliberately |
+| `GUI_ALLOWED_HOSTS` | — | Host names the operator UI answers to besides loopback. Requests for any other `Host` get `421`, a DNS-rebinding guard. Needed only when you reach the UI under another name |
 | `EXTERNAL_API_TOKEN` | — | Enables the [External Room API](docs/external-room-api.md) on its own listener (bearer token) |
 | `EXTERNAL_API_PORT` / `EXTERNAL_API_HOST` | `3940` / `127.0.0.1` | External Room API listener. For remote adapters, put TLS or a private network in front of it |
 | `EXTERNAL_SCENARIOS` | — | Comma-separated built-in or library scenario ids that may be started externally (default-deny) |
@@ -992,7 +1005,10 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
 
 - **Single process, in-memory scheduling.** Running experiments live in the
   server process; a restart ends them (they are recorded as `INTERRUPTED`).
-  There is no distributed runtime.
+  There is no distributed runtime. Each run and batch records the pid of the
+  process that owns it. Startup recovery touches only rows whose owner is
+  gone, so a server started next to a running CLI batch on the same database
+  leaves that batch alone. This works on the same machine only.
 - **External rooms (v1)** assume the room already exists and the identities are in it. Delivery is by long-polling rather than SSE or push. There are no typing indicators, and the bearer token is not encryption (see the [contract](docs/external-room-api.md)).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs

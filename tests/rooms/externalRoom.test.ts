@@ -174,8 +174,8 @@ describe("External Room API — contract flow", () => {
     // Mission end, the reveal, then the debrief.
     await consumer.until((e) => e.type === "run.state" && e.state === "debrief_open");
     const states = consumer.published.filter((e) => e.type === "run.state").map((e) => e.state);
-    expect(states).toEqual(expect.arrayContaining(["mission_started", "discussion", "proposal", "voting", "mission_finished", "debrief_open"]));
-    expect(states.indexOf("mission_finished")).toBeLessThan(states.indexOf("debrief_open"));
+    expect(states).toEqual(expect.arrayContaining(["run_started", "discussion", "proposal", "voting", "run_finished", "debrief_open"]));
+    expect(states.indexOf("run_finished")).toBeLessThan(states.indexOf("debrief_open"));
     const reveal = consumer.published.filter((e) => e.kind === "narration" && e.data?.source === "outcomes.SUCCESS");
     expect(reveal.map((e) => e.data.part)).toEqual([1, 2, 3]);
     expect((await call("GET", `/bindings/${binding.bindingId}`)).body.binding.state).toBe("DEBRIEF");

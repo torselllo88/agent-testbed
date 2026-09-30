@@ -35,6 +35,10 @@ function applyMigrations(db: Db): void {
   // At most one row per builtin_id — enforced by ScenarioRepository.syncBuiltins (the only writer).
   ensureColumn(db, "scenarios", "builtin_id", "builtin_id TEXT");
   ensureColumn(db, "scenarios", "builtin_version", "builtin_version INTEGER");
+  // The process that runs a live experiment / batch: startup recovery only touches rows whose owner is gone,
+  // so a server started next to a running CLI batch on the same database leaves the CLI's runs alone.
+  ensureColumn(db, "experiments", "owner_pid", "owner_pid INTEGER");
+  ensureColumn(db, "batches", "owner_pid", "owner_pid INTEGER");
   db.exec(INTERACTION_SQL);
   db.exec(ROOMS_SQL);
 }
@@ -66,6 +70,21 @@ export function openDb(dataDir: string = env.dataDir, synchronous: string = env.
   db.exec("PRAGMA busy_timeout = 5000;");
   applyMigrations(db);
   return db;
+}
+
+/**
+ * Whether ANOTHER live process on this machine owns a row (null = unknown owner, treated as gone).
+ * This process's own live runs are excluded by the caller's in-memory maps; a row it owns but no
+ * longer runs is dead.
+ */
+export function processAlive(pid: number | null): boolean {
+  if (pid === null || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM"; // exists, but not ours to signal
+  }
 }
 
 /** Test-only: a fresh in-memory DB with migrations applied. */

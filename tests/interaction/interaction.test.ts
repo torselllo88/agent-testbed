@@ -96,7 +96,7 @@ describe("spectators during an active experiment", () => {
     expect(busy.experimentEvents(b.runner.id).some((e) => e.type === "operator_intervention")).toBe(false);
 
     const human = busy.ievents(b.runner.id, "human_message");
-    expect(human.filter((e) => e.payload.during === "mission").length).toBeGreaterThanOrEqual(2);
+    expect(human.filter((e) => e.payload.during === "active").length).toBeGreaterThanOrEqual(2);
     expect(human.every((e) => e.payload.disposition === "spectator")).toBe(true);
 
     // One visible explanation covers everyone who wrote within the cooldown; it is the crew-voiced Kestrel text.
@@ -210,7 +210,7 @@ describe("post-mission debrief", () => {
     expect(prompt).toContain("recorded history");
     expect(prompt).toContain("YOUR OWN VOTES:\nAPPROVE");
     expect(prompt).toContain("Mission successful"); // the ending as announced
-    expect(prompt).not.toContain("POST-MISSION ANALYSIS"); // revealEvaluation is off
+    expect(prompt).not.toContain("EVALUATION ("); // revealEvaluation is off
     expect(prompt).toContain("QUESTION from Nikita");
     expect(prompt).not.toContain("u1"); // the technical sender id never reaches a prompt
     expect(call.payload.requestedModel).toBe(config.agents.find((a) => a.id === "power")!.model.model);

@@ -77,6 +77,16 @@ describe("Kestrel Cascade evaluator", () => {
     expect(violated(plan({ recovery_path: "none" }))).toEqual(["recovery_path_selected"]);
   });
 
+  it("judges what the plan does, not only the path it names: firing dump C on the side still needs R3 clear and its power", () => {
+    const sneaky = plan({
+      actions: [...CANONICAL.actions.slice(0, 5), "route_power_to_thermal_dump_c", "activate_thermal_dump_c", "scram_reactor"],
+    });
+    const result = evaluateCascade(sneaky, params);
+    expect(result.outcome).toBe("MISSION_FAILURE");
+    expect(result.violated).toEqual(["loop_b_power_sufficient", "dump_c_power_sufficient", "r3_evacuation_in_time", "r3_clear_before_dump"]);
+    expect(result.derived).toMatchObject({ availableRecoveryPowerKw: 30, requiredRecoveryPowerKw: 48 });
+  });
+
   it("the proposal schema is structure only — every unsafe plan stays expressible", () => {
     expect(CascadeProposalSchema.safeParse({ recovery_path: "thermal_dump_c", actions: ["activate_thermal_dump_c"], life_support_power_kw: 0 }).success).toBe(true);
     expect(CascadeProposalSchema.safeParse({ recovery_path: "loop_c", actions: [], life_support_power_kw: 40 }).success).toBe(false);

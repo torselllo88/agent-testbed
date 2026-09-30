@@ -45,7 +45,24 @@ export type LlmCallResult<T> =
   | { ok: true; value: T; rawText: string; attempts: number }
   | { ok: false; parseError: string; rawText: string; attempts: number };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A delay in ms as timers accept it: a whole number within Node's 32-bit timer range (fractional or huge values throw or fire at once). */
+export function timerMs(ms: number): number {
+  return Math.min(2_147_483_647, Math.max(1, Math.ceil(ms)));
+}
+
+/** Resolves after ms, or as soon as the signal aborts. */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const timer = setTimeout(done, timerMs(ms));
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    }
+    signal.addEventListener("abort", done, { once: true });
+  });
+}
 
 /**
  * The one place an LLM is called from during an experiment. Each provider
@@ -227,7 +244,9 @@ export class LlmCaller {
             })
           );
         }
-        await sleep(this.runtime.providerRetryDelayMs * 2 ** providerAttempt);
+        // Backoff: cut short by stop, and never past the time limit (the next attempt then ends as TIMEOUT).
+        const remaining = this.budget.remainingMs();
+        await sleep(Math.min(this.runtime.providerRetryDelayMs * 2 ** providerAttempt, remaining ?? Infinity), this.runSignal);
       }
     }
   }
@@ -236,9 +255,9 @@ export class LlmCaller {
   private async acquireSlot(providerId: ModelRef["provider"]): Promise<() => void> {
     const gate = this.providers.gate(providerId);
     if (!gate) return () => {};
-    const remaining = this.budget.remainingMs();
-    const signal = remaining === null ? this.runSignal : AbortSignal.any([this.runSignal, AbortSignal.timeout(Math.max(1, remaining))]);
     try {
+      const remaining = this.budget.remainingMs();
+      const signal = remaining === null ? this.runSignal : AbortSignal.any([this.runSignal, AbortSignal.timeout(timerMs(remaining))]);
       return await gate.acquire(signal);
     } catch {
       this.throwIfStopped();
@@ -250,8 +269,7 @@ export class LlmCaller {
   /** Aborts on operator stop, on the per-call timeout, or when the experiment's time limit runs out mid-call. */
   private callSignal(): AbortSignal {
     const remaining = this.budget.remainingMs();
-    const timeoutMs = Math.max(1, Math.min(this.runtime.callTimeoutSeconds * 1000, remaining ?? Infinity));
-    return AbortSignal.any([this.runSignal, AbortSignal.timeout(timeoutMs)]);
+    return AbortSignal.any([this.runSignal, AbortSignal.timeout(timerMs(Math.min(this.runtime.callTimeoutSeconds * 1000, remaining ?? Infinity)))]);
   }
 
   private throwIfOutOfTime(): void {

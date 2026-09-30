@@ -175,6 +175,11 @@ export class RoomRepository {
     return row ? { externalEventId: row.external_event_id } : null;
   }
 
+  /** Drops a reservation whose processing failed, so a retry of the same event runs again. */
+  deleteInbound(bindingId: string, externalEventId: string): void {
+    this.db.prepare(`DELETE FROM room_inbound WHERE binding_id = ? AND external_event_id = ?`).run(bindingId, externalEventId);
+  }
+
   updateInboundResult(bindingId: string, externalEventId: string, result: Record<string, unknown>): void {
     this.db.prepare(`UPDATE room_inbound SET result_json = ? WHERE binding_id = ? AND external_event_id = ?`).run(JSON.stringify(result), bindingId, externalEventId);
   }

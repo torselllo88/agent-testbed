@@ -99,8 +99,9 @@ Transitions: `ACTIVE` → `DEBRIEF` (if the scenario has a debrief) → `COMPLET
 **One run per room.** Starting a new binding in a room fails with
 `409 ROOM_BUSY` while another binding there is `ACTIVE` or `DEBRIEF`
 (`reason: "active"`), or is finished but not fully acknowledged
-(`reason: "undelivered"`). To start again, drain and ack the old binding, or
-stop or close it explicitly. There is no implicit replace.
+(`reason: "undelivered"`). To start again, either drain and ack everything the old
+binding has — `stop` alone is not enough, it only adds its final events — or
+`close` it. There is no implicit replace.
 
 ## 6. Endpoints
 
@@ -360,7 +361,9 @@ state only, for example to show a "LIVE" or "DEBRIEF OPEN" badge.
 - **Replies are the best addressing.** A reply to a character's message
   (`replyToExternalEventId` = that message's room event id, known from your
   ack) goes to that character in the debrief, deterministically. `mentions`
-  (bound `externalUserId`s) and names in the text are fallbacks.
+  (bound `externalUserId`s) and names in the text are fallbacks. A mention of
+  an identity shared by several participants names nobody in particular, so it
+  is ignored.
 - **Timing decides the meaning.** During a run, human messages are spectator
   chat: they never reach the agents, and one notice explains that the
   participants will be available after the run. Messages sent during the run are
@@ -398,7 +401,7 @@ All errors look like `{"error": {"code": "…", "message": "…", …details}}`.
 | 404 | `SCENARIO_NOT_FOUND`, `BINDING_NOT_FOUND`, `NOT_FOUND` | — |
 | 409 | `ROOM_BUSY` | Another binding holds the room (`reason`: `active` / `undelivered`, `bindingId`). |
 | 409 | `BINDING_CLOSED` | Inbound to a closed binding. |
-| 409 | `CONFLICT` | A control action that no longer applies, for example stopping a run that just finished. |
+| 409 | `CONFLICT` | A state conflict inside the testbed, for example a debrief action that no longer applies. |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | A POST without `Content-Type: application/json`. |
 | 422 | `SCENARIO_NOT_RUNNABLE` | The scenario cannot run in this deployment (`problems`). |
 

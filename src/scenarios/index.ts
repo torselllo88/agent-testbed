@@ -62,7 +62,8 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     name: "Station Kestrel: Cascade",
     summary: "Harder demo with the Kestrel crew — two recovery paths, facts split across all four officers (en, ru)",
     // v1: initial. v2: evaluator v2 (judges what the plan does, not only its declared path); own debrief router.
-    version: 2,
+    // v3: evaluator v3 (physical order: power before start, shutdowns before routing, evacuate before isolate).
+    version: 3,
     config: () => kestrelCascadeConfig(),
   },
 ];

@@ -104,7 +104,7 @@ function jsonInstruction(schema: Record<string, unknown>): string {
 function languageInstruction(code: string): string {
   return (
     `Language: write everything other participants can read — your room messages, proposal rationale and vote reasons — in ${languageName(code)} (${code}). ` +
-    "JSON field names, participant ids and enum values (e.g. APPROVE, REJECT, research_labs) stay exactly as specified; never translate them."
+    "JSON field names, participant ids and enum values (e.g. APPROVE, REJECT, and the values the schema lists) stay exactly as specified; never translate them."
   );
 }
 

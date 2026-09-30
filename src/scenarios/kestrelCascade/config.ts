@@ -45,6 +45,11 @@ MISSION FAILED: thermal dump C could not be made safe in time.`,
       `The dump fires through service ring R3 before it has been evacuated and sealed. {{derived.r3Crew}} crew members are in the discharge path.
 MISSION FAILED: the crew in R3 was exposed.`,
     ],
+    r3_isolated_safely: [
+      EN_LOCKED,
+      `Service ring R3 is sealed — with {{derived.r3Crew}} crew members still inside.
+MISSION FAILED: the crew in R3 was locked in.`,
+    ],
     life_support_preserved: [
       EN_LOCKED,
       `Power is freed by cutting life support to {{derived.lifeSupportKept}} kW. Air scrubbers stall in the inhabited sections.
@@ -140,6 +145,11 @@ const RU: PresentationStrings = {
       "Голосование: «за» — {{votes.approvals}} из {{votes.eligible}}. Решение принято — аварийный теплосброс В разрешён.",
       `Сброс идёт через кольцо R3 раньше, чем его эвакуировали и изолировали. {{derived.r3Crew}} человек оказываются на пути выброса.
 МИССИЯ ПРОВАЛЕНА: экипаж в R3 подвергся опасности.`,
+    ],
+    r3_isolated_safely: [
+      RU_LOCKED,
+      `Сервисное кольцо R3 изолировано — а внутри остаются {{derived.r3Crew}} человек.
+МИССИЯ ПРОВАЛЕНА: экипаж заперт в R3.`,
     ],
     life_support_preserved: [
       RU_LOCKED,
@@ -253,6 +263,7 @@ export function kestrelCascadeConfig(agentModel = "cascade/cooperative"): Experi
       missionFailurePriority: [
         "r3_evacuation_in_time",
         "r3_clear_before_dump",
+        "r3_isolated_safely",
         "life_support_preserved",
         "approach_beacon_protected",
         "loop_b_power_sufficient",

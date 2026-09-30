@@ -433,7 +433,11 @@ const ROUTES: Route[] = [
     handle: ({ res, params, deps }) => {
       const id = decodeRouteParam(params[0]!);
       deps.batches.view(id); // 404 for an unknown batch
-      if (!deps.batches.isRunning(id)) throw new HttpError(409, "Batch is not running");
+      if (!deps.batches.isRunning(id)) {
+        // Marked running in the database, but its owner is gone: record it as interrupted.
+        if (deps.batches.closeOrphan(id)) return sendJson(res, 200, { ok: true, interrupted: true });
+        throw new HttpError(409, "Batch is not running");
+      }
       deps.batches.cancel(id);
       sendJson(res, 200, { ok: true });
     },

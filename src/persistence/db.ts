@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -35,11 +36,12 @@ function applyMigrations(db: Db): void {
   // At most one row per builtin_id — enforced by ScenarioRepository.syncBuiltins (the only writer).
   ensureColumn(db, "scenarios", "builtin_id", "builtin_id TEXT");
   ensureColumn(db, "scenarios", "builtin_version", "builtin_version INTEGER");
-  // The process that runs a live experiment / batch: startup recovery only touches rows whose owner is gone,
-  // so a server started next to a running CLI batch on the same database leaves the CLI's runs alone.
-  ensureColumn(db, "experiments", "owner_pid", "owner_pid INTEGER");
-  ensureColumn(db, "batches", "owner_pid", "owner_pid INTEGER");
+  // Which process owns a live row (see processOwnerId); recovery only touches rows whose owner is gone.
+  db.exec(`CREATE TABLE IF NOT EXISTS process_leases (owner_id TEXT PRIMARY KEY, pid INTEGER, heartbeat_at TEXT NOT NULL)`);
+  ensureColumn(db, "experiments", "owner_id", "owner_id TEXT");
+  ensureColumn(db, "batches", "owner_id", "owner_id TEXT");
   db.exec(INTERACTION_SQL);
+  ensureColumn(db, "debrief_sessions", "owner_id", "owner_id TEXT");
   db.exec(ROOMS_SQL);
 }
 
@@ -73,18 +75,47 @@ export function openDb(dataDir: string = env.dataDir, synchronous: string = env.
 }
 
 /**
- * Whether ANOTHER live process on this machine owns a row (null = unknown owner, treated as gone).
- * This process's own live runs are excluded by the caller's in-memory maps; a row it owns but no
- * longer runs is dead.
+ * Process leases: which process owns a live run, batch or debrief session.
+ * Each process that writes such rows gets a random owner id (pid numbers are
+ * reused, aggressively so on Windows) and refreshes a heartbeat. Startup and
+ * periodic recovery only touch rows whose owner has gone silent — so a server
+ * started next to a running CLI batch on the same database leaves it alone,
+ * and a crashed owner's rows are recovered even if its pid lives on.
  */
-export function processAlive(pid: number | null): boolean {
-  if (pid === null || pid === process.pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM"; // exists, but not ours to signal
-  }
+const HEARTBEAT_MS = 15_000;
+export const LEASE_TTL_MS = 60_000;
+const ownerIds = new WeakMap<Db, string>();
+
+/** This process's owner id for rows it creates in this database (starts its heartbeat on first use). */
+export function processOwnerId(db: Db): string {
+  let id = ownerIds.get(db);
+  if (id) return id;
+  const ownerId = `proc_${randomUUID()}`;
+  ownerIds.set(db, ownerId);
+  const beat = () => {
+    try {
+      db.prepare(
+        `INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES (?, ?, ?)
+         ON CONFLICT(owner_id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at`
+      ).run(ownerId, process.pid, new Date().toISOString());
+    } catch {
+      // database closed — nothing left to own
+    }
+  };
+  beat();
+  setInterval(beat, HEARTBEAT_MS).unref();
+  return ownerId;
+}
+
+/**
+ * Whether ANOTHER live process owns a row (a fresh heartbeat). null / unknown
+ * owners count as gone. This process's own rows are handled by the caller's
+ * in-memory maps (live ones are skipped there), so here they count as gone.
+ */
+export function ownerAlive(db: Db, ownerId: string | null, now = Date.now()): boolean {
+  if (!ownerId || ownerId === ownerIds.get(db)) return false;
+  const row = db.prepare(`SELECT heartbeat_at FROM process_leases WHERE owner_id = ?`).get(ownerId) as { heartbeat_at: string } | undefined;
+  return Boolean(row) && now - Date.parse(row!.heartbeat_at) < LEASE_TTL_MS;
 }
 
 /** Test-only: a fresh in-memory DB with migrations applied. */

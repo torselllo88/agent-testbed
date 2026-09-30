@@ -452,7 +452,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       state.draft.presentation = { ...(state.draft.presentation ?? {}), narrator: value ? { displayName: "NARRATOR" } : null };
     } else if (path === "transport.type") {
       state.draft.transport = { type: value };
-    } else if (path.endsWith(".model.provider") || path === "scheduler.classifier.provider") {
+    } else if (path.endsWith(".provider") && getPath(state.draft, path.slice(0, -".provider".length))?.model !== undefined) {
+      // Any model reference (agent, router classifier, debrief router).
       setPath(state.draft, path, value);
       // Routing is OpenRouter-specific; the config rejects it for any other provider.
       if (value !== "openrouter") delete getPath(state.draft, path.slice(0, -".provider".length)).routing;

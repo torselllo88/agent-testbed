@@ -25,6 +25,16 @@ if (interruptedDebriefs > 0) console.log(`Marked ${interruptedDebriefs} debrief 
 const interruptedBindings = rooms.recoverInterrupted();
 if (interruptedBindings > 0) console.log(`Told ${interruptedBindings} external room binding(s) that their run was interrupted.`);
 
+// While the server runs, another process sharing the database (e.g. a CLI batch) may crash: once its lease
+// goes stale, close its runs, batches and debrief sessions as interrupted — without waiting for a restart.
+setInterval(() => {
+  const runs = service.recoverInterrupted().length;
+  const orphanBatches = batches.recoverInterrupted().length;
+  const sessions = interaction.recoverInterrupted();
+  if (runs || orphanBatches || sessions) rooms.recoverInterrupted();
+  if (runs || orphanBatches || sessions) console.log(`Recovered after a crashed process: ${runs} run(s), ${orphanBatches} batch(es), ${sessions} debrief session(s).`);
+}, 60_000).unref();
+
 // Built-in scenarios live in the library as read-only rows kept in sync with the code.
 const synced = new ScenarioRepository(db).syncBuiltins(BUILTIN_SCENARIOS);
 if (synced.added.length || synced.updated.length) {
@@ -42,6 +52,7 @@ server.listen(env.port, env.host, () => {
   console.log(`LLM providers available: ${configured.join(", ")}`);
   if (env.host === "0.0.0.0") {
     console.log("Bound to 0.0.0.0 — reachable from outside this machine, with no authentication. Make sure that's intended.");
+    console.log("Requests are only served for localhost / 127.0.0.1 unless you list other names in GUI_ALLOWED_HOSTS (DNS-rebinding guard).");
   }
 });
 

@@ -100,18 +100,30 @@ describe("rooms review fixes", () => {
 });
 
 describe("persistence and server review fixes", () => {
-  it("startup recovery leaves runs owned by another live process alone", () => {
+  it("recovery leaves rows of another live process alone and closes those of a silent one (pid reuse cannot fool it)", () => {
     const t = testbed();
     const repo = new ExperimentRepository(t.db);
-    const liveId = "run-of-a-live-cli";
-    const deadId = "run-of-a-dead-process";
-    for (const id of [liveId, deadId]) {
-      repo.create({ id, config: kestrelConfig(), configHash: "h", testbedVersion: { version: "test" } as never });
-    }
-    t.db.prepare(`UPDATE experiments SET owner_pid = ? WHERE id = ?`).run(process.ppid, liveId); // the test runner's parent: alive
-    t.db.prepare(`UPDATE experiments SET owner_pid = ? WHERE id = ?`).run(2_147_000_000, deadId); // no such process
-    expect(t.service.recoverInterrupted()).toEqual([deadId]);
-    expect(repo.getOrThrow(liveId).finishedAt).toBeNull();
+    const now = new Date().toISOString();
+    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
+    t.db.prepare(`INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES ('proc_live', ?, ?), ('proc_dead', ?, ?)`).run(process.pid, now, process.pid, stale);
+    const ids = { live: "run-of-a-live-cli", dead: "run-of-a-crashed-process", unknown: "run-without-owner" };
+    for (const id of Object.values(ids)) repo.create({ id, config: kestrelConfig(), configHash: "h", testbedVersion: { version: "test" } as never });
+    t.db.prepare(`UPDATE experiments SET owner_id = 'proc_live' WHERE id = ?`).run(ids.live);
+    t.db.prepare(`UPDATE experiments SET owner_id = 'proc_dead' WHERE id = ?`).run(ids.dead); // same pid, but a stale heartbeat
+    t.db.prepare(`UPDATE experiments SET owner_id = NULL WHERE id = ?`).run(ids.unknown); // rows from before owners existed
+    expect(t.service.recoverInterrupted().sort()).toEqual([ids.dead, ids.unknown].sort());
+    expect(repo.getOrThrow(ids.live).finishedAt).toBeNull();
+  });
+
+  it("a batch left running by a crashed owner can be closed as interrupted through cancel", async () => {
+    const t = testbed();
+    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
+    t.db.prepare(`INSERT INTO process_leases (owner_id, pid, heartbeat_at) VALUES ('proc_gone', 1, ?)`).run(stale);
+    const { BatchRepository } = await import("../../src/persistence/batchRepository.js");
+    const record = new BatchRepository(t.db).create("orphan", t.batches.resolve({ name: "orphan", base: { config: t.fast.config }, repetitions: 1 }));
+    t.db.prepare(`UPDATE batches SET owner_id = 'proc_gone' WHERE id = ?`).run(record.id);
+    expect(t.batches.closeOrphan(record.id)).toBe(true);
+    expect(new BatchRepository(t.db).get(record.id)?.status).toBe("interrupted");
   });
 
   it("the operator API refuses requests for a foreign Host (DNS rebinding)", async () => {
@@ -132,5 +144,43 @@ describe("persistence and server review fixes", () => {
     expect(await get(`localhost:${port}`)).toBe(200);
     expect(await get(`attacker.example:${port}`)).toBe(421);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+});
+
+describe("second review round", () => {
+  it("a mention of a shared identity names nobody: the question is routed by the text instead", async () => {
+    const t = testbed();
+    const shared = PARTICIPANTS.map((p) => ({ ...p, externalUserId: "@bot:example.org" }));
+    const binding = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!shared" }, participants: shared });
+    await t.service.settle();
+    await t.interaction.settle();
+    await t.rooms.inbound(binding.bindingId, {
+      externalEventId: "$q-shared",
+      sender: { externalUserId: "@alice:example.org", displayName: "Alice" },
+      body: "Viktor, why did it work?",
+      mentions: ["@bot:example.org"],
+    });
+    await t.interaction.settle();
+    const route = new InteractionRepository(t.db).listEvents(binding.experimentId).find((e) => e.type === "debrief_route_decided")!;
+    expect(route.payload).toMatchObject({ agentId: "power", source: "name" });
+  });
+
+  it("a scenario saved before debrief.router existed still routes with its scheduler's classifier; an explicit null does not", async () => {
+    const routerCalls = async (router: "absent" | null) => {
+      const t = testbed();
+      const config = structuredClone(t.fast.config) as ReturnType<typeof kestrelConfig>;
+      if (router === "absent") delete (config.humanInteraction!.debrief as { router?: unknown }).router;
+      else config.humanInteraction!.debrief.router = null;
+      const { runner, done } = t.service.start({ config });
+      await done;
+      await t.interaction.settle();
+      await t.interaction.receive(runner.id, { senderId: "u1", displayName: "Nikita", text: "What do you all think?", replyTo: null, mentions: [] });
+      await t.interaction.settle();
+      return new InteractionRepository(t.db).listEvents(runner.id).filter((e) => e.type === "debrief_llm_call" && e.payload.purpose === "debrief_router");
+    };
+    const legacy = await routerCalls("absent");
+    expect(legacy).toHaveLength(1);
+    expect(legacy[0]!.payload.requestedModel).toBe("router/next-in-order"); // Kestrel's scheduler classifier
+    expect(await routerCalls(null)).toHaveLength(0);
   });
 });

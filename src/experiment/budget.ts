@@ -45,6 +45,8 @@ export class BudgetTracker {
   // Held clock: time an extension holds the run (e.g. viewer pacing) — like a pause, excluded from active time.
   private heldAtMs: number | null = null;
   private heldTotalMs = 0;
+  /** Nesting depth: only the outermost hold starts and ends the held segment. */
+  private holdDepth = 0;
 
   constructor(
     private readonly limits: LimitsConfig,
@@ -67,12 +69,14 @@ export class BudgetTracker {
   }
 
   beginHold(): void {
+    this.holdDepth += 1;
     if (this.heldAtMs === null) this.heldAtMs = this.now();
   }
 
-  /** Ends the current held segment; returns its length. */
+  /** Ends the current held segment (when the outermost hold ends); returns its length. */
   endHold(): number {
-    if (this.heldAtMs === null) return 0;
+    if (this.holdDepth > 0) this.holdDepth -= 1;
+    if (this.holdDepth > 0 || this.heldAtMs === null) return 0;
     const ms = this.now() - this.heldAtMs;
     this.heldTotalMs += ms;
     this.heldAtMs = null;

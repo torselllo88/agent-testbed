@@ -196,6 +196,17 @@ export class BatchService {
   }
 
   /** Starts no further runs and stops the ones in flight (they end as STOPPED_BY_OPERATOR and are excluded from rates). */
+  /**
+   * A batch still marked running that no live process owns (its owner crashed):
+   * marks it interrupted. Returns false when it is not such an orphan.
+   */
+  closeOrphan(id: string): boolean {
+    if (this.active.has(id)) return false;
+    if (!this.batches.listRunningIds().includes(id)) return false;
+    this.batches.finish(id, "interrupted");
+    return true;
+  }
+
   cancel(id: string): void {
     const state = this.active.get(id);
     if (!state) throw new BatchValidationError(["Batch is not running"]);

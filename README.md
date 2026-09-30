@@ -275,8 +275,16 @@ at 40 kW. The 4-minute figure is deliberately not in the shared context, so it
 has to be communicated.
 
 The proposal is `{ recovery_path, actions[] (ordered), life_support_power_kw }`.
-Every unsafe plan stays expressible. The evaluator requires only one ordering:
-beacon before comms (and, for C, R3 evacuated and isolated before the dump).
+Every unsafe plan stays expressible. Order matters only where physics says so
+(evaluator v3):
+
+- the beacon goes to battery before comms go off;
+- power counts only from loads shut down *before* it is routed;
+- a system is powered before it is started or activated;
+- R3 is evacuated before it is isolated — on any path — and for C, before the
+  dump fires.
+
+Any other order is accepted.
 Each failure mode is its own check, with its own grounded ending: C chosen,
 B with 22 kW, beacon unprotected, life support diverted, no SCRAM. Stub
 variants `cascade/cooperative` (success) and `cascade/dump-c` (failure) let it
@@ -326,7 +334,9 @@ the runner: the outcome, metrics, proposal, votes and evaluation are frozen.
   explicit mention; a character's name in the text (either language,
   including Russian case forms: *Виктору*, *Саре*); the debrief's own router
   model (`debrief.router`, independent of the experiment's scheduler), if
-  confident; the scenario's
+  confident. Scenarios saved before the field existed still use their
+  scheduler's classifier, marked "legacy" in the routing decision; an explicit
+  `null` means no router. Then the scenario's
   `debrief.defaultAgentId` (Kestrel: Sarah), else the proposer.
 - **Perspective.** A character answers with its own model from the run
   (`debrief.maxOutputTokens` caps the answer). It gets its persona and role,
@@ -757,8 +767,9 @@ served model is recorded either way.
 **Durability.** SQLite runs in WAL mode with `synchronous = NORMAL` by default:
 safe across process crashes and restarts, with only an OS crash or power loss
 able to drop the latest commits. `SQLITE_SYNCHRONOUS=FULL` fsyncs every event.
-On startup, runs cut off by a restart are closed as `INTERRUPTED` with a final
-event, and batches cut off the same way are marked `interrupted`.
+On startup — and every minute while the server runs — runs cut off by a dead
+process are closed as `INTERRUPTED` with a final event, and batches cut off the
+same way are marked `interrupted`.
 
 ---
 
@@ -826,6 +837,13 @@ interface, `RunExtension` ([src/experiment/extensions.ts](src/experiment/extensi
   - hold the experiment clock (excluded from active time, like a pause);
   - see the stop signal;
   - read the run's add-on options (`headless`).
+
+  This is enforced at runtime, not only by the types:
+  - the run's config is frozen;
+  - `post` accepts only narrator messages, and caller metadata cannot
+    overwrite the message's own fields;
+  - `log` accepts only add-on events (`presentation_delay`, `extension_note`);
+  - runaway posting from a publish hook is cut off.
 
 Extensions cannot touch turns, proposals, votes, evaluation or the outcome. A
 failing extension is logged and changes nothing. The composition roots
@@ -967,6 +985,7 @@ See [.env.example](.env.example). All variables are optional.
 | `OPENROUTER_SITE_URL`, `OPENROUTER_SITE_NAME` | — | Optional attribution headers |
 | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | — | Enables Azure OpenAI (an agent's `model` is then the deployment name) |
 | `LLM_MAX_CONCURRENT_REQUESTS` | `8` | Simultaneous in-flight requests per real provider, process-wide |
+| `LLM_MAX_CONCURRENT_DEBRIEF_REQUESTS` | `2` | The debrief's own slots per real provider, separate from the experiments' slots. People asking questions never delay a running experiment; this adds to the provider's total concurrency |
 | `SQLITE_SYNCHRONOUS` | `NORMAL` | Trace durability: `NORMAL`, `FULL`, `EXTRA`, `OFF` |
 | `STUB_LATENCY_MS` | `300` | Stub latency in the web UI only, so stub runs can be watched live |
 | `DATA_DIR` | `./data` | Where the SQLite database lives |
@@ -1005,10 +1024,11 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
 
 - **Single process, in-memory scheduling.** Running experiments live in the
   server process; a restart ends them (they are recorded as `INTERRUPTED`).
-  There is no distributed runtime. Each run and batch records the pid of the
-  process that owns it. Startup recovery touches only rows whose owner is
-  gone, so a server started next to a running CLI batch on the same database
-  leaves that batch alone. This works on the same machine only.
+  There is no distributed runtime. Each run, batch and debrief records the
+  process that owns it, and every process renews a lease in the database every
+  15 s. Recovery touches only rows whose owner's lease has expired (60 s), so a
+  server started next to a running CLI batch on the same database leaves that
+  batch alone, even if the operating system has reused its pid.
 - **External rooms (v1)** assume the room already exists and the identities are in it. Delivery is by long-polling rather than SSE or push. There are no typing indicators, and the bearer token is not encryption (see the [contract](docs/external-room-api.md)).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs

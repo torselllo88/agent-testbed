@@ -75,3 +75,36 @@ describe("experiment core boundary", () => {
     expect(errors).toEqual(['extension "broken" failed in onRoomOpened: boom at open', 'extension "broken" failed in onRunEnded: boom at end']);
   });
 });
+
+describe("generic code stays scenario- and vendor-neutral", () => {
+  const GENERIC_DIRS = ["experiment", "scheduling", "consensus", "transport", "evaluation", "llm", "persistence", "batch", "presentation", "interaction", "rooms", "server", "gui/public"];
+  const files = GENERIC_DIRS.flatMap((d) => sourceFilesAny(path.resolve("src", d)));
+
+  it("no scenario vocabulary or vendor names in code (comments excluded)", () => {
+    const vocabulary = /\b(research_labs|life_support|reactor|coolant|kestrel|space-station|crew|matrix|chums)\b/i;
+    const offenders = files.flatMap((file) =>
+      stripComments(fs.readFileSync(file, "utf8"))
+        .split("\n")
+        .map((line, i) => ({ file, line: i + 1, text: line }))
+        .filter((l) => vocabulary.test(l.text))
+        .map((l) => `${path.relative(process.cwd(), l.file)}:${l.line}: ${l.text.trim()}`)
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("generic code imports scenarios only through the registry (src/scenarios/index)", () => {
+    const offenders = files.filter((file) => /from\s+["'][./]*\/scenarios\/(?!index\.js)/.test(fs.readFileSync(file, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});
+
+function sourceFilesAny(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    return e.isDirectory() ? sourceFilesAny(full) : /\.(ts|js)$/.test(e.name) ? [full] : [];
+  });
+}
+
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+}

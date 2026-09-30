@@ -61,6 +61,12 @@ export const env = {
    * concurrency: one experiment's voting step alone issues one request per agent.
    */
   llmMaxConcurrentRequests: parseIntEnv(process.env.LLM_MAX_CONCURRENT_REQUESTS, 8),
+  /**
+   * The post-run debrief's own request slots per real provider — separate from
+   * the experiments' slots, so people asking questions never delay a running
+   * experiment (and so add to the provider's total concurrency).
+   */
+  llmMaxConcurrentDebriefRequests: parseIntEnv(process.env.LLM_MAX_CONCURRENT_DEBRIEF_REQUESTS, 2),
   /** PORT is what most PaaS platforms inject; GUI_PORT is the local-dev override. */
   port: parseIntEnv(process.env.PORT ?? process.env.GUI_PORT, 3939),
   /** Loopback by default — a plain `npm start` should never be reachable from the network. */

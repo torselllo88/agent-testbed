@@ -104,6 +104,11 @@ export type OperatorCommand =
   | { type: "force_decision" }
   | { type: "stop" };
 
+/** The only events an extension may add to the trace — never the experiment's own (votes, evaluation, ...). */
+const EXTENSION_EVENT_TYPES: ReadonlySet<EventType> = new Set([EventType.PRESENTATION_DELAY, EventType.EXTENSION_NOTE]);
+/** Narration posted from a publish hook nests one level; anything deeper is a runaway extension. */
+const MAX_PUBLISH_DEPTH = 4;
+
 /** Commands that change what happens in the run (not just when) — they mark the run as intervened. */
 const FLOW_ALTERING: ReadonlySet<OperatorCommand["type"]> = new Set(["select_next", "force_decision", "stop"]);
 
@@ -184,6 +189,7 @@ export class ExperimentRunner {
   private proposalAttempt = 1;
   /** Agent-visible messages published so far (the experiment transcript). */
   private transcriptLength = 0;
+  private publishDepth = 0;
   private readonly environment: RunEnvironment;
   private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
@@ -208,7 +214,8 @@ export class ExperimentRunner {
     const scenarioConfig = parseExperimentConfig(rawConfig);
     const overrides = options.overrides ? RunOverridesSchema.parse(options.overrides) : undefined;
     // What the run snapshots and executes; the saved scenario itself is never modified.
-    this.config = applyRunOverrides(scenarioConfig, overrides);
+    // Frozen for the whole run: nothing (an extension included) can change what agents are given or how the run is budgeted.
+    this.config = deepFreeze(applyRunOverrides(scenarioConfig, overrides));
     this.id = options.id ?? randomUUID();
     this.strings = protocolStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
@@ -229,8 +236,13 @@ export class ExperimentRunner {
       experimentId: this.id,
       config: this.config,
       options: { headless },
-      post: (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => this.publish(sender, text, meta),
+      // Checked at runtime, not only by the types: an extension may post narration only, never as an agent or the moderator.
+      post: async (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => {
+        if (sender?.kind !== "narrator" || typeof sender.name !== "string") throw new Error("extensions may only post as the narrator");
+        return this.publish({ kind: "narrator", name: sender.name }, String(text), meta);
+      },
       log: (type, payload) => {
+        if (!EXTENSION_EVENT_TYPES.has(type)) throw new Error(`extensions may only log add-on events (${[...EXTENSION_EVENT_TYPES].join(", ")}), not "${type}"`);
         this.log.append(type, payload);
       },
       holdClock: async (fn) => {
@@ -815,15 +827,28 @@ export class ExperimentRunner {
    * agentHistory); narration has none — `index` is null in its event.
    */
   private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
+    // An extension that posts from beforePublish without filtering would recurse forever.
+    if (this.publishDepth >= MAX_PUBLISH_DEPTH) throw new Error("publish nested too deeply (an extension posting from its own publish hook?)");
+    this.publishDepth += 1;
+    try {
+      return await this.publishOnce(sender, text, extra);
+    } finally {
+      this.publishDepth -= 1;
+    }
+  }
+
+  private async publishOnce(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown>): Promise<RoomMessage> {
     const message = Object.freeze({ sender: Object.freeze({ ...sender }), text });
     for (const ext of this.extensions) {
       if (ext.beforePublish) await this.guarded(ext, "beforePublish", () => ext.beforePublish!(message, this.extensionContext));
     }
-    const posted = await this.transport.publish({ sender, text });
+    // The room keeps its own copy of the sender: no caller can change a message after it was posted.
+    const posted = await this.transport.publish({ sender: { ...sender }, text });
     const index = sender.kind === "narrator" ? null : ++this.transcriptLength;
     this.log.append(
       EventType.MESSAGE_POSTED,
-      { index, messageId: posted.id, sender: posted.sender, text: posted.text, ...extra },
+      // Caller metadata first: it can add fields, never overwrite the message's own.
+      { ...extra, index, messageId: posted.id, sender: posted.sender, text: posted.text },
       sender.kind === "agent" ? sender.agentId : null
     );
     const result = index === null ? posted : { ...posted, index };

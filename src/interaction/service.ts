@@ -380,7 +380,8 @@ function settingsOf(config: ExperimentConfig): HumanInteractionConfig {
 /** Derived counts for the experiment page — never part of experiment metrics. */
 function summarize(events: InteractionEvent[]) {
   const spectators = events.filter((e) => e.type === "human_message" && e.payload.disposition === "spectator");
-  const duringMission = spectators.filter((e) => e.payload.during === "active");
+  // "mission" is what events logged before the rename say.
+  const duringMission = spectators.filter((e) => e.payload.during === "active" || e.payload.during === "mission");
   return {
     spectatorMessages: spectators.length,
     spectatorMessagesDuringRun: duringMission.length,

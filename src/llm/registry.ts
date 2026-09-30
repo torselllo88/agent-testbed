@@ -18,6 +18,13 @@ export interface ProviderRegistryOptions {
   secrets?: string[];
   /** Per real provider, across the whole process. Default: no limit (tests); the app passes LLM_MAX_CONCURRENT_REQUESTS. */
   maxConcurrentRequests?: number;
+  /**
+   * Separate request pools for work that must never queue ahead of (or behind)
+   * experiments — e.g. the post-run debrief, whose calls would otherwise count
+   * as a running experiment's queue time. Pool name -> slots per real provider
+   * (default 2). Only used when maxConcurrentRequests is set.
+   */
+  poolLimits?: Record<string, number>;
 }
 
 /**
@@ -29,6 +36,8 @@ export class ProviderRegistry {
   private readonly providers = new Map<ProviderId, LlmProvider>();
   private readonly secrets: string[];
   private readonly gates: Map<ProviderId, ConcurrencyGate>;
+  private readonly poolGates: Map<string, ConcurrencyGate>;
+  private readonly poolLimits: Record<string, number>;
   readonly maxConcurrentRequests: number | null;
 
   constructor(
@@ -36,8 +45,11 @@ export class ProviderRegistry {
     readonly stub: StubProvider,
     options: ProviderRegistryOptions = {},
     /** Internal: lets withStub() share the same gates, so the limit stays process-wide. */
-    sharedGates?: Map<ProviderId, ConcurrencyGate>
+    sharedGates?: Map<ProviderId, ConcurrencyGate>,
+    sharedPoolGates?: Map<string, ConcurrencyGate>
   ) {
+    this.poolGates = sharedPoolGates ?? new Map();
+    this.poolLimits = options.poolLimits ?? {};
     for (const provider of providers) this.providers.set(provider.id, provider);
     this.providers.set("stub", stub);
     this.secrets = (options.secrets ?? []).filter((s) => s.length >= 8);
@@ -54,7 +66,13 @@ export class ProviderRegistry {
   /** Same real providers, secrets and request gates, with a different stub instance (see StubProvider.withLatency). */
   withStub(stub: StubProvider): ProviderRegistry {
     const real = [...this.providers.values()].filter((p) => p.id !== "stub");
-    return new ProviderRegistry(real, stub, { secrets: this.secrets, maxConcurrentRequests: this.maxConcurrentRequests ?? undefined }, this.gates);
+    return new ProviderRegistry(
+      real,
+      stub,
+      { secrets: this.secrets, maxConcurrentRequests: this.maxConcurrentRequests ?? undefined, poolLimits: this.poolLimits },
+      this.gates,
+      this.poolGates
+    );
   }
 
   get(id: ProviderId): LlmProvider {
@@ -69,9 +87,20 @@ export class ProviderRegistry {
     return this.providers.has(id);
   }
 
-  /** The process-wide request gate for a provider, or null when it is not gated (stub, or no limit configured). */
-  gate(id: ProviderId): ConcurrencyGate | null {
-    return this.gates.get(id) ?? null;
+  /**
+   * The process-wide request gate for a provider, or null when it is not gated
+   * (stub, or no limit configured). With a pool, the separate gate of that pool.
+   */
+  gate(id: ProviderId, pool?: string): ConcurrencyGate | null {
+    if (!pool) return this.gates.get(id) ?? null;
+    if (!this.gates.has(id)) return null;
+    const key = `${pool}:${id}`;
+    let gate = this.poolGates.get(key);
+    if (!gate) {
+      gate = new ConcurrencyGate(this.poolLimits[pool] ?? 2);
+      this.poolGates.set(key, gate);
+    }
+    return gate;
   }
 
   status(): ProviderStatus[] {
@@ -119,5 +148,9 @@ export function createProviderRegistryFromEnv(stub: StubProvider = new StubProvi
     secrets.push(azureOpenAi.apiKey);
   }
 
-  return new ProviderRegistry(providers, stub, { secrets, maxConcurrentRequests: env.llmMaxConcurrentRequests });
+  return new ProviderRegistry(providers, stub, {
+    secrets,
+    maxConcurrentRequests: env.llmMaxConcurrentRequests,
+    poolLimits: { debrief: env.llmMaxConcurrentDebriefRequests },
+  });
 }

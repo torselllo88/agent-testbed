@@ -1,4 +1,4 @@
-import type { Db } from "./db.js";
+import { ownerAlive, processOwnerId, type Db } from "./db.js";
 
 export type DebriefStatus = "OPEN" | "CLOSED" | "INTERRUPTED";
 
@@ -93,8 +93,8 @@ export class InteractionRepository {
     const row = this.db.prepare(`SELECT MAX(number) AS n FROM debrief_sessions WHERE experiment_id = ?`).get(input.experimentId) as { n: number | null };
     const number = (row.n ?? 0) + 1;
     this.db
-      .prepare(`INSERT INTO debrief_sessions (${SESSION_COLUMNS}) VALUES (?, ?, ?, 'OPEN', ?, ?, NULL, NULL, ?)`)
-      .run(input.id, input.experimentId, number, input.openedBy, input.openedAt, JSON.stringify(EMPTY_DEBRIEF_USAGE));
+      .prepare(`INSERT INTO debrief_sessions (${SESSION_COLUMNS}, owner_id) VALUES (?, ?, ?, 'OPEN', ?, ?, NULL, NULL, ?, ?)`)
+      .run(input.id, input.experimentId, number, input.openedBy, input.openedAt, JSON.stringify(EMPTY_DEBRIEF_USAGE), processOwnerId(this.db));
     return this.getSession(input.id)!;
   }
 
@@ -108,9 +108,10 @@ export class InteractionRepository {
     return rows.map(toSession);
   }
 
+  /** Open sessions whose owning process is gone (another live server's sessions are left alone). */
   openSessions(): DebriefSessionRecord[] {
-    const rows = this.db.prepare(`SELECT ${SESSION_COLUMNS} FROM debrief_sessions WHERE status = 'OPEN'`).all() as unknown as SessionRow[];
-    return rows.map(toSession);
+    const rows = this.db.prepare(`SELECT ${SESSION_COLUMNS}, owner_id FROM debrief_sessions WHERE status = 'OPEN'`).all() as unknown as Array<SessionRow & { owner_id: string | null }>;
+    return rows.filter((r) => !ownerAlive(this.db, r.owner_id)).map(toSession);
   }
 
   updateUsage(id: string, usage: DebriefUsage): void {

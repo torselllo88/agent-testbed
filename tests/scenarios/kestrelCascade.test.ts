@@ -83,8 +83,23 @@ describe("Kestrel Cascade evaluator", () => {
     });
     const result = evaluateCascade(sneaky, params);
     expect(result.outcome).toBe("MISSION_FAILURE");
-    expect(result.violated).toEqual(["loop_b_power_sufficient", "dump_c_power_sufficient", "r3_evacuation_in_time", "r3_clear_before_dump"]);
+    // Loop B is powered first and gets its 30 kW; dump C then needs 48 in total with 30 available.
+    expect(result.violated).toEqual(["dump_c_power_sufficient", "r3_evacuation_in_time", "r3_clear_before_dump"]);
     expect(result.derived).toMatchObject({ availableRecoveryPowerKw: 30, requiredRecoveryPowerKw: 48 });
+  });
+
+  it("physical order matters where physics says so: power from earlier shutdowns only, power before start, evacuate before isolate", () => {
+    const violated = (actions: CascadeProposal["actions"]) => evaluateCascade(plan({ actions }), params).violated;
+    // R3 sealed with the crew inside (loop B path — no dump involved).
+    expect(violated(["switch_beacon_to_battery", "shutdown_research_labs", "shutdown_external_communications", "isolate_r3", "route_power_to_loop_b", "start_loop_b", "scram_reactor"])).toEqual(["r3_isolated_safely"]);
+    // Evacuating first makes the same isolation fine.
+    expect(violated(["switch_beacon_to_battery", "shutdown_research_labs", "shutdown_external_communications", "evacuate_r3", "isolate_r3", "route_power_to_loop_b", "start_loop_b", "scram_reactor"])).toEqual([]);
+    // Loop B started before it is powered, and power routed before the loads are freed.
+    const early = evaluateCascade(plan({ actions: ["start_loop_b", "route_power_to_loop_b", "scram_reactor", "switch_beacon_to_battery", "shutdown_research_labs", "shutdown_external_communications"] }), params);
+    expect(early.violated).toEqual(["loop_b_started", "loop_b_power_sufficient"]);
+    expect(early.checks.loop_b_power_sufficient!.detail).toBe("10 kW available when power is routed to loop B, 30 kW required");
+    // Comms shut down only after routing: 22 kW at that moment.
+    expect(violated(["switch_beacon_to_battery", "shutdown_research_labs", "route_power_to_loop_b", "shutdown_external_communications", "start_loop_b", "scram_reactor"])).toEqual(["loop_b_power_sufficient"]);
   });
 
   it("the proposal schema is structure only — every unsafe plan stays expressible", () => {

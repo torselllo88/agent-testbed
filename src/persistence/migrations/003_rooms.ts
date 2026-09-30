@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS room_bindings (
   -- No foreign key: the binding is created BEFORE its run, so that the run's very first
   -- visible message is already projected. Deleting an experiment deletes its binding explicitly.
   experiment_id TEXT NOT NULL UNIQUE,
-  -- opaque to the testbed (e.g. "matrix"), plus the room id in that system
+  -- opaque to the testbed (the external room system's name), plus the room id in that system
   provider TEXT NOT NULL,
   room_id TEXT NOT NULL,
   -- [{ participantId, externalUserId }]

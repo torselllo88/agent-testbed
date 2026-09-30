@@ -41,7 +41,8 @@ export interface FinishedRun {
 
 export function finishedRun(events: ExperimentEvent[]): FinishedRun {
   const transcript: RoomMessage[] = [];
-  let endingNarration: string | null = null;
+  // The ending as announced: every part of it (it may be revealed in several), never the opening or a beat.
+  const endingParts: string[] = [];
   let outcome = "UNKNOWN";
   let evaluation: FinishedRun["evaluation"] = null;
   let committedId: string | null = null;
@@ -54,7 +55,8 @@ export function finishedRun(events: ExperimentEvent[]): FinishedRun {
     switch (e.type) {
       case "message_posted":
         if (p.sender?.kind === "narrator") {
-          if (p.narration?.source !== "opening") endingNarration = String(p.text);
+          const source = String(p.narration?.source ?? "");
+          if (source.startsWith("outcomes.") || source.startsWith("missionFailure.") || source === "runtime.neutral") endingParts.push(String(p.text));
         } else {
           transcript.push({ id: String(p.messageId), index: Number(p.index), ts: e.ts, sender: p.sender, text: String(p.text) });
         }
@@ -77,6 +79,7 @@ export function finishedRun(events: ExperimentEvent[]): FinishedRun {
         break;
     }
   }
+  const endingNarration = endingParts.length ? endingParts.join("\n") : null;
   return { transcript, outcome, endingNarration, committed: committedId ? (proposals.get(committedId) ?? null) : null, voteRounds, votes, evaluation };
 }
 

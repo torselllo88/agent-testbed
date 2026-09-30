@@ -54,7 +54,11 @@ try {
 
 process.on("SIGINT", () => {
   console.error("\nCancelling batch…");
-  batches.cancel(batchId);
+  try {
+    batches.cancel(batchId);
+  } catch {
+    // already finished — the results are being written
+  }
 });
 
 const total = batches.view(batchId).progress.total;

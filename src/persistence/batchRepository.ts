@@ -1,6 +1,6 @@
 import type { BatchCondition, BatchSpec } from "../batch/spec.js";
 import type { ExperimentConfig } from "../experiment/config.js";
-import { processAlive, type Db } from "./db.js";
+import { ownerAlive, processOwnerId, type Db } from "./db.js";
 
 export type BatchStatus = "running" | "completed" | "cancelled" | "interrupted";
 
@@ -48,8 +48,8 @@ export class BatchRepository {
 
   create(id: string, resolved: ResolvedBatch): BatchRecord {
     this.db
-      .prepare(`INSERT INTO batches (id, name, spec_json, status, created_at, owner_pid) VALUES (?, ?, ?, 'running', ?, ?)`)
-      .run(id, resolved.spec.name, JSON.stringify(resolved), new Date().toISOString(), process.pid);
+      .prepare(`INSERT INTO batches (id, name, spec_json, status, created_at, owner_id) VALUES (?, ?, ?, 'running', ?, ?)`)
+      .run(id, resolved.spec.name, JSON.stringify(resolved), new Date().toISOString(), processOwnerId(this.db));
     return this.getOrThrow(id);
   }
 
@@ -75,7 +75,7 @@ export class BatchRepository {
 
   /** Batches still marked running whose owning process is gone. */
   listRunningIds(): string[] {
-    const rows = this.db.prepare(`SELECT id, owner_pid FROM batches WHERE status = 'running'`).all() as Array<{ id: string; owner_pid: number | null }>;
-    return rows.filter((r) => !processAlive(r.owner_pid)).map((r) => r.id);
+    const rows = this.db.prepare(`SELECT id, owner_id FROM batches WHERE status = 'running'`).all() as Array<{ id: string; owner_id: string | null }>;
+    return rows.filter((r) => !ownerAlive(this.db, r.owner_id)).map((r) => r.id);
   }
 }

@@ -81,7 +81,9 @@ export class LlmCaller {
     private readonly budget: CallBudget,
     private readonly runtime: RuntimeConfig,
     /** Aborted by the runner on operator stop; its reason is a TerminateRun. */
-    private readonly runSignal: AbortSignal
+    private readonly runSignal: AbortSignal,
+    /** A separate provider request pool (see ProviderRegistryOptions.poolLimits); experiments use the default one. */
+    private readonly pool?: string
   ) {}
 
   async call<T>(spec: LlmCallSpec<T>): Promise<LlmCallResult<T>> {
@@ -253,7 +255,7 @@ export class LlmCaller {
 
   /** Waits for a request slot; a stop or the experiment time limit ends the wait (queued time counts as experiment time). */
   private async acquireSlot(providerId: ModelRef["provider"]): Promise<() => void> {
-    const gate = this.providers.gate(providerId);
+    const gate = this.providers.gate(providerId, this.pool);
     if (!gate) return () => {};
     try {
       const remaining = this.budget.remainingMs();

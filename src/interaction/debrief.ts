@@ -175,6 +175,9 @@ export class DebriefSession {
         this.current = { question, agentId: null };
         try {
           await this.process(question);
+        } catch (err) {
+          // One failed question never strands the ones behind it.
+          console.error(`debrief session ${this.record.id}: question ${question.messageId} failed:`, err);
         } finally {
           this.current = null;
           this.ctx.saveUsage(this.usage);
@@ -262,7 +265,9 @@ export class DebriefSession {
     if (direct) return direct;
 
     const fallback = this.settings.defaultAgentId ?? config.decision.proposerId;
-    const routerModel = this.settings.router;
+    // No router field at all = a config from before it existed: route as it did then (the scheduler's classifier).
+    const legacy = this.settings.router === undefined;
+    const routerModel = legacy ? (config.scheduler.type === "hybrid" ? config.scheduler.classifier : null) : this.settings.router;
     if (!routerModel) return { agentId: fallback, source: "default", detail: "no addressee; no router model" };
     try {
       const prompt = renderDebriefRouterPrompt(config, this.ctx.history(), { askerName: question.displayName, text: question.text });
@@ -279,7 +284,7 @@ export class DebriefSession {
         context: { purpose: "debrief_router", question: question.text, candidates: config.agents.map((a) => a.id) },
       });
       if (result.ok && result.value.confident && config.agents.some((a) => a.id === result.value.agentId)) {
-        return { agentId: result.value.agentId!, source: "router", detail: result.value.reason };
+        return { agentId: result.value.agentId!, source: "router", detail: legacy ? `${result.value.reason} (legacy: scheduler classifier)` : result.value.reason };
       }
       const why = result.ok ? (result.value.confident ? `unknown agent "${result.value.agentId}"` : "router not confident") : "unparseable router answer";
       return { agentId: fallback, source: "default", detail: why };
@@ -295,7 +300,9 @@ export class DebriefSession {
       { append: (_type, payload, agentId) => this.ctx.log("debrief_llm_call", { questionId, ...payload }, agentId) },
       this.budget,
       this.ctx.config.runtime,
-      this.abort.signal
+      this.abort.signal,
+      // Its own request slots: a debrief never takes (or waits for) a running experiment's slots.
+      "debrief"
     );
   }
 }

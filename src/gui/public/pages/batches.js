@@ -10,7 +10,7 @@ const PATH_PRESETS = [
   ["limits.agentTokenLimit", "[20000, null]"],
   ["agentVisibility.discussionBudget", "[false, true]"],
   ["decision.maxProposalAttempts", "[1, 2]"],
-  ["$agents", '[["operations", "engineering", "power", "life_support"], ["operations", "engineering", "power"]]'],
+  ["$agents", '[["agent_a", "agent_b", "agent_c"], ["agent_a", "agent_b"]]'], // replace with the base scenario's agent ids
 ];
 
 export function batchStatusBadge(status) {

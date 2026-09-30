@@ -382,7 +382,10 @@ export class ExternalRoomService implements RoomOutlet {
     this.rooms.recordInbound(bindingId, input.externalEventId, messageId, { status: "accepted", messageId, pending: true }, new Date(this.now()).toISOString());
 
     const replyTo = input.replyToExternalEventId ? this.internalIdOf(bindingId, input.replyToExternalEventId) : null;
-    const mentions = (input.mentions ?? []).flatMap((u) => binding.participants.filter((p) => p.externalUserId === u).map((p) => p.participantId));
+    const mentions = (input.mentions ?? []).flatMap((u) => {
+      const agents = binding.participants.filter((p) => p.externalUserId === u && p.participantId !== SYSTEM_PARTICIPANT_ID);
+      return agents.length === 1 ? [agents[0]!.participantId] : []; // a shared identity names nobody in particular
+    });
     let received: Awaited<ReturnType<HumanInteractionService["receive"]>>;
     try {
       received = await this.deps.interaction.receive(binding.experimentId, {

@@ -341,8 +341,10 @@ export const DebriefConfigSchema = z.object({
    * Model that picks who answers a question addressed to nobody in particular
    * (after replies, mentions and names). null = no model routing: the default
    * character answers. Independent of the experiment's own scheduler.
+   * Absent (configs saved before this field existed): the scheduler's
+   * classifier is used, as it was then — marked "legacy" in each routing decision.
    */
-  router: ModelRefSchema.nullable().default(null),
+  router: ModelRefSchema.nullable().optional(),
   /** Who answers a question addressed to nobody in particular when routing is inconclusive. Default: the proposer. */
   defaultAgentId: z.string().optional(),
   /** Per-answer output cap; answers use each character's own mission model. */

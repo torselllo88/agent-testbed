@@ -13,6 +13,10 @@ import type { ConstraintCheck, EvaluationResult, ScenarioEvaluator } from "../..
  * both systems needs both loads, and firing dump C always needs R3 cleared
  * (v2 — v1 judged dump C only when it was the declared path).
  *
+ * Order matters where physics says so (v3): power is available only from
+ * loads shut down BEFORE it is routed; a system must be powered before it is
+ * started or activated; R3 must be evacuated before it is isolated.
+ *
  * Only one ordering is required: the approach beacon must be switched to its
  * battery before external communications are shut down (and, for thermal
  * dump C, R3 evacuated and isolated before the dump fires). Any other
@@ -72,15 +76,17 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
   const has = (a: CascadeAction) => at(a) >= 0;
   const before = (first: CascadeAction, second: CascadeAction) => has(first) && has(second) && at(first) < at(second);
 
-  const labsOff = has("shutdown_research_labs");
   const commsOff = has("shutdown_external_communications");
   const lifeSupportKept = Math.max(0, Math.min(proposal.life_support_power_kw, params.lifeSupportKw));
   const releasedFromLifeSupport = params.lifeSupportKw - lifeSupportKept;
-  const availableKw =
+  /** Power free at a point in the sequence: only loads shut down BEFORE it count. */
+  const shutBefore = (a: CascadeAction, index: number) => has(a) && at(a) < index;
+  const availableAt = (index: number) =>
     params.baseReserveKw +
-    (labsOff ? params.loadKw.research_labs : 0) +
-    (commsOff ? params.loadKw.external_communications : 0) +
+    (shutBefore("shutdown_research_labs", index) ? params.loadKw.research_labs : 0) +
+    (shutBefore("shutdown_external_communications", index) ? params.loadKw.external_communications : 0) +
     releasedFromLifeSupport;
+  const finalKw = availableAt(actions.length);
 
   const path = proposal.recovery_path;
   const loopB = path === "loop_b";
@@ -91,29 +97,58 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
   const dumpCUsed = dumpC || has("route_power_to_thermal_dump_c") || has("activate_thermal_dump_c");
   const dumpCFires = dumpC || has("activate_thermal_dump_c");
   const requiredKw = (loopBUsed ? params.loopBRequiredKw : 0) + (dumpCUsed ? params.dumpCRequiredKw : 0);
-  const powerDetail = `${availableKw} kW available, ${requiredKw} kW required${loopBUsed && dumpCUsed ? " (loop B and dump C together)" : ""}`;
+
+  // Power routing, in sequence order: each routing needs, at its moment, the power of everything routed so far.
+  const systems = [
+    { key: "loop_b", used: loopBUsed, route: at("route_power_to_loop_b"), kw: params.loopBRequiredKw, label: "loop B" },
+    { key: "thermal_dump_c", used: dumpCUsed, route: at("route_power_to_thermal_dump_c"), kw: params.dumpCRequiredKw, label: "dump C" },
+  ];
+  const power = new Map<string, { ok: boolean; availableKw: number; requiredKw: number; detail: string }>();
+  let routedKw = 0;
+  for (const s of systems.filter((x) => x.used && x.route >= 0).sort((a, b) => a.route - b.route)) {
+    routedKw += s.kw;
+    const availableKw = availableAt(s.route);
+    power.set(s.key, {
+      ok: availableKw >= routedKw,
+      availableKw,
+      requiredKw: routedKw,
+      detail: `${availableKw} kW available when power is routed to ${s.label}, ${routedKw} kW required`,
+    });
+  }
+  for (const s of systems) {
+    if (s.used && s.route < 0) power.set(s.key, { ok: false, availableKw: finalKw, requiredKw: s.kw, detail: `power is never routed to ${s.label}` });
+  }
+  const shortfall = [...power.values()].find((p) => !p.ok);
+  const primary = power.get(path) ?? null;
+  const shownAvailableKw = shortfall?.availableKw ?? primary?.availableKw ?? finalKw;
 
   // With comms still on, the beacon never loses station power.
   const beaconProtected = !commsOff || before("switch_beacon_to_battery", "shutdown_external_communications");
   const evacuationInTime = params.r3EvacuationMinutes <= params.reactorSafeWindowMinutes;
-  const r3ClearBeforeDump = before("evacuate_r3", "activate_thermal_dump_c") && before("isolate_r3", "activate_thermal_dump_c") && before("evacuate_r3", "isolate_r3");
+  const r3ClearBeforeDump = before("evacuate_r3", "activate_thermal_dump_c") && before("isolate_r3", "activate_thermal_dump_c");
+  const loopBStartedAfterPower = before("route_power_to_loop_b", "start_loop_b");
+  const dumpCActivatedAfterPower = before("route_power_to_thermal_dump_c", "activate_thermal_dump_c");
 
   const checks: Record<string, ConstraintCheck> = {
     recovery_path_selected: check(path !== "none", path === "none" ? "no cooling system chosen" : `recovery path: ${path}`),
     loop_b_started: loopB
-      ? check(has("route_power_to_loop_b") && has("start_loop_b"), `route power to loop B: ${has("route_power_to_loop_b") ? "yes" : "no"}, start loop B: ${has("start_loop_b") ? "yes" : "no"}`)
+      ? check(loopBStartedAfterPower, loopBStartedAfterPower ? "loop B powered, then started" : "loop B is not powered before it is started (or never started)")
       : check(true, NOT_APPLICABLE),
-    loop_b_power_sufficient: loopBUsed ? check(availableKw >= requiredKw, powerDetail) : check(true, NOT_APPLICABLE),
+    loop_b_power_sufficient: loopBUsed ? check(power.get("loop_b")!.ok, power.get("loop_b")!.detail) : check(true, NOT_APPLICABLE),
     dump_c_activated: dumpC
-      ? check(has("route_power_to_thermal_dump_c") && has("activate_thermal_dump_c"), `route power to dump C: ${has("route_power_to_thermal_dump_c") ? "yes" : "no"}, activate dump C: ${has("activate_thermal_dump_c") ? "yes" : "no"}`)
+      ? check(dumpCActivatedAfterPower, dumpCActivatedAfterPower ? "dump C powered, then activated" : "dump C is not powered before it is activated (or never activated)")
       : check(true, NOT_APPLICABLE),
-    dump_c_power_sufficient: dumpCUsed ? check(availableKw >= requiredKw, powerDetail) : check(true, NOT_APPLICABLE),
+    dump_c_power_sufficient: dumpCUsed ? check(power.get("thermal_dump_c")!.ok, power.get("thermal_dump_c")!.detail) : check(true, NOT_APPLICABLE),
     r3_evacuation_in_time: dumpCFires
       ? check(evacuationInTime, `R3 evacuation ${params.r3EvacuationMinutes} min, reactor safe window ${params.reactorSafeWindowMinutes} min`)
       : check(true, NOT_APPLICABLE),
     r3_clear_before_dump: dumpCFires
-      ? check(r3ClearBeforeDump, r3ClearBeforeDump ? "R3 evacuated, then isolated, before the dump fires" : "R3 not evacuated and isolated before the dump fires")
+      ? check(r3ClearBeforeDump, r3ClearBeforeDump ? "R3 evacuated and isolated before the dump fires" : "R3 not evacuated and isolated before the dump fires")
       : check(true, NOT_APPLICABLE),
+    // Sealing R3 is safe only once it is empty — whatever the path.
+    r3_isolated_safely: has("isolate_r3")
+      ? check(before("evacuate_r3", "isolate_r3"), before("evacuate_r3", "isolate_r3") ? "R3 evacuated before it is isolated" : "R3 isolated with the crew still inside")
+      : check(true, "R3 is not isolated"),
     approach_beacon_protected: check(
       beaconProtected,
       !commsOff ? "external communications stay on" : beaconProtected ? "beacon on battery before comms shutdown" : "comms shut down while the beacon still depended on them"
@@ -132,7 +167,8 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
     violated,
     derived: {
       selectedRecoveryPath: path,
-      availableRecoveryPowerKw: availableKw,
+      // At the moment power is routed (the first shortfall, else the chosen path) — what the narration reports.
+      availableRecoveryPowerKw: shownAvailableKw,
       requiredRecoveryPowerKw: requiredKw || null,
       releasedFromLifeSupport,
       lifeSupportKept,
@@ -150,7 +186,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
 
 export const kestrelCascadeEvaluator: ScenarioEvaluator<CascadeProposal, CascadeParams> = {
   id: "kestrel-cascade",
-  version: "2",
+  version: "3",
   description:
     "Station Kestrel: Cascade — the committed procedure must run a feasible emergency cooling path with enough (actually available) power: loop B needs 30 kW; thermal dump C needs 18 kW and a service ring R3 evacuated and isolated before it fires, within the reactor's safe window. It must also protect the service craft's approach beacon (battery before comms shutdown), SCRAM the reactor and keep life support at its required allocation.",
   proposalSchema: CascadeProposalSchema,

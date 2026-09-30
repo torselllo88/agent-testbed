@@ -4,6 +4,9 @@ import type { StubProvider } from "../llm/stubProvider.js";
 import { spaceStationConfig } from "./spaceStation/config.js";
 import { spaceStationEvaluator } from "./spaceStation/evaluator.js";
 import { kestrelConfig } from "./spaceStation/kestrel.js";
+import { kestrelCascadeConfig } from "./kestrelCascade/config.js";
+import { kestrelCascadeEvaluator } from "./kestrelCascade/evaluator.js";
+import { registerCascadeStubs } from "./kestrelCascade/stubScripts.js";
 import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 
 /**
@@ -52,13 +55,22 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     version: 5,
     config: () => kestrelConfig(),
   },
+  {
+    id: "station-kestrel-cascade",
+    name: "Station Kestrel: Cascade",
+    summary: "Harder demo with the Kestrel crew — two recovery paths, facts split across all four officers (en, ru)",
+    // v1: initial.
+    version: 1,
+    config: () => kestrelCascadeConfig(),
+  },
 ];
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {
-  return new EvaluatorRegistry().register(spaceStationEvaluator);
+  return new EvaluatorRegistry().register(spaceStationEvaluator).register(kestrelCascadeEvaluator);
 }
 
 export function registerBuiltinStubs(stub: StubProvider): StubProvider {
   registerSpaceStationStubs(stub);
+  registerCascadeStubs(stub);
   return stub;
 }

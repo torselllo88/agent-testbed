@@ -363,7 +363,7 @@ describe("scenario library", () => {
     const h = createHarness();
     const repo = new ScenarioRepository(h.db);
     const user = repo.create(spaceStationConfig());
-    expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: ["space-station", "station-kestrel"], updated: [] });
+    expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: ["space-station", "station-kestrel", "station-kestrel-cascade"], updated: [] });
     expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: [], updated: [] });
 
     const kestrel = repo.getBuiltin("station-kestrel")!;
@@ -377,6 +377,6 @@ describe("scenario library", () => {
     expect(repo.syncBuiltins(bumped).updated).toEqual(["station-kestrel"]);
     expect(repo.getBuiltin("station-kestrel")).toMatchObject({ version: 2, builtin: { version: codeVersion + 1 }, config: { description: "v2" } });
     expect(repo.get(user.id)).toMatchObject({ version: 1, builtin: null });
-    expect(repo.list().slice(0, 2).map((s) => s.builtin?.id)).toEqual(["space-station", "station-kestrel"]);
+    expect(repo.list().slice(0, 3).map((s) => s.builtin?.id)).toEqual(["space-station", "station-kestrel", "station-kestrel-cascade"]);
   });
 });

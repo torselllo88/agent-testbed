@@ -59,7 +59,7 @@ describe("HTTP basics", () => {
     expect(body.evaluators[0]).toMatchObject({ id: "space-station", version: "1" });
     expect(body.evaluators[0].proposalSchema.properties).toHaveProperty("coolant_loop");
     expect(body.schedulers).toEqual(["round_robin", "hybrid"]);
-    expect(body.builtinScenarios.map((b: { id: string }) => b.id)).toEqual(["space-station", "station-kestrel"]);
+    expect(body.builtinScenarios.map((b: { id: string }) => b.id)).toEqual(["space-station", "station-kestrel", "station-kestrel-cascade"]);
     expect(body.builtinScenarios.every((b: { version: number }) => b.version >= 1)).toBe(true);
   });
 

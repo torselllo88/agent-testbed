@@ -57,8 +57,9 @@ That is all that is needed for a first look. Without any API key, every agent
 runs on the built-in **stub provider**: scripted, deterministic stand-ins for
 the Space Station officers. The scenarios then run end-to-end, free and
 offline (stub agents always speak English). The **Scenarios** library already
-contains two built-ins: the neutral **Space Station Benchmark** and the
-humanized live demo **Station Kestrel**.
+contains three built-ins: the neutral **Space Station Benchmark**, the
+humanized live demo **Station Kestrel**, and its harder sibling **Station
+Kestrel: Cascade**.
 
 To run real LLM agents:
 
@@ -253,6 +254,33 @@ them) and 300 output tokens per turn (a safety cap; brevity comes from the
 prompt, because a lower cap would truncate the proposal JSON, not the prose). A demo should not
 run long, and v1's 2.5 s / 20 ms / 9 s made a verbose live run take about
 5 minutes. Tune these by watching real runs.
+
+**Station Kestrel: Cascade** is a harder demo with the same crew, personas,
+speech style, narrator, pacing and debrief. It is a *different task* (its
+own facts, evaluator `kestrel-cascade` and `taskDefinitionHash`), built so
+that no single officer can find the safe procedure alone. Two recovery paths
+look plausible, and the facts that decide between them are split up:
+
+| Officer | Holds |
+|---|---|
+| John (engineering) | Loop B needs 30 kW; thermal dump C needs only 18 kW but vents through service ring R3, which must be evacuated and isolated first; the reactor window is about 4 minutes |
+| Viktor (power) | 10 kW reserve + 12 labs = 22 kW, enough for C; loop B also needs communications (8 kW), and cutting them powers down the service craft's approach beacon |
+| Maya (life support) | Six crew in R3; evacuating them takes about 6 minutes |
+| Sarah (operations) | The beacon has an emergency battery, safe only if it is switched over *before* comms go off |
+
+Only when these facts are combined does it become clear that C cannot be made
+safe in time (6 min > 4 min), and that B works only as: beacon to battery →
+labs off → comms off → 30 kW to loop B → start → SCRAM, with life support kept
+at 40 kW. The 4-minute figure is deliberately not in the shared context, so it
+has to be communicated.
+
+The proposal is `{ recovery_path, actions[] (ordered), life_support_power_kw }`.
+Every unsafe plan stays expressible. The evaluator requires only one ordering:
+beacon before comms (and, for C, R3 evacuated and isolated before the dump).
+Each failure mode is its own check, with its own grounded ending: C chosen,
+B with 22 kW, beacon unprotected, life support diverted, no SCRAM. Stub
+variants `cascade/cooperative` (success) and `cascade/dump-c` (failure) let it
+run keyless.
 
 **Two hashes.** `configHash` identifies the exact configuration.
 `taskDefinitionHash` identifies the underlying problem: task text, each

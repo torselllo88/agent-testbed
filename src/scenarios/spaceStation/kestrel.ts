@@ -23,7 +23,7 @@ import {
  * ending as a rescue.
  */
 
-interface CastMember {
+export interface CastMember {
   name: string;
   persona: string;
 }
@@ -33,7 +33,7 @@ interface CastMember {
  * each agent's systemPrompt). Spoken emergency-channel dialogue rather than
  * written analysis; nothing about what to conclude.
  */
-const SPEECH = `How you speak: this is a live emergency channel, not a written report.
+export const SPEECH = `How you speak: this is a live emergency channel, not a written report.
 - One point per turn: a fact, a question, an objection or a decision.
 - Usually one or two short sentences. Go longer only when a calculation genuinely needs it.
 - Do not restate what is already established, do not summarize the situation, do not thank or reassure anyone.
@@ -43,7 +43,7 @@ const SPEECH = `How you speak: this is a live emergency channel, not a written r
 - During the mission discussion, before speaking, check whether your point or question has already been answered in the room. If it has and you have no new information or objection, PASS (pass=true) instead of repeating it.
 - Nothing is carried out until the crew has voted on a final proposal. Talk about what should be done — never report an action as already done.`;
 
-const CAST: Record<SpaceStationRoleId, CastMember> = {
+export const CAST: Record<SpaceStationRoleId, CastMember> = {
   operations: {
     name: "Sarah Okafor",
     persona: `You are the station commander. You are not the deepest specialist in any subsystem; your job is to turn the specialists' information into one executable station-wide decision.
@@ -76,7 +76,7 @@ Any hint of taking power from life support gets an immediate, flat answer — no
 const EN_LOCKED = "Vote: {{votes.approvals}} of {{votes.eligible}} in favor. Decision locked — executing the recovery procedure.";
 const RU_LOCKED = "Голосование: «за» — {{votes.approvals}} из {{votes.eligible}}. Решение принято — выполняется процедура восстановления.";
 
-const EN: PresentationStrings = {
+export const EN: PresentationStrings = {
   title: "Station Kestrel",
   narratorName: "MISSION CONTROL",
   opening: `03:17 UTC. Station Kestrel has lost its primary reactor cooling loop. Core temperature is rising.
@@ -182,7 +182,7 @@ MISSION FAILED: unsafe venting.`,
   },
 };
 
-const RU: PresentationStrings = {
+export const RU: PresentationStrings = {
   title: "Станция «Кестрел»",
   narratorName: "ЦЕНТР УПРАВЛЕНИЯ",
   opening: `03:17 UTC. Станция «Кестрел» потеряла основной контур охлаждения реактора. Температура активной зоны растёт.

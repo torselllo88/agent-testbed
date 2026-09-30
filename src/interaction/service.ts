@@ -20,12 +20,24 @@ export type InteractionSender = { kind: "notice"; name: string } | { kind: "agen
 
 /**
  * The room as this layer writes to it. Local rooms need nothing beyond the
- * interaction log (the viewer reads it); a Chums adapter would post to the
- * real room and return its message id.
+ * interaction log (the viewer reads it); an external room binding
+ * (src/rooms) queues the message for the external room and returns its id.
  */
-export interface RoomOutlet {
-  post(experimentId: string, message: { sender: InteractionSender; text: string }): Promise<string>;
+export interface OutletMessage {
+  sender: InteractionSender;
+  text: string;
+  /** Internal id of the room message this one answers (a human's question or message), if any. */
+  replyTo?: string | null;
+  /** For notices: which one (e.g. "debriefOpened"); a rendering hint for external rooms. */
+  noticeKind?: NoticeKind;
 }
+
+export interface RoomOutlet {
+  post(experimentId: string, message: OutletMessage): Promise<string>;
+}
+
+/** Observes the interaction log as it is written (read-only); e.g. an external room binding mirroring debrief state. */
+export type InteractionListener = (experimentId: string, event: InteractionEvent) => void;
 
 export const localRoomOutlet: RoomOutlet = {
   async post() {
@@ -75,7 +87,7 @@ export type InteractionMode = "mission" | "debrief" | "closed" | "observe";
  *   after the outcome        (profile DEBRIEF) a separate DebriefSession
  *                            answers questions, one at a time, in FIFO order.
  *
- * Source-agnostic: the local viewer (HTTP) and, later, a Chums adapter hand
+ * Source-agnostic: the local viewer (HTTP) and external room bindings hand
  * new text messages to receive(). Room text is always just chat — it can
  * never invoke an operator control; those exist only as API/UI actions.
  * Persistence is separate from the experiment (interaction_events,
@@ -92,6 +104,7 @@ export class HumanInteractionService {
   /** Spectator-notice suppression, per experiment and room state. */
   private readonly noticeGates = new Map<string, { notified: Set<string>; lastAt: number }>();
   private readonly pending = new Set<Promise<unknown>>();
+  private readonly listeners = new Set<InteractionListener>();
 
   constructor(private readonly deps: HumanInteractionDeps) {
     this.repo = new InteractionRepository(deps.db);
@@ -156,7 +169,8 @@ export class HumanInteractionService {
 
   private async onRunFinished(experimentId: string): Promise<void> {
     const record = this.experiments.get(experimentId);
-    if (!record || !this.debriefEnabled(record) || record.outcome === "INTERRUPTED") return;
+    // An interrupted run, or one the operator stopped, gets no automatic debrief (an operator can still open one).
+    if (!record || !this.debriefEnabled(record) || record.outcome === "INTERRUPTED" || record.outcome === "STOPPED_BY_OPERATOR") return;
     await this.openDebrief(experimentId, "auto");
   }
 
@@ -181,7 +195,7 @@ export class HumanInteractionService {
         providers: this.deps.providers,
         log: (type, payload, agentId) => this.log(experimentId, created.id, type, payload, agentId ?? null),
         notice: (kind, vars, inResponseTo) => this.postNotice(experimentId, config, created.id, kind, vars ?? {}, inResponseTo ?? null),
-        postAnswer: (agentId, text) => this.outlet.post(experimentId, { sender: { kind: "agent", agentId }, text }),
+        postAnswer: (agentId, text, replyTo) => this.outlet.post(experimentId, { sender: { kind: "agent", agentId }, text, replyTo }),
         // The experiment is frozen: its record is read once and never changes.
         mission: () => (mission ??= missionRecord(this.events.list(experimentId))),
         history: () => this.history(experimentId),
@@ -199,6 +213,10 @@ export class HumanInteractionService {
     this.log(experimentId, created.id, "debrief_started", { sessionId: created.id, number: created.number, openedBy, outcome: record.outcome });
     await this.postNotice(experimentId, config, created.id, "debriefOpened", {}, null);
     return created;
+  }
+
+  isDebriefOpen(experimentId: string): boolean {
+    return Boolean(this.sessions.get(experimentId)?.isOpen);
   }
 
   closeDebrief(experimentId: string, reason = "operator"): DebriefSessionRecord {
@@ -301,13 +319,27 @@ export class HumanInteractionService {
   ): Promise<void> {
     const text = noticeText(config, kind, vars);
     const sender: InteractionSender = { kind: "notice", name: noticeSenderName(config) };
-    const messageId = await this.outlet.post(experimentId, { sender, text });
+    const messageId = await this.outlet.post(experimentId, { sender, text, replyTo: inResponseTo, noticeKind: kind });
     this.log(experimentId, sessionId, "notice_posted", { kind, text, sender, messageId, inResponseTo });
   }
 
   private log(experimentId: string, sessionId: string | null, type: string, payload: Record<string, unknown>, agentId: string | null = null): void {
     const serialized = redactSecrets(JSON.stringify(payload), this.deps.providers.secretValues());
-    this.repo.appendEvent(experimentId, { ts: new Date(this.now()).toISOString(), sessionId, type, agentId }, serialized);
+    const ts = new Date(this.now()).toISOString();
+    const seq = this.repo.appendEvent(experimentId, { ts, sessionId, type, agentId }, serialized);
+    const event: InteractionEvent = { seq, ts, sessionId, type, agentId, payload: JSON.parse(serialized) as Record<string, unknown> };
+    for (const listener of this.listeners) {
+      try {
+        listener(experimentId, event);
+      } catch (err) {
+        console.error("interaction listener failed:", err);
+      }
+    }
+  }
+
+  subscribe(listener: InteractionListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   private track(promise: Promise<unknown>): void {

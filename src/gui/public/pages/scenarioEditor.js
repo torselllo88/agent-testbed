@@ -247,8 +247,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       ${field("Conversation language", input("conversation.language", "string", `list="language-suggestions"`), "What agents write in (changes behavior); a run can override it")}
       <h3>Agent visibility</h3>
       ${checkbox("agentVisibility.discussionBudget", "Show agents the discussion turn budget and proposal attempt (changes agent behavior — off for baseline runs)")}
-      <h3>Transport</h3>
-      ${field("Transport", select("transport.type", [["local", "local"], ["chums", "chums (not implemented yet)"]], { structural: true }))}`;
+`;
     },
 
     limits: () => `

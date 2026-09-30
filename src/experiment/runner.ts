@@ -76,7 +76,8 @@ export interface RunOptions {
 /** Recorded on experiment_started. The stub latency matters: it changes every duration metric. */
 export interface RunEnvironment {
   stubLatencyMs: number;
-  origin: "interactive" | "batch" | "cli";
+  /** "external": started through the External Room API (src/rooms). */
+  origin: "interactive" | "batch" | "cli" | "external";
   /** Effective SQLite durability mode of the trace database (read back from SQLite). */
   sqliteSynchronous: string;
   /** Process-wide cap on simultaneous requests per real provider; null = unlimited. */
@@ -217,6 +218,7 @@ export class ExperimentRunner {
     this.consensus = createConsensusRule(this.config.consensus);
     this.extensions = deps.extensions?.(this.config) ?? [];
     this.extensionContext = {
+      experimentId: this.id,
       config: this.config,
       post: (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => this.publish(sender, text, meta),
       log: (type, payload) => {
@@ -879,7 +881,6 @@ export function checkRunnable(
       problems.push(`${who}: unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);
     }
   }
-  if (config.transport.type !== "local") problems.push(`transport "${config.transport.type}" is not implemented yet`);
   // A profile that would change experiment semantics must not silently run as something else.
   const profile = config.humanInteraction?.profile;
   if (profile && !HUMAN_INTERACTION_PROFILES[profile].supported) {

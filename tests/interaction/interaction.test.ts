@@ -277,6 +277,18 @@ describe("post-mission debrief", () => {
     expect((new ExperimentRepository(db).getOrThrow(runner.id).summary as { costUsd: { total: number } }).costUsd.total).toBe(missionCost);
   });
 
+  it("does not open automatically after an operator stop — an operator can still open one", async () => {
+    const env = setup(20);
+    const { runner, done } = env.service.start({ config: kestrel() });
+    await sleep(30);
+    env.service.control(runner.id, { type: "stop" });
+    await done;
+    await env.interaction.settle();
+    expect(env.record(runner.id).outcome).toBe("STOPPED_BY_OPERATOR");
+    expect(env.interaction.view(runner.id)).toMatchObject({ mode: "closed", sessions: [] });
+    expect((await env.interaction.openDebrief(runner.id, "operator")).number).toBe(1);
+  });
+
   it("an operator can close it and open a new session; closed sessions stay as they were", async () => {
     const env = setup();
     const id = await finishedKestrel(env);

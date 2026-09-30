@@ -26,7 +26,8 @@ export interface DebriefSessionContext {
   providers: ProviderRegistry;
   log(type: string, payload: Record<string, unknown>, agentId?: string | null): void;
   notice(kind: NoticeKind, vars?: Record<string, unknown>, inResponseTo?: string | null): Promise<void>;
-  postAnswer(agentId: string, text: string): Promise<string>;
+  /** Posts a character's answer; `replyTo` is the question's internal message id. */
+  postAnswer(agentId: string, text: string, replyTo: string): Promise<string>;
   mission(): MissionRecord;
   /** Every public debrief exchange of this experiment so far (all sessions), oldest first. */
   history(): DebriefExchange[];
@@ -237,7 +238,7 @@ export class DebriefSession {
       const text = result.ok ? result.value.message.trim() : "";
       if (!text) throw new Error(result.ok ? "empty answer" : `unparseable answer: ${result.parseError}`);
       if (!this.open) throw new Error("debrief closed");
-      const messageId = await this.ctx.postAnswer(agent.id, text);
+      const messageId = await this.ctx.postAnswer(agent.id, text, question.messageId);
       this.usage.answered += 1;
       this.ctx.log(
         "debrief_answer_published",

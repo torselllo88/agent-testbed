@@ -17,6 +17,8 @@ import type { Termination } from "./outcome.js";
 export type NarratorSender = Extract<RoomSender, { kind: "narrator" }>;
 
 export interface RunExtensionContext {
+  /** The run this context belongs to. */
+  readonly experimentId: string;
   /** The run's effective configuration (read-only). */
   readonly config: Readonly<ExperimentConfig>;
   /**

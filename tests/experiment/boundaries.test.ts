@@ -23,10 +23,15 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("experiment core boundary", () => {
-  it("no core module imports an add-on layer (presentation, human interaction)", () => {
+  it("no core module imports an add-on layer (presentation, human interaction, external rooms)", () => {
     const offenders = CORE_DIRS.flatMap((d) => sourceFiles(path.resolve("src", d))).filter((file) =>
-      /from\s+["'][./]*\/(presentation|interaction)\//.test(fs.readFileSync(file, "utf8"))
+      /from\s+["'][./]*\/(presentation|interaction|rooms)\//.test(fs.readFileSync(file, "utf8"))
     );
+    expect(offenders).toEqual([]);
+  });
+
+  it("the human-interaction layer knows nothing about external rooms", () => {
+    const offenders = sourceFiles(path.resolve("src", "interaction")).filter((file) => /from\s+["'][./]*\/rooms\//.test(fs.readFileSync(file, "utf8")));
     expect(offenders).toEqual([]);
   });
 

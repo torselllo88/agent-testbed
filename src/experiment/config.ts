@@ -360,10 +360,8 @@ export const HumanInteractionConfigSchema = z.object({
 });
 export type HumanInteractionConfig = z.infer<typeof HumanInteractionConfigSchema>;
 
-export const TransportConfigSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("local") }),
-  z.object({ type: z.literal("chums"), room: z.string().optional() }),
-]);
+/** The experiment's internal room. External chat rooms are projections of it (src/rooms), not transports. */
+export const TransportConfigSchema = z.discriminatedUnion("type", [z.object({ type: z.literal("local") })]);
 export type TransportConfig = z.infer<typeof TransportConfigSchema>;
 
 export const ExperimentConfigSchema = z

@@ -14,6 +14,7 @@ import { OUTCOMES } from "../experiment/outcome.js";
 import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
+import type { ExternalRoomService } from "../rooms/service.js";
 import type { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
@@ -33,6 +34,8 @@ export interface AppDeps {
   service: ExperimentService;
   batches: BatchService;
   interaction: HumanInteractionService;
+  /** External room bindings; optional so the operator app can run without them (tests). */
+  rooms?: ExternalRoomService;
   /** OpenRouter model list for the editor; omitted = not offered. */
   openRouterModels?: OpenRouterModelCatalog;
 }
@@ -296,6 +299,7 @@ const ROUTES: Route[] = [
       experiments.getOrThrow(id);
       if (deps.service.isRunning(id)) throw new HttpError(409, "Stop the experiment before deleting it");
       deps.interaction.forget(id);
+      deps.rooms?.forgetExperiment(id);
       experiments.delete(id);
       sendJson(res, 200, { ok: true });
     },

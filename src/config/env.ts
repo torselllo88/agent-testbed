@@ -65,4 +65,20 @@ export const env = {
   port: parseIntEnv(process.env.PORT ?? process.env.GUI_PORT, 3939),
   /** Loopback by default — a plain `npm start` should never be reachable from the network. */
   host: process.env.GUI_HOST || "127.0.0.1",
+  /**
+   * External Room API (docs/external-room-api.md): a separate listener that
+   * serves only /api/external/*, so the operator UI can stay on loopback.
+   * Disabled unless a token is set. The token is plain bearer auth: put TLS
+   * (a reverse proxy) or a private network in front of it for remote consumers.
+   */
+  externalApi: {
+    token: process.env.EXTERNAL_API_TOKEN || undefined,
+    port: parseIntEnv(process.env.EXTERNAL_API_PORT, 3940),
+    host: process.env.EXTERNAL_API_HOST || "127.0.0.1",
+    /** Default-deny: only these scenarios (built-in ids or library scenario ids) can be started externally. */
+    scenarios: (process.env.EXTERNAL_SCENARIOS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
 };

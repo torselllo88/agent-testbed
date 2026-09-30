@@ -390,7 +390,7 @@ view, **Start & watch** opens viewer mode.
   from OpenRouter's public `/models` endpoint (no key sent) and is cached on
   the server for 6 hours. Offline, the field is plain text.
 - **Protocol:** scheduler, start agent, router classifier, consensus rule,
-  proposer, attempts, agent visibility, transport.
+  proposer, attempts, conversation language, agent visibility.
 - **Limits:** soft discussion limits, hard limits, runtime retries and timeouts.
 - **Evaluator:** evaluator and its parameters; the proposal schema for reference.
 - **Presentation:** narration (narrator, per-language strings,
@@ -768,11 +768,12 @@ src/
                 protocolStrings (moderator notices agents read, en/ru) · RunExtension interface (extensions.ts)
   scheduling/   Scheduler interface · round-robin · hybrid (explicit → classifier → fallback)
   consensus/    ConsensusRule interface · unanimity · majority
-  transport/    Transport interface · LocalTransport · ChumsTransport (extension point)
+  transport/    Transport interface · LocalTransport (the experiment's own room) · HumanRoomMessage
   evaluation/   ScenarioEvaluator interface · registry
   scenarios/    scenario packages (config + evaluator + stub scripts) · registries
   presentation/ run extensions: narrator (opening / grounded endings) · PacedTransport (viewer pacing)
   interaction/  HumanInteractionService (people in the room) · DebriefSession (FIFO queue) · addressing · debrief prompts
+  rooms/        ExternalRoomService — External Room API: bindings, persistent outbox, inbound (docs/external-room-api.md)
   batch/        spec & condition expansion · BatchService · aggregates
   llm/          provider interface · OpenRouter · Azure OpenAI · stub · registry · concurrency gate · pricing
   persistence/  SQLite (node:sqlite) · scenarios · experiments · events · batches · debrief sessions · interaction events
@@ -827,7 +828,7 @@ event log.
 them. The layer consists of:
 
 - `HumanInteractionService`, which receives new human text messages from any
-  source (the local viewer over HTTP now, a Chums adapter later);
+  source (the local viewer over HTTP, or an external room through the External Room API);
 - a `RoomOutlet` for posting;
 - `ExperimentService.onRunFinished`, which starts the debrief.
 
@@ -873,20 +874,31 @@ the public room only.
 implement `ConsensusRule.decide(votes, eligible)` in
 [src/consensus/index.ts](src/consensus/index.ts).
 
-**Chums Chat transport.** [src/transport/chumsTransport.ts](src/transport/chumsTransport.ts)
-is the adapter point. It currently throws "not implemented", and the runner
-refuses `"transport": { "type": "chums" }` up front. To implement it, fill in
-`open` (create or join the room), `publish` (post as an agent or as the
-moderator) and `history` (the ordered room history), and drop the up-front
-refusal in `checkRunnable()` ([src/experiment/runner.ts](src/experiment/runner.ts)).
-Agents, scheduling and the runner only ever talk to the `Transport` interface.
-People's messages in a Chums room are not the transport's business. The
-adapter hands each new text message
-([`HumanRoomMessage`](src/transport/humans.ts)) to
-`HumanInteractionService.receive()`, and implements a `RoomOutlet` so notices
-and debrief answers are posted to the real room. The adapter must keep its own
-bots' messages out of the human stream, and humans' messages out of
-`history()`.
+**An external chat room** (a Matrix room in Chums, or any other system) is
+not a transport. Agents coordinate in the testbed's own room. An external
+room gets a **projection** of the run through the
+[External Room API](docs/external-room-api.md), a vendor- and
+scenario-agnostic contract for another team's adapter:
+
+- **Persistent outbox.** Every visible message goes into one ordered outbox
+  per binding: agents, narration, readable protocol notices with structured
+  `data`, room notices and debrief answers, plus optional `run.state`
+  events. The adapter long-polls it by cursor and publishes strictly in order,
+  as each participant's own identity. It acknowledges each event with the room
+  event id; acks are idempotent, and the stable `messageId` serves as the room
+  system's idempotency key.
+- **Inbound.** New human text messages come back deduplicated by external
+  event id, with echo protection, and go to the human-interaction layer:
+  spectator chat during the mission, debrief questions after it. Replies to a
+  character's message reach that character.
+- **Separate listener.** The API has its own listener (`EXTERNAL_API_*`) with
+  a bearer token. Only whitelisted scenarios can be started, and models are
+  chosen by the operator in the saved scenario.
+
+The layer lives in [src/rooms/](src/rooms/). It attaches to runs as one more
+extension (the projection), and to the interaction layer as its
+`RoomOutlet`. Nothing in the core or in `src/interaction/` knows it exists.
+`npm run room:mock` is a runnable reference adapter.
 
 **A new LLM provider:** implement `LlmProvider.complete()` in [src/llm/](src/llm/)
 and register it in `createProviderRegistryFromEnv`.
@@ -948,6 +960,9 @@ See [.env.example](.env.example). All variables are optional.
 | `DATA_DIR` | `./data` | Where the SQLite database lives |
 | `GUI_PORT` / `PORT` | `3939` | Web UI port |
 | `GUI_HOST` | `127.0.0.1` | Bind address. **There is no authentication**; only use `0.0.0.0` deliberately |
+| `EXTERNAL_API_TOKEN` | — | Enables the [External Room API](docs/external-room-api.md) on its own listener (bearer token) |
+| `EXTERNAL_API_PORT` / `EXTERNAL_API_HOST` | `3940` / `127.0.0.1` | External Room API listener. For remote adapters, put TLS or a private network in front of it |
+| `EXTERNAL_SCENARIOS` | — | Comma-separated built-in or library scenario ids that may be started externally (default-deny) |
 
 ---
 
@@ -978,7 +993,7 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
 - **Single process, in-memory scheduling.** Running experiments live in the
   server process; a restart ends them (they are recorded as `INTERRUPTED`).
   There is no distributed runtime.
-- **The Chums transport is an interface only** (see above).
+- **External rooms (v1)** assume the room already exists and the identities are in it. Delivery is by long-polling rather than SSE or push. There are no typing indicators, and the bearer token is not encryption (see the [contract](docs/external-room-api.md)).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs
   that still fail end as `PROVIDER_ERROR` (reported separately in batches).

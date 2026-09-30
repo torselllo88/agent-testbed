@@ -1,10 +1,18 @@
 node_modules/
 dist/
 .vitest-data/
+coverage/
 
 # Runtime state: SQLite database (scenarios, experiments, event traces) and exports.
 data/*
 !data/.gitkeep
+*.sqlite3
+*.sqlite3-*
 
+# Secrets: only the template is tracked.
 .env
+.env.*
+!.env.example
+
 *.log
+*.tar.gz

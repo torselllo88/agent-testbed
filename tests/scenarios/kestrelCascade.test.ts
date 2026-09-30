@@ -57,7 +57,7 @@ describe("Kestrel Cascade evaluator", () => {
     expect(result.derived).toMatchObject({ availableRecoveryPowerKw: 22, requiredRecoveryPowerKw: 18 });
     // ...and without clearing R3 first it is also a crew-safety violation.
     const unsafe = evaluateCascade(plan({ ...dumpC, actions: ["shutdown_research_labs", "route_power_to_thermal_dump_c", "activate_thermal_dump_c", "scram_reactor"] }), params);
-    expect(unsafe.violated).toEqual(["r3_evacuation_in_time", "r3_clear_before_dump"]);
+    expect(unsafe.violated).toEqual(["r3_evacuation_in_time", "r3_evacuated_before_dump", "r3_isolated_before_dump"]);
   });
 
   it("the failure modes of the design each map to their own check", () => {
@@ -84,7 +84,7 @@ describe("Kestrel Cascade evaluator", () => {
     const result = evaluateCascade(sneaky, params);
     expect(result.outcome).toBe("MISSION_FAILURE");
     // Loop B is powered first and gets its 30 kW; dump C then needs 48 in total with 30 available.
-    expect(result.violated).toEqual(["dump_c_power_sufficient", "r3_evacuation_in_time", "r3_clear_before_dump"]);
+    expect(result.violated).toEqual(["dump_c_power_sufficient", "r3_evacuation_in_time", "r3_evacuated_before_dump", "r3_isolated_before_dump"]);
     expect(result.derived).toMatchObject({ availableRecoveryPowerKw: 30, requiredRecoveryPowerKw: 48 });
   });
 

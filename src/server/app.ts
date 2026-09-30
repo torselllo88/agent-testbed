@@ -6,12 +6,12 @@ import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
-import { ConfigValidationError, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, taskDefinitionHash, type RunOverrides } from "../experiment/config.js";
+import { ConfigValidationError, configHash, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, taskDefinitionHash, type RunOverrides } from "../experiment/config.js";
 import { COMMON_LANGUAGES } from "../experiment/languages.js";
 import { AUTHORED_PROTOCOL_LANGUAGES } from "../experiment/protocolStrings.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
 import { OUTCOMES } from "../experiment/outcome.js";
-import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, type OperatorCommand } from "../experiment/runner.js";
+import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, withEffectiveEvaluatorParams, type OperatorCommand } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
 import type { ExternalRoomService } from "../rooms/service.js";
@@ -92,6 +92,9 @@ async function body<T>(req: http.IncomingMessage, schema: z.ZodType<T>): Promise
 
 function scenarioSummary(s: ScenarioRecord, evaluators: EvaluatorRegistry) {
   const evaluator = evaluators.list().find((e) => e.id === s.config.evaluator?.id);
+  // Both hashes as a run started now (without overrides) records them: evaluator defaults applied, current version.
+  const params = evaluator?.paramsSchema.safeParse(s.config.evaluator?.params);
+  const effective = params?.success ? withEffectiveEvaluatorParams(s.config, params.data) : s.config;
   const builtin = s.builtin ? BUILTIN_SCENARIOS.find((b) => b.id === s.builtin!.id) : undefined;
   return {
     id: s.id,
@@ -100,9 +103,8 @@ function scenarioSummary(s: ScenarioRecord, evaluators: EvaluatorRegistry) {
     builtin: s.builtin,
     readOnly: Boolean(s.builtin),
     summary: builtin?.summary ?? s.config.description ?? "",
-    configHash: s.configHash,
-    // With the evaluator version that would judge a run started now — what its runs record.
-    taskDefinitionHash: taskDefinitionHash(s.config, evaluator?.version ?? null),
+    configHash: configHash(effective),
+    taskDefinitionHash: taskDefinitionHash(effective, evaluator?.version ?? null),
     agents: s.config.agents?.length ?? 0,
     agentNames: (s.config.agents ?? []).map((a) => a.name),
     scheduler: s.config.scheduler?.type,
@@ -292,7 +294,13 @@ const ROUTES: Route[] = [
     pattern: new RegExp(`^/api/experiments/${ID}$`),
     handle: ({ res, params, experiments, deps }) => {
       const id = decodeRouteParam(params[0]!);
-      sendJson(res, 200, { experiment: experiments.getOrThrow(id), running: deps.service.isRunning(id), live: deps.service.liveState(id) });
+      sendJson(res, 200, {
+        experiment: experiments.getOrThrow(id),
+        running: deps.service.isRunning(id),
+        live: deps.service.liveState(id),
+        // Bound to an external room (until the binding is closed): people talk there; this UI only watches.
+        externalRoom: deps.rooms?.openBindingFor(id) ?? null,
+      });
     },
   },
   {
@@ -342,7 +350,12 @@ const ROUTES: Route[] = [
     pattern: new RegExp(`^/api/experiments/${ID}/room/messages$`),
     handle: async ({ req, res, params, deps }) => {
       const input = await body(req, HumanMessageBody);
-      const result = await deps.interaction.receive(decodeRouteParam(params[0]!), {
+      const experimentId = decodeRouteParam(params[0]!);
+      // One human surface per room: a question asked here would be answered in the external room, where nobody saw it.
+      if (deps.rooms?.openBindingFor(experimentId)) {
+        throw new HttpError(409, "This experiment is connected to an external room — people talk there; this view is read-only until the binding is closed", "EXTERNAL_ROOM_ACTIVE");
+      }
+      const result = await deps.interaction.receive(experimentId, {
         ...input,
         replyTo: input.replyTo ?? null,
         mentions: input.mentions ?? [],
@@ -476,7 +489,7 @@ const ROUTES: Route[] = [
 ];
 
 function errorStatusAndMessage(err: unknown): { status: number; body: Record<string, unknown> } {
-  if (err instanceof HttpError) return { status: err.status, body: { error: err.message } };
+  if (err instanceof HttpError) return { status: err.status, body: { error: err.message, ...(err.code ? { code: err.code } : {}) } };
   if (err instanceof InteractionError) return { status: err.status, body: { error: err.message } };
   if (err instanceof ConfigValidationError) {
     return { status: 400, body: { error: err.message, problems: err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`) } };

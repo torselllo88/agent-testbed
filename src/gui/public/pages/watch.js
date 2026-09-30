@@ -34,6 +34,7 @@ const LABELS = {
     send: "Send",
     replyTo: (n) => `Reply to ${n}`,
     needName: "Enter your name first.",
+    external: "This room is connected to an external chat room — people talk there. Here you can only watch.",
   },
   ru: {
     live: "В ЭФИРЕ",
@@ -51,6 +52,7 @@ const LABELS = {
     send: "Отправить",
     replyTo: (n) => `Ответ для: ${n}`,
     needName: "Сначала введите имя.",
+    external: "Эта комната подключена к внешнему чату — люди общаются там. Здесь можно только смотреть.",
   },
 };
 
@@ -142,6 +144,7 @@ export async function renderWatch(experimentId) {
   let experiment;
   let running = false;
   let interaction = { mode: "observe", session: null };
+  let externalRoom = null;
   const events = [];
   const ievents = [];
   let lastSeq = 0;
@@ -155,6 +158,7 @@ export async function renderWatch(experimentId) {
     ]);
     experiment = detail.experiment;
     running = detail.running;
+    externalRoom = detail.externalRoom ?? null;
     events.push(...fresh);
     if (fresh.length) lastSeq = fresh.at(-1).seq;
     ievents.push(...room.events);
@@ -202,6 +206,7 @@ export async function renderWatch(experimentId) {
           <button type="submit" class="primary">${escapeHtml(L.send)}</button>
         </div>
       </form>
+      <p class="w-external muted small" id="w-external" hidden>${escapeHtml(L.external)}</p>
     </div>`;
   const room = document.getElementById("watch-room");
   const nameInput = document.getElementById("w-name");
@@ -303,6 +308,8 @@ export async function renderWatch(experimentId) {
         : escapeHtml(L.ended);
     document.getElementById("watch-typing").textContent = typingText();
     textInput.placeholder = interaction.mode === "debrief" ? L.ask : L.chat;
+    document.getElementById("w-composer").hidden = Boolean(externalRoom);
+    document.getElementById("w-external").hidden = !externalRoom;
     room.classList.toggle("debrief", interaction.mode === "debrief");
     renderReply();
   }

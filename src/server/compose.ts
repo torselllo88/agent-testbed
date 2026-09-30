@@ -27,7 +27,7 @@ export function composeTestbed(deps: { db: Db; providers: ProviderRegistry; eval
     providers: deps.providers,
     experiments: service,
     outlet: { post: (experimentId, message) => rooms!.post(experimentId, message) },
-    mayOpenDebrief: (experimentId) => rooms?.mayOpenDebrief(experimentId) ?? true,
+    debriefBlocked: (experimentId, openedBy) => rooms?.debriefBlocked(experimentId, openedBy) ?? null,
   });
   rooms = new ExternalRoomService({
     db: deps.db,

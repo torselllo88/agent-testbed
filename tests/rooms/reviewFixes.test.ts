@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfigValidationError, parseExperimentConfig } from "../../src/experiment/config.js";
 import { ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
-import { createInMemoryDb, forgetLeaseObservations, setLeaseClockForTests } from "../../src/persistence/db.js";
+import { createInMemoryDb, forgetLeaseObservations, FROZEN_OWNER_TTL_MS, setLeaseClockForTests } from "../../src/persistence/db.js";
 import { ExperimentRepository } from "../../src/persistence/experimentRepository.js";
 import { InteractionRepository } from "../../src/persistence/interactionRepository.js";
 import { RoomRepository } from "../../src/persistence/roomRepository.js";
@@ -105,7 +105,7 @@ describe("rooms review fixes", () => {
 });
 
 describe("persistence and server review fixes", () => {
-  it("recovery: a crashed owner's rows at once, a silent one's after a whole lease on our own clock; a live one's never", () => {
+  it("recovery: a crashed owner's rows at once; a silent one's after a lease (another host) or the freeze timeout (its pid lives on); a live one's never", () => {
     const t = testbed();
     const repo = new ExperimentRepository(t.db);
     let mono = 1_000_000;
@@ -115,14 +115,16 @@ describe("persistence and server review fixes", () => {
     const lease = t.db.prepare(`INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES (?, ?, ?, ?)`);
     lease.run("proc_live", process.pid, os.hostname(), iso(0));
     lease.run("proc_crashed", deadPid(), os.hostname(), iso(0)); // restarted within its lease: the pid is gone
-    lease.run("proc_silent", process.pid, os.hostname(), iso(10 * 60_000)); // stale — but its pid lives on (reused?)
+    lease.run("proc_silent", process.pid, os.hostname(), iso(10 * 60_000)); // stale — but its pid lives on (frozen, or reused)
+    lease.run("proc_remote", 4242, "another-host", iso(10 * 60_000)); // stale, and no pid to check here
     lease.run("proc_jumped", process.pid, os.hostname(), iso(10 * 60_000)); // looks stale after a clock jump, still beating
-    const ids = { live: "run-live", crashed: "run-crashed", silent: "run-silent", jumped: "run-jumped", unknown: "run-without-owner" };
+    const ids = { live: "run-live", crashed: "run-crashed", silent: "run-silent", remote: "run-remote", jumped: "run-jumped", unknown: "run-without-owner" };
     for (const id of Object.values(ids)) repo.create({ id, config: kestrelConfig(), configHash: "h", testbedVersion: { version: "test" } as never });
     const own = t.db.prepare(`UPDATE experiments SET owner_id = ? WHERE id = ?`);
     own.run("proc_live", ids.live);
     own.run("proc_crashed", ids.crashed);
     own.run("proc_silent", ids.silent);
+    own.run("proc_remote", ids.remote);
     own.run("proc_jumped", ids.jumped);
     own.run(null, ids.unknown); // rows from before owners existed
 
@@ -139,6 +141,16 @@ describe("persistence and server review fixes", () => {
     mono += 61_000;
     beat.run(iso(0), "proc_live");
     beat.run(iso(8 * 60_000), "proc_jumped");
+    // Another host: a whole lease without a beat is enough. Here, a pid that still exists holds out much longer.
+    expect(t.service.recoverInterrupted()).toEqual([ids.remote]);
+
+    mono += FROZEN_OWNER_TTL_MS - 2 * 61_000; // the silent owner has been watched since the reset, 61 s ago
+    beat.run(iso(0), "proc_live");
+    beat.run(iso(7 * 60_000), "proc_jumped");
+    expect(t.service.recoverInterrupted()).toEqual([]); // still within the freeze timeout
+    mono += 61_000;
+    beat.run(iso(0), "proc_live");
+    beat.run(iso(6 * 60_000), "proc_jumped");
     expect(t.service.recoverInterrupted()).toEqual([ids.silent]);
     for (const id of [ids.live, ids.jumped]) expect(repo.getOrThrow(id).finishedAt).toBeNull();
   });
@@ -306,5 +318,67 @@ describe("third review round", () => {
     const failed = new InteractionRepository(t.db).listEvents(runner.id).filter((e) => e.type === "debrief_question_failed");
     expect(failed).toHaveLength(1);
     expect(failed[0]!.payload).toMatchObject({ reason: "error", error: "database unavailable" });
+  });
+});
+
+describe("final focused review", () => {
+  const outbox = (t: ReturnType<typeof testbed>, bindingId: string) => new RoomRepository(t.db).listOutbox(bindingId, 0, 10_000);
+  it("an operator may reopen a debrief on a finished binding only while it is still the room's latest open binding", async () => {
+    const t = testbed();
+    const a = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!reopen" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    t.rooms.stop(a.bindingId);
+    expect(t.rooms.view(a.bindingId).state).toBe("COMPLETED");
+
+    // The room is still A's: the operator may reopen, and A goes back to DEBRIEF (adapters poll until CLOSED).
+    await t.interaction.openDebrief(a.experimentId, "operator");
+    expect(t.rooms.view(a.bindingId).state).toBe("DEBRIEF");
+    t.interaction.closeDebrief(a.experimentId);
+
+    // Drained and acked, the room takes a new binding: A may no longer come back to life in it.
+    t.rooms.ack(a.bindingId, outbox(t, a.bindingId).map((o) => ({ messageId: o.messageId, externalEventId: `$ext-${o.seq}` })));
+    const b = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!reopen" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    const before = t.rooms.view(a.bindingId).delivery.lastSeq;
+    await expect(t.interaction.openDebrief(a.experimentId, "operator")).rejects.toThrow("already held by a newer binding");
+    expect(t.rooms.view(a.bindingId).delivery.lastSeq).toBe(before);
+    expect(t.rooms.find("test", "!reopen", true).map((v) => v.bindingId)).toEqual([b.bindingId]);
+
+    // A closed binding detached the experiment from its room: an operator debrief is local only.
+    t.rooms.close(a.bindingId);
+    await t.interaction.openDebrief(a.experimentId, "operator");
+    expect(t.rooms.view(a.bindingId).delivery.lastSeq).toBe(before);
+    t.interaction.closeDebrief(a.experimentId);
+  });
+
+  it("the local viewer may watch an externally bound experiment but not talk in it (409 EXTERNAL_ROOM_ACTIVE) until the binding is closed", async () => {
+    const t = testbed();
+    const binding = t.rooms.start({ scenarioId: t.fast.id, room: { provider: "test", roomId: "!local" }, participants: PARTICIPANTS });
+    await t.service.settle();
+    await t.interaction.settle();
+    const server = createApp({ db: t.db, providers: t.providers, evaluators: createEvaluatorRegistry(), service: t.service, batches: t.batches, interaction: t.interaction, rooms: t.rooms });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as AddressInfo).port;
+    const call = async (method: string, path: string, body?: unknown) => {
+      const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      return { status: res.status, body: (await res.json()) as Record<string, any> };
+    };
+    const base = `/api/experiments/${binding.experimentId}`;
+    const message = { senderId: "local-1", displayName: "Operator", text: "Viktor, why?" };
+
+    const view = await call("GET", base);
+    expect(view.status).toBe(200);
+    expect(view.body.externalRoom).toMatchObject({ bindingId: binding.bindingId, provider: "test", roomId: "!local" });
+    const refused = await call("POST", `${base}/room/messages`, message);
+    expect(refused).toMatchObject({ status: 409, body: { code: "EXTERNAL_ROOM_ACTIVE" } });
+    expect(new InteractionRepository(t.db).listEvents(binding.experimentId).filter((e) => e.type === "human_message")).toHaveLength(0);
+
+    t.rooms.close(binding.bindingId);
+    expect((await call("GET", base)).body.externalRoom).toBeNull();
+    expect((await call("POST", `${base}/room/messages`, message)).status).toBe(201);
+    await t.interaction.settle();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 });

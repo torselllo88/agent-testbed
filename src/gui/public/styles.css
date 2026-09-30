@@ -536,6 +536,9 @@ body.watch-mode .app { max-width: none; padding: 0; }
 .w-debrief-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .w-composer { border-top: 1px solid var(--border); padding: 10px 24px 16px; display: flex; flex-direction: column; gap: 6px; }
 .w-composer-row { display: flex; gap: 8px; }
+.w-composer[hidden] { display: none; }
+.w-external { border-top: 1px solid var(--border); margin: 0; padding: 12px 24px 16px; }
+.w-external[hidden] { display: none; }
 .w-name-input { flex: 0 0 140px; min-width: 0; }
 .w-text-input { flex: 1; min-width: 0; }
 .w-reply { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }

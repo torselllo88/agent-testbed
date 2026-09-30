@@ -11,7 +11,9 @@ import path from "node:path";
 export class HttpError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    /** A stable machine-readable reason, when a client should tell this case apart (e.g. EXTERNAL_ROOM_ACTIVE). */
+    public readonly code?: string
   ) {
     super(message);
   }

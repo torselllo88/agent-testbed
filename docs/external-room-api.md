@@ -96,6 +96,18 @@ Missing or wrong token → `401 {"error":{"code":"UNAUTHORIZED",…}}`.
 Transitions: `ACTIVE` → `DEBRIEF` (if the scenario has a debrief) → `COMPLETED`.
 `POST …/stop` ends whatever is live. `POST …/close` goes to `CLOSED`.
 
+The testbed's operator may open a new debrief on a finished run: `COMPLETED`
+or `INTERRUPTED` → `DEBRIEF` again (with `run.state debrief_open`) — but only
+while this binding is still the latest open binding of its room; once a newer
+binding holds the room, the old one never comes back to life. So keep polling
+a binding until it is `CLOSED` (or until you have started a newer one in its
+room), and close bindings you are done with.
+
+While a binding is open, the room is the only place people talk to the run:
+the testbed's own viewer only watches it (its message box is disabled, and its
+API answers `409 EXTERNAL_ROOM_ACTIVE`). After `close`, the experiment is
+detached from the room; anything done locally from then on stays local.
+
 **One run per room.** Starting a new binding in a room fails with
 `409 ROOM_BUSY` while another binding there is `ACTIVE` or `DEBRIEF`
 (`reason: "active"`), or is finished but not fully acknowledged
@@ -244,11 +256,23 @@ advancing.
 `replyToExternalEventId`, `mentions` and `timestamp` are optional. The
 testbed orders messages by the time it receives them.
 
+Limits — a message outside them is rejected whole with `400 INVALID_REQUEST`
+(`problems` says why). A 400 is final: do not retry it.
+
+| Field | Limit |
+|---|---|
+| `externalEventId` | 1–500 characters |
+| `sender.externalUserId`, `replyToExternalEventId`, each mention | up to 500 characters |
+| `sender.displayName` | required, 1–100 characters (fall back to the user id if the room has none) |
+| `body` | 1–4000 characters after trimming (split or truncate longer messages yourself) |
+| `mentions` | at most 20 |
+
 | Response | Meaning |
 |---|---|
 | `202 {"status":"accepted","messageId":"h_…","disposition":"spectator"}` | Shown to people only. The run is in progress, there is no debrief, or the debrief is closed. |
 | `202 {"status":"accepted","disposition":"question","queued":{"position":1}}` | A debrief question. It will be answered in order. |
 | `202 {"status":"accepted","disposition":"question","rejected":"user_limit"}` | Too many pending questions from this person; the room gets a notice. |
+| `202 {"status":"accepted","disposition":"question","rejected":"queue_full"}` | Too many pending questions in total; the room gets a notice. |
 | `200 {"status":"duplicate", …first result…}` | You sent this `externalEventId` before. No second effect. |
 | `202 {"status":"ignored","reason":"bound_identity" \| "own_event"}` | Echo of one of the binding's own identities or events. Never treated as human input. |
 | `409 BINDING_CLOSED` | The binding is closed. |

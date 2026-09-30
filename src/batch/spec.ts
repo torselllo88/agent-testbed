@@ -138,16 +138,29 @@ function setAtPath(target: unknown, keys: string[], value: unknown, fullPath: st
  * A variable's path that the validated config does not carry the value at —
  * a typo in the last segment, or a setting this configuration does not use —
  * so the zod schemas dropped (or changed) it. null when every value landed.
+ * Every field the variable sets must survive exactly; fields the schemas add
+ * (defaults inside a whole-object value) do not count.
  */
 export function droppedVariable(raw: unknown, parsed: ExperimentConfig, variable: BatchVariable): string | null {
   if (variable.path === "$agents") return null;
   const keys = variable.path.split(".");
   const applied = valuesAtPath(raw, keys);
   const landed = valuesAtPath(parsed, keys);
-  const same = landed.length === applied.length && landed.every((v, i) => v !== undefined && canonicalJson(v) === canonicalJson(applied[i]));
+  const same = landed.length === applied.length && landed.every((v, i) => carries(v, applied[i]));
   return same
     ? null
     : `"${variable.path}" is not a setting of this config — the value was dropped or changed when the config was validated (a typo, or a setting this configuration does not use)`;
+}
+
+/** Whether "landed" holds every field of "applied" unchanged (recursively); extra fields in "landed" are fine. */
+function carries(landed: unknown, applied: unknown): boolean {
+  if (applied === undefined) return true;
+  if (applied === null || typeof applied !== "object") return canonicalJson(landed) === canonicalJson(applied);
+  if (Array.isArray(applied)) {
+    return Array.isArray(landed) && landed.length === applied.length && applied.every((item, i) => carries(landed[i], item));
+  }
+  if (landed === null || typeof landed !== "object" || Array.isArray(landed)) return false;
+  return Object.entries(applied).every(([k, v]) => k in landed && carries((landed as Record<string, unknown>)[k], v));
 }
 
 function valuesAtPath(target: unknown, keys: string[]): unknown[] {

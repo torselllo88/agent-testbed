@@ -44,6 +44,8 @@ export interface ExperimentMetrics {
   errors: number;
   /** Add-on (extension) failures — integration / presentation problems, not experiment errors. */
   extensionErrors: number;
+  /** The version of the evaluator that judged the run (runtime metadata, not part of configHash; part of taskDefinitionHash). */
+  evaluatorVersion: string | null;
 }
 
 const inc = (map: Record<string, number>, key: string, by = 1) => {
@@ -76,6 +78,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     protocolIncidents: {},
     errors: 0,
     extensionErrors: 0,
+    evaluatorVersion: null,
   };
 
   let startedTs: string | null = null;
@@ -87,6 +90,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     switch (e.type) {
       case EventType.EXPERIMENT_STARTED:
         startedTs = e.ts;
+        m.evaluatorVersion = (p.evaluator as { version?: string } | undefined)?.version ?? null;
         break;
       case EventType.EXPERIMENT_FINISHED:
         finishedTs = e.ts;

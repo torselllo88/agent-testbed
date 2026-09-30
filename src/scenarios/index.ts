@@ -66,7 +66,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     // v3: evaluator v3 (physical order: power before start, shutdowns before routing, evacuate before isolate).
     // v4: evaluator v4 (powered-before-use for every system the plan runs; each failure narrates its own figures);
     //     name aliases for the debrief (Russian case forms).
-    version: 4,
+    // v5: evaluator v5 — "R3 clear before the dump" split into evacuated-before and isolated-before, each with a
+    //     truthful ending of its own.
+    version: 5,
     config: () => kestrelCascadeConfig(),
   },
 ];

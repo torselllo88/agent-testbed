@@ -40,10 +40,15 @@ MISSION FAILED.`],
       `The dump cannot be fired without exposing the {{derived.r3Crew}} crew members still in R3, and the reactor window closes first.
 MISSION FAILED: thermal dump C could not be made safe in time.`,
     ],
-    r3_clear_before_dump: [
+    r3_evacuated_before_dump: [
       "Vote: {{votes.approvals}} of {{votes.eligible}} in favor. Decision locked — emergency thermal dump C authorized.",
-      `The dump fires through service ring R3 before it has been evacuated and sealed. {{derived.r3Crew}} crew members are in the discharge path.
+      `The dump fires through service ring R3 before it has been evacuated. {{derived.r3Crew}} crew members are in the discharge path.
 MISSION FAILED: the crew in R3 was exposed.`,
+    ],
+    r3_isolated_before_dump: [
+      "Vote: {{votes.approvals}} of {{votes.eligible}} in favor. Decision locked — emergency thermal dump C authorized.",
+      `Service ring R3 is empty, but it is not sealed when the dump fires: the discharge is not contained to the ring.
+MISSION FAILED: thermal dump C fired through an unsealed ring.`,
     ],
     r3_isolated_safely: [
       EN_LOCKED,
@@ -142,10 +147,15 @@ const RU: PresentationStrings = {
       `Сброс нельзя провести, не подставив {{derived.r3Crew}} человек, которые ещё в R3, а окно реактора закрывается раньше.
 МИССИЯ ПРОВАЛЕНА: теплосброс В не удалось сделать безопасным вовремя.`,
     ],
-    r3_clear_before_dump: [
+    r3_evacuated_before_dump: [
       "Голосование: «за» — {{votes.approvals}} из {{votes.eligible}}. Решение принято — аварийный теплосброс В разрешён.",
-      `Сброс идёт через кольцо R3 раньше, чем его эвакуировали и изолировали. {{derived.r3Crew}} человек оказываются на пути выброса.
+      `Сброс идёт через кольцо R3 раньше, чем его эвакуировали. {{derived.r3Crew}} человек оказываются на пути выброса.
 МИССИЯ ПРОВАЛЕНА: экипаж в R3 подвергся опасности.`,
+    ],
+    r3_isolated_before_dump: [
+      "Голосование: «за» — {{votes.approvals}} из {{votes.eligible}}. Решение принято — аварийный теплосброс В разрешён.",
+      `Кольцо R3 уже пусто, но не изолировано, когда срабатывает сброс: выброс не удерживается в пределах кольца.
+МИССИЯ ПРОВАЛЕНА: теплосброс В сработал через неизолированное кольцо.`,
     ],
     r3_isolated_safely: [
       RU_LOCKED,
@@ -264,7 +274,8 @@ export function kestrelCascadeConfig(agentModel = "cascade/cooperative"): Experi
       // Narrative priority for the MISSION_FAILURE ending: crew and craft first, then power, then completeness.
       missionFailurePriority: [
         "r3_evacuation_in_time",
-        "r3_clear_before_dump",
+        "r3_evacuated_before_dump",
+        "r3_isolated_before_dump",
         "r3_isolated_safely",
         "life_support_preserved",
         "approach_beacon_protected",

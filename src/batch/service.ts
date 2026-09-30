@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ConfigValidationError, configHash, parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
-import { checkRunnable, ConfigNotRunnableError, type RunnerDeps } from "../experiment/runner.js";
+import { checkRunnable, ConfigNotRunnableError, withEffectiveEvaluatorParams, type RunnerDeps } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import { BatchRepository, type BatchRecord, type ResolvedBatch } from "../persistence/batchRepository.js";
@@ -131,13 +131,15 @@ export class BatchService {
     for (const condition of conditions) {
       try {
         const raw = conditionConfig(baseConfig, spec.variables, condition);
-        const config = parseExperimentConfig(raw);
-        const dropped = spec.variables.map((v) => droppedVariable(raw, config, v)).filter((p): p is string => p !== null);
+        const parsed = parseExperimentConfig(raw);
+        const dropped = spec.variables.map((v) => droppedVariable(raw, parsed, v)).filter((p): p is string => p !== null);
         if (dropped.length) {
           problems.push(...dropped.map((p) => `condition "${condition.key}": ${p}`));
           continue;
         }
-        checkRunnable({ providers, evaluators: this.deps.evaluators }, config);
+        const { evaluatorParams } = checkRunnable({ providers, evaluators: this.deps.evaluators }, parsed);
+        // As the run will snapshot and hash it: evaluator defaults applied.
+        const config = withEffectiveEvaluatorParams(parsed, evaluatorParams);
         conditionConfigs.set(condition.key, config);
         // The last line of defence: two conditions that are one config would compare a thing with itself.
         const hash = configHash(config);
@@ -316,6 +318,9 @@ export class BatchService {
       "duration_active_ms",
       "intervened",
       "config_hash",
+      // configHash is the effective configuration; the evaluator version judging it is runtime metadata beside it.
+      "evaluator_version",
+      "task_definition_hash",
     ];
     const rows = this.runs(id)
       .slice()
@@ -345,6 +350,8 @@ export class BatchService {
           m.durationMs?.active,
           r.intervened,
           r.configHash,
+          m.evaluatorVersion,
+          r.taskDefinitionHash,
         ];
       });
     return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n") + "\n";

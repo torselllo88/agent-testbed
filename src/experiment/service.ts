@@ -1,4 +1,5 @@
 import type { ProviderRegistry } from "../llm/registry.js";
+import { withTransaction } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
 import { EventType, type ExperimentEvent } from "./events.js";
@@ -101,16 +102,20 @@ export class ExperimentService {
         agentId: null,
         payload: { termination: outcome, recovered: true },
       };
-      this.events.insert(id, event, JSON.stringify(event.payload));
-      const record = this.experiments.getOrThrow(id);
-      const metrics = computeMetrics(this.events.list(id), { intervened: record.intervened });
-      this.experiments.update(id, {
-        phase: Phase.FINISHED,
-        status: outcome.status,
-        outcome: outcome.outcome,
-        outcomeDetail: { category: outcome.category, reason: outcome.reason },
-        finishedAt: event.ts,
-        summary: metrics as unknown as Record<string, unknown>,
+      // The final event and the terminal row together or not at all: a pass that fails half-way (a busy
+      // database) leaves nothing behind, so the retry does not write a second experiment_finished.
+      withTransaction(this.deps.db, () => {
+        this.events.insert(id, event, JSON.stringify(event.payload));
+        const record = this.experiments.getOrThrow(id);
+        const metrics = computeMetrics(this.events.list(id), { intervened: record.intervened });
+        this.experiments.update(id, {
+          phase: Phase.FINISHED,
+          status: outcome.status,
+          outcome: outcome.outcome,
+          outcomeDetail: { category: outcome.category, reason: outcome.reason },
+          finishedAt: event.ts,
+          summary: metrics as unknown as Record<string, unknown>,
+        });
       });
     }
     return ids;

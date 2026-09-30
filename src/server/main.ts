@@ -16,14 +16,20 @@ const evaluators = createEvaluatorRegistry();
 // The experiment core plus its add-ons: presentation, people in the room, external room bindings.
 const { service, batches, interaction, rooms } = composeTestbed({ db, providers, evaluators, externalScenarios: env.externalApi.scenarios });
 
-const interrupted = service.recoverInterrupted();
-if (interrupted.length > 0) console.log(`Marked ${interrupted.length} experiment(s) cut off by the last shutdown as INTERRUPTED.`);
-const interruptedBatches = batches.recoverInterrupted();
-if (interruptedBatches.length > 0) console.log(`Marked ${interruptedBatches.length} batch(es) cut off by the last shutdown as interrupted.`);
-const interruptedDebriefs = interaction.recoverInterrupted();
-if (interruptedDebriefs > 0) console.log(`Marked ${interruptedDebriefs} debrief session(s) cut off by the last shutdown as INTERRUPTED.`);
-const interruptedBindings = rooms.recoverInterrupted();
-if (interruptedBindings > 0) console.log(`Told ${interruptedBindings} external room binding(s) that their run was interrupted.`);
+// Startup recovery. A failure here (e.g. a database busy past its timeout) must not keep the server from starting:
+// it is reported loudly, and the periodic pass below retries — each step is atomic per row and idempotent.
+try {
+  const interrupted = service.recoverInterrupted();
+  if (interrupted.length > 0) console.log(`Marked ${interrupted.length} experiment(s) cut off by the last shutdown as INTERRUPTED.`);
+  const interruptedBatches = batches.recoverInterrupted();
+  if (interruptedBatches.length > 0) console.log(`Marked ${interruptedBatches.length} batch(es) cut off by the last shutdown as interrupted.`);
+  const interruptedDebriefs = interaction.recoverInterrupted();
+  if (interruptedDebriefs > 0) console.log(`Marked ${interruptedDebriefs} debrief session(s) cut off by the last shutdown as INTERRUPTED.`);
+  const interruptedBindings = rooms.recoverInterrupted();
+  if (interruptedBindings > 0) console.log(`Told ${interruptedBindings} external room binding(s) that their run was interrupted.`);
+} catch (err) {
+  console.error("\n*** Startup recovery failed — the server starts anyway; periodic recovery retries every minute. ***\n", err);
+}
 
 // While the server runs, another process sharing the database (e.g. a CLI batch) may crash: once it is gone
 // (see ownerAlive), close its runs, batches and debrief sessions as interrupted — without waiting for a restart.
@@ -43,9 +49,10 @@ setInterval(() => {
     const runs = service.recoverInterrupted().length;
     const orphanBatches = batches.recoverInterrupted().length;
     const sessions = interaction.recoverInterrupted();
-    if (runs || orphanBatches || sessions) {
-      rooms.recoverInterrupted();
-      console.log(`Recovered after a crashed process: ${runs} run(s), ${orphanBatches} batch(es), ${sessions} debrief session(s).`);
+    // Every pass: one idempotent query, and it catches up if an earlier pass failed after recovering the runs.
+    const bindings = rooms.recoverInterrupted();
+    if (runs || orphanBatches || sessions || bindings) {
+      console.log(`Recovered after a crashed process: ${runs} run(s), ${orphanBatches} batch(es), ${sessions} debrief session(s), ${bindings} room binding(s).`);
     }
   } catch (err) {
     // E.g. the database stayed busy: the next pass retries. Never let recovery take the server down.

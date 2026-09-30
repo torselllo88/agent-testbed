@@ -3,7 +3,7 @@ import { parseExperimentConfig, type ExperimentConfig, type HumanInteractionConf
 import { redactSecrets } from "../experiment/events.js";
 import type { ExperimentService } from "../experiment/service.js";
 import type { ProviderRegistry } from "../llm/registry.js";
-import type { Db } from "../persistence/db.js";
+import { withTransaction, type Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { InteractionRepository, type DebriefSessionRecord, type InteractionEvent } from "../persistence/interactionRepository.js";
@@ -50,8 +50,11 @@ export interface HumanInteractionDeps {
   providers: ProviderRegistry;
   experiments: Pick<ExperimentService, "isRunning" | "onRunFinished">;
   outlet?: RoomOutlet;
-  /** Whether an automatic debrief may open for this finished run (e.g. not when its external room binding is closed). */
-  mayOpenDebrief?: (experimentId: string) => boolean;
+  /**
+   * Why a debrief may not open for this finished run now, or null — e.g. an automatic one once its external room
+   * binding is closed, or any one while that room is held by a newer binding.
+   */
+  debriefBlocked?: (experimentId: string, openedBy: "auto" | "operator") => string | null;
   now?: () => number;
 }
 
@@ -178,7 +181,7 @@ export class HumanInteractionService {
     const stopRequested = this.events
       .list(experimentId)
       .some((e) => e.type === "operator_intervention" && (e.payload.command as { type?: string } | undefined)?.type === "stop");
-    if (stopRequested || this.deps.mayOpenDebrief?.(experimentId) === false) return;
+    if (stopRequested || this.deps.debriefBlocked?.(experimentId, "auto")) return;
     await this.openDebrief(experimentId, "auto");
   }
 
@@ -187,6 +190,8 @@ export class HumanInteractionService {
     const record = this.record(experimentId);
     if (this.deps.experiments.isRunning(experimentId) || !record.finishedAt) throw new InteractionError("The experiment has not finished yet");
     if (record.batchId) throw new InteractionError("Batch runs have no debrief");
+    const blocked = this.deps.debriefBlocked?.(experimentId, openedBy);
+    if (blocked) throw new InteractionError(`No debrief can open now: ${blocked}`);
     const config = configOf(record);
     if (!this.debriefEnabled(record)) {
       throw new InteractionError(`Debrief is not enabled for this experiment (human interaction profile ${settingsOf(config).profile})`);
@@ -251,17 +256,20 @@ export class HumanInteractionService {
    */
   recoverInterrupted(): number {
     const stale = this.repo.openSessions().filter((s) => !this.sessions.has(s.experimentId));
-    for (const s of stale) {
-      const events = this.repo.listEvents(s.experimentId).filter((e) => e.sessionId === s.id);
-      const done = new Set(events.filter((e) => e.type === "debrief_answer_published" || e.type === "debrief_question_failed").map((e) => String(e.payload.questionId)));
-      const unanswered = events.filter((e) => e.type === "debrief_question_queued").map((e) => String(e.payload.questionId)).filter((id) => !done.has(id));
-      for (const questionId of unanswered) this.log(s.experimentId, s.id, "debrief_question_failed", { questionId, reason: "interrupted" });
-      const usage = { ...s.usage, failed: s.usage.failed + unanswered.length };
-      this.repo.updateUsage(s.id, usage);
-      this.repo.closeSession(s.id, "INTERRUPTED", "server restart", new Date(this.now()).toISOString());
-      this.log(s.experimentId, s.id, "debrief_closed", { sessionId: s.id, reason: "server restart", status: "INTERRUPTED", droppedQuestions: unanswered, usage });
-    }
+    for (const s of stale) withTransaction(this.deps.db, () => this.closeInterrupted(s));
     return stale.length;
+  }
+
+  /** One session cut off by a stopped process — its failed questions, usage, closing and final event together. */
+  private closeInterrupted(s: DebriefSessionRecord): void {
+    const events = this.repo.listEvents(s.experimentId).filter((e) => e.sessionId === s.id);
+    const done = new Set(events.filter((e) => e.type === "debrief_answer_published" || e.type === "debrief_question_failed").map((e) => String(e.payload.questionId)));
+    const unanswered = events.filter((e) => e.type === "debrief_question_queued").map((e) => String(e.payload.questionId)).filter((id) => !done.has(id));
+    for (const questionId of unanswered) this.log(s.experimentId, s.id, "debrief_question_failed", { questionId, reason: "interrupted" });
+    const usage = { ...s.usage, failed: s.usage.failed + unanswered.length };
+    this.repo.updateUsage(s.id, usage);
+    this.repo.closeSession(s.id, "INTERRUPTED", "server restart", new Date(this.now()).toISOString());
+    this.log(s.experimentId, s.id, "debrief_closed", { sessionId: s.id, reason: "server restart", status: "INTERRUPTED", droppedQuestions: unanswered, usage });
   }
 
   /** Before an experiment is deleted: stop its open session (its rows go with the experiment). */

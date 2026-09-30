@@ -84,16 +84,28 @@ export function openDb(dataDir: string = env.dataDir, synchronous: string = env.
  * batch on the same database leaves it alone.
  *
  * Invariant: recovery prefers leaving a dead owner's rows open a little longer
- * over interrupting an owner that may still be alive (which would also collide
- * with its next trace write). An owner is gone when
+ * over interrupting an owner that may still be alive (which kills a live, paid
+ * run and collides with its next trace write). An owner is gone when
  *  - it ran on this host and its pid no longer exists (a crash or restart is
  *    recovered at once), or
- *  - its heartbeat has been seen standing still for a whole lease, measured on
- *    THIS process's monotonic clock — a wall-clock jump or a machine waking from
- *    sleep cannot make a live owner look dead (see forgetLeaseObservations).
+ *  - its heartbeat has been seen standing still — measured on THIS process's
+ *    monotonic clock, so a wall-clock jump or a machine waking from sleep cannot
+ *    make a live owner look dead (see forgetLeaseObservations) — for a whole
+ *    lease (another host, or no pid on record), or for FROZEN_OWNER_TTL_MS when
+ *    its pid still exists on this host.
  */
 const HEARTBEAT_MS = 15_000;
 export const LEASE_TTL_MS = 60_000;
+/**
+ * Same-host PID existence is treated as strong evidence of liveness; a stale
+ * heartbeat alone is insufficient until this extended freeze timeout expires.
+ * A live process can stall for minutes (a console in QuickEdit selection mode
+ * blocks its output and with it the event loop; a paused debugger; Ctrl+Z).
+ * Deliberately long — do not "optimize" it back to LEASE_TTL_MS: a false "gone"
+ * kills a live paid run and corrupts its trace, a false "alive" only lets an
+ * orphan (a crashed owner whose pid was reused) wait a few minutes more.
+ */
+export const FROZEN_OWNER_TTL_MS = 10 * 60_000;
 const HOST = os.hostname();
 const ownerIds = new WeakMap<Db, string>();
 /** Per owner: the heartbeat last seen, and since when (monotonic ms) it has not moved. */
@@ -142,7 +154,9 @@ export function ownerAlive(db: Db, ownerId: string | null): boolean {
     | { pid: number | null; host: string | null; heartbeat_at: string }
     | undefined;
   if (!row) return false;
-  if (row.host === HOST && row.pid !== null && !pidExists(row.pid)) return false;
+  const sameHost = row.host === HOST && row.pid !== null;
+  if (sameHost && !pidExists(row.pid!)) return false;
+  const ttl = sameHost ? FROZEN_OWNER_TTL_MS : LEASE_TTL_MS;
   const now = (leaseClocks.get(db) ?? performance.now)();
   let seen = observations.get(db);
   if (!seen) observations.set(db, (seen = new Map()));
@@ -151,7 +165,7 @@ export function ownerAlive(db: Db, ownerId: string | null): boolean {
     seen.set(ownerId, { heartbeatAt: row.heartbeat_at, since: now });
     return true;
   }
-  return now - last.since < LEASE_TTL_MS;
+  return now - last.since < ttl;
 }
 
 /**

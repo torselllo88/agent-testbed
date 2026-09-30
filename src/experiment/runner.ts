@@ -220,15 +220,17 @@ export class ExperimentRunner {
     const scenarioConfig = parseExperimentConfig(rawConfig);
     const overrides = options.overrides ? RunOverridesSchema.parse(options.overrides) : undefined;
     // What the run snapshots and executes; the saved scenario itself is never modified.
+    const overridden = applyRunOverrides(scenarioConfig, overrides);
+    const runnable = checkRunnable(deps, overridden);
+    // One set of evaluator params — schema defaults applied — for the snapshot, the evaluator and both hashes.
     // Frozen for the whole run: nothing (an extension included) can change what agents are given or how the run is budgeted.
-    this.config = deepFreeze(applyRunOverrides(scenarioConfig, overrides));
+    this.config = deepFreeze(withEffectiveEvaluatorParams(overridden, runnable.evaluatorParams));
     this.id = options.id ?? randomUUID();
     this.strings = protocolStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
 
-    const runnable = checkRunnable(deps, this.config);
     this.evaluator = runnable.evaluator;
-    this.evaluatorParams = runnable.evaluatorParams;
+    this.evaluatorParams = this.config.evaluator.params;
 
     this.experiments = new ExperimentRepository(deps.db);
     this.log = new EventLog(this.id, new EventRepository(deps.db), deps.providers.secretValues(), () => this.phase);
@@ -953,6 +955,15 @@ export class ConfigNotRunnableError extends Error {
  * Everything beyond the config schema that must hold for a run to start —
  * checked before a run record is created, and by the editor's validation.
  */
+/**
+ * The config as a run snapshots, hashes and is judged with: evaluator params
+ * with the evaluator's schema defaults applied — so "{}" and every default
+ * written out are one configuration, with one configHash and taskDefinitionHash.
+ */
+export function withEffectiveEvaluatorParams(config: ExperimentConfig, evaluatorParams: unknown): ExperimentConfig {
+  return { ...config, evaluator: { ...config.evaluator, params: evaluatorParams as Record<string, unknown> } };
+}
+
 export function checkRunnable(
   deps: Pick<RunnerDeps, "providers" | "evaluators">,
   config: ExperimentConfig

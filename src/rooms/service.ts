@@ -252,10 +252,32 @@ export class ExternalRoomService implements RoomOutlet {
     return this.view(bindingId);
   }
 
+  /**
+   * Why a debrief may not open for this experiment now (null: it may).
+   *  - automatic: not once its binding is closed;
+   *  - by the operator (also after COMPLETED / INTERRUPTED): only while its binding is still the latest
+   *    open one of its room — a room holds one run at a time, and the adapter follows the newest binding.
+   * A closed binding detached the experiment from its room: an operator debrief is then local only.
+   */
+  debriefBlocked(experimentId: string, openedBy: "auto" | "operator"): string | null {
+    const binding = this.rooms.bindingForExperiment(experimentId);
+    if (!binding) return null;
+    if (binding.closedAt) return openedBy === "auto" ? "its external room binding is closed" : null;
+    const bindings = this.rooms.bindingsForRoom(binding.provider, binding.roomId);
+    const newer = bindings.slice(bindings.findIndex((b) => b.id === binding.id) + 1).some((b) => !b.closedAt);
+    return newer ? "its external room is already held by a newer binding" : null;
+  }
+
   /** An automatic debrief after the run opens only while the binding is not closed. */
   mayOpenDebrief(experimentId: string): boolean {
+    return this.debriefBlocked(experimentId, "auto") === null;
+  }
+
+  /** The experiment's binding while it is not closed: people then talk to it in that room, not elsewhere. */
+  openBindingFor(experimentId: string): { bindingId: string; provider: string; roomId: string; state: string } | null {
     const binding = this.rooms.bindingForExperiment(experimentId);
-    return !binding?.closedAt;
+    if (!binding || binding.closedAt) return null;
+    return { bindingId: binding.id, provider: binding.provider, roomId: binding.roomId, state: this.view(binding.id).state };
   }
 
   /** Closes the binding for good: stops anything live; inbound is refused afterwards. The outbox stays readable. */

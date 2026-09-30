@@ -276,16 +276,18 @@ has to be communicated.
 
 The proposal is `{ recovery_path, actions[] (ordered), life_support_power_kw }`.
 Every unsafe plan stays expressible. Order matters only where physics says so
-(evaluator v4):
+(evaluator v5):
 
 - the beacon goes to battery before comms go off;
 - power counts only from loads shut down *before* it is routed;
 - every system the plan runs — the declared path or one started on the side —
   is powered before it is started or activated;
-- R3 is evacuated before it is isolated — on any path — and for C, before the
-  dump fires.
+- R3 is evacuated before it is isolated — on any path — and for C, both
+  evacuated and isolated before the dump fires (two checks: an ending about
+  crew in the discharge path is only told when they were).
 
-Any other order is accepted.
+Any other order is accepted. One failure check is one statement the narrator
+can make without lying.
 Each failure mode is its own check, with its own grounded ending: C chosen,
 B with 22 kW, beacon unprotected, life support diverted, no SCRAM. An ending
 explains exactly the check that failed, with that check's own figures — a
@@ -295,7 +297,10 @@ system that was never powered is a start failure, not "30 kW available,
 variants `cascade/cooperative` (success) and `cascade/dump-c` (failure) let it
 run keyless.
 
-**Two hashes.** `configHash` identifies the exact configuration.
+**Two hashes.** `configHash` identifies the exact effective configuration —
+the one the run snapshots and executes, with evaluator params as the
+evaluator reads them (schema defaults applied: `{}` and every default written
+out are one configuration).
 `taskDefinitionHash` identifies the underlying problem: task text, each
 agent's id, role, objective and private context, the decision protocol and
 the evaluator — its id, **version** and parameters. Two evaluator versions
@@ -303,7 +308,10 @@ that judge one proposal differently are two tasks, so equal hashes always mean
 equal rules of success. Runs of Kestrel in English, Kestrel in
 Russian and the benchmark share a `taskDefinitionHash`, but they are **not**
 the same experimental condition: persona, models and language change
-behavior.
+behavior. The evaluator version itself is runtime metadata recorded with every
+run (`metrics.evaluatorVersion`, and a batch CSV column next to
+`config_hash` and `task_definition_hash`): for analysis, `configHash`
++ `evaluatorVersion` identify a condition, `taskDefinitionHash` the task.
 
 ---
 
@@ -690,7 +698,9 @@ tagged with its batch, condition and repetition.
   One broken condition rejects the whole batch, naming the condition. A path
   whose value the validated config does not carry (a typo such as
   `model.temprature`, or a setting the configuration does not use) is an
-  error, and so are two conditions that come out as the same config. The limit
+  error: every field a value sets must survive exactly, while fields the
+  schema adds to a whole-object value (defaults) are fine. Two conditions
+  that come out as the same effective config are an error too. The limit
   is 2000 runs per batch, checked before any condition is built.
 - **`order: "interleaved"`** (the default) runs repetition 1 of every condition,
   then repetition 2, and so on, so provider drift over time spreads evenly
@@ -1051,13 +1061,18 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
   process that owns it, and every process renews a lease in the database every
   15 s. Recovery (at startup and every minute) touches only rows whose owner
   is gone: its pid no longer exists on this host — so a crash or restart is
-  recovered at once — or its heartbeat has stood still for a whole lease
-  (60 s) as measured on the recovering process's own monotonic clock. A clock
-  jump or a machine waking from sleep cannot make a live owner look dead: after
-  its own timers ran late, the server skips a recovery pass. Recovery prefers
-  leaving a dead owner's rows open a minute longer over interrupting a live one.
-  So a server started next to a running CLI batch on the same database leaves
-  that batch alone.
+  recovered at once — or its heartbeat has stood still, as measured on the
+  recovering process's own monotonic clock, for a whole lease (60 s; another
+  host) or for 10 minutes when its pid still exists here. A live process can
+  freeze for minutes — a Windows console in QuickEdit selection mode blocks
+  it — and interrupting it would kill a paid run; an orphan whose pid was
+  reused only waits longer. A clock jump or a machine waking from sleep cannot
+  make a live owner look dead either: after its own timers ran late, the
+  server skips a recovery pass. Each recovered row is closed atomically (the
+  final event and the terminal row in one transaction), so a pass that fails
+  half-way is simply retried; a failed startup recovery never keeps the server
+  from starting. So a server started next to a running CLI batch on the same
+  database leaves that batch alone.
 - **External rooms (v1)** assume the room already exists and the identities are in it. Delivery is by long-polling rather than SSE or push. There are no typing indicators, and the bearer token is not encryption (see the [contract](docs/external-room-api.md)).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. If limits
   are exceeded anyway, provider retries with backoff are the fallback, and runs

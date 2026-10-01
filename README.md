@@ -51,7 +51,7 @@ outcomes and limits — is in [docs/concepts.md](docs/concepts.md).
 
 ## Quick start
 
-Requires **Node.js ≥ 22.5** (the built-in `node:sqlite` is used; no database server).
+Requires **Node.js ≥ 22.13** (the built-in `node:sqlite` is used, unflagged since 22.13; no database server).
 
 ```bash
 npm install
@@ -187,9 +187,11 @@ CI (`.github/workflows/ci.yml`) runs the build and the tests.
 - **Single process, in-memory scheduling.** Running experiments live in the
   server process; a restart ends them (recorded as `INTERRUPTED`). There is no
   distributed runtime; see [recovery](docs/reproducibility.md#durability-and-recovery).
-- **No authentication.** The server binds to loopback by default; operator
-  actions (including opening and closing a debrief) are unauthenticated API
-  calls, and in the viewer a person is whatever display name they type.
+- **Authentication is one shared operator token** (`OPERATOR_TOKEN`); without
+  it there is none, which is why the server binds to loopback by default. There
+  are no user accounts: in the viewer, a person is whatever display name they
+  type. Deploying on a platform: see
+  [configuration](docs/configuration.md#deploying-on-a-platform-railway-and-similar).
 - **The request gate is a semaphore**, not RPM/TPM rate limiting. Provider
   retries with backoff are the fallback; runs that still fail end as
   `PROVIDER_ERROR` (reported separately in batches).

@@ -2,10 +2,13 @@
 
 The web UI uses exactly this API, and so can scripts. JSON in, JSON out; `POST`
 and `PUT` require `Content-Type: application/json`. It is served by
-`npm run gui` (default `http://127.0.0.1:3939`), has **no authentication**, and
-answers only to loopback host names and `GUI_ALLOWED_HOSTS` (other `Host`
-headers get `421`). The separate API for external chat rooms is the
-[External Room API](external-room-api.md).
+`npm run gui` (default `http://127.0.0.1:3939`) and answers only to loopback
+host names and `GUI_ALLOWED_HOSTS` (other `Host` headers get `421`). With
+`OPERATOR_TOKEN` set, every request needs it (HTTP Basic password, any user
+name, or `Authorization: Bearer <token>`; otherwise `401`); without it there
+is no authentication. `GET /healthz` answers `200 {"ok":true}` for any host
+and without a token, for platform health checks. The separate API for
+external chat rooms is the [External Room API](external-room-api.md).
 
 | Method & path | Purpose |
 |---|---|

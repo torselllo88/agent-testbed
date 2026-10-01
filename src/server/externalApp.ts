@@ -153,7 +153,12 @@ function sendError(res: http.ServerResponse, status: number, code: string, messa
 }
 
 export function createExternalApp(deps: { rooms: ExternalRoomService; token: string }): http.Server {
-  return http.createServer((req, res) => {
+  return http.createServer(externalRequestHandler(deps));
+}
+
+/** The External Room API's request handler: its own listener, or mounted on the operator one (EXTERNAL_API_LISTENER=main). */
+export function externalRequestHandler(deps: { rooms: ExternalRoomService; token: string }): http.RequestListener {
+  return (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     void (async () => {
       try {
@@ -175,5 +180,5 @@ export function createExternalApp(deps: { rooms: ExternalRoomService; token: str
         sendError(res, 500, "INTERNAL", err instanceof Error ? err.message : String(err));
       }
     })();
-  });
+  };
 }

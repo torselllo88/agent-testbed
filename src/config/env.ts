@@ -80,6 +80,12 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
   /**
+   * When set, the operator UI and API require it (HTTP Basic auth: any user
+   * name, this as the password; or "Authorization: Bearer <token>"). Unset =
+   * no authentication — fine on loopback, never on a public host.
+   */
+  operatorToken: process.env.OPERATOR_TOKEN || undefined,
+  /**
    * External Room API (docs/external-room-api.md): a separate listener that
    * serves only /api/external/*, so the operator UI can stay on loopback.
    * Disabled unless a token is set. The token is plain bearer auth: put TLS
@@ -89,6 +95,12 @@ export const env = {
     token: process.env.EXTERNAL_API_TOKEN || undefined,
     port: parseIntEnv(process.env.EXTERNAL_API_PORT, 3940),
     host: process.env.EXTERNAL_API_HOST || "127.0.0.1",
+    /**
+     * "separate" (default): its own listener (port/host above). "main": served on the
+     * operator listener under /api/external/* instead — for platforms that expose one
+     * port per service. Its own bearer token applies either way; the operator token does not.
+     */
+    listener: process.env.EXTERNAL_API_LISTENER === "main" ? ("main" as const) : ("separate" as const),
     /** Default-deny: only these scenarios (built-in ids or library scenario ids) can be started externally. */
     scenarios: (process.env.EXTERNAL_SCENARIOS ?? "")
       .split(",")

@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +41,10 @@ export interface AppDeps {
   allowedHosts?: string[];
   /** OpenRouter model list for the editor; omitted = not offered. */
   openRouterModels?: OpenRouterModelCatalog;
+  /** OPERATOR_TOKEN: when set, every operator request needs it (HTTP Basic password, or Bearer). */
+  operatorToken?: string;
+  /** The External Room API mounted under /api/external/* on this listener (EXTERNAL_API_LISTENER=main). */
+  externalApi?: http.RequestListener;
 }
 
 interface RouteContext {
@@ -509,6 +514,24 @@ function errorStatusAndMessage(err: unknown): { status: number; body: Record<str
  */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/** HTTP Basic with the token as the password (any user name), or a Bearer token. Constant-time. */
+export function operatorAuthorized(header: string | undefined, token: string): boolean {
+  if (!header) return false;
+  const basic = /^Basic\s+(\S+)$/i.exec(header);
+  const bearer = /^Bearer\s+(.+)$/i.exec(header);
+  let presented: string | null = null;
+  if (basic) {
+    const decoded = Buffer.from(basic[1]!, "base64").toString("utf8");
+    const colon = decoded.indexOf(":");
+    presented = colon >= 0 ? decoded.slice(colon + 1) : null;
+  } else if (bearer) {
+    presented = bearer[1]!.trim();
+  }
+  if (presented === null) return false;
+  const digest = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(digest(presented), digest(token));
+}
+
 export function hostAllowed(hostHeader: string | undefined, extraHosts: readonly string[] = []): boolean {
   if (!hostHeader) return false;
   const host = hostHeader.trim().toLowerCase().replace(/:\d+$/, "");
@@ -525,8 +548,17 @@ export function createApp(deps: AppDeps): http.Server {
   return http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
 
+    // Liveness for a platform's health check: no host check, no auth, no data.
+    if (url.pathname === "/healthz" && (req.method === "GET" || req.method === "HEAD")) return sendJson(res, 200, { ok: true });
+    // The External Room API has its own bearer token, and its clients are remote by design.
+    if (deps.externalApi && url.pathname.startsWith("/api/external/")) return deps.externalApi(req, res);
+
     void (async () => {
       try {
+        if (deps.operatorToken && !operatorAuthorized(req.headers.authorization, deps.operatorToken)) {
+          res.setHeader("WWW-Authenticate", 'Basic realm="Agent Testbed", charset="UTF-8"');
+          return sendJson(res, 401, { error: "Authentication required (OPERATOR_TOKEN)" });
+        }
         if (!hostAllowed(req.headers.host, deps.allowedHosts)) {
           return sendJson(res, 421, { error: `Host "${req.headers.host ?? ""}" is not served. Add it to GUI_ALLOWED_HOSTS if you reach the testbed under that name.` });
         }

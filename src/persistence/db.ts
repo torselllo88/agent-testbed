@@ -155,7 +155,9 @@ export function ownerAlive(db: Db, ownerId: string | null): boolean {
     | undefined;
   if (!row) return false;
   const sameHost = row.host === HOST && row.pid !== null;
-  if (sameHost && !pidExists(row.pid!)) return false;
+  // Our own pid under another owner id is a previous process — typical in a container, where the server is
+  // always pid 1. (Pid checks assume one pid namespace per host name.)
+  if (sameHost && (row.pid === process.pid || !pidExists(row.pid!))) return false;
   const ttl = sameHost ? FROZEN_OWNER_TTL_MS : LEASE_TTL_MS;
   const now = (leaseClocks.get(db) ?? performance.now)();
   let seen = observations.get(db);

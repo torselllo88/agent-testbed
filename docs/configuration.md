@@ -108,8 +108,36 @@ See [.env.example](../.env.example). All variables are optional.
 | `STUB_LATENCY_MS` | `300` | Stub latency in the web UI only, so stub runs can be watched live |
 | `DATA_DIR` | `./data` | Where the SQLite database lives |
 | `GUI_PORT` / `PORT` | `3939` | Web UI port |
-| `GUI_HOST` | `127.0.0.1` | Bind address. **There is no authentication**; only use `0.0.0.0` deliberately |
+| `GUI_HOST` | `127.0.0.1` | Bind address. Without `OPERATOR_TOKEN` **there is no authentication**; only use `0.0.0.0` deliberately |
+| `OPERATOR_TOKEN` | — | When set, the UI and the operator API require it: HTTP Basic auth with any user name and the token as the password, or `Authorization: Bearer <token>`. Required on any public host |
 | `GUI_ALLOWED_HOSTS` | — | Host names the operator UI answers to besides loopback. Requests for any other `Host` get `421`, a DNS-rebinding guard. Needed only when you reach the UI under another name |
 | `EXTERNAL_API_TOKEN` | — | Enables the [External Room API](external-room-api.md) on its own listener (bearer token) |
 | `EXTERNAL_API_PORT` / `EXTERNAL_API_HOST` | `3940` / `127.0.0.1` | External Room API listener. For remote adapters, put TLS or a private network in front of it |
+| `EXTERNAL_API_LISTENER` | `separate` | `main` serves `/api/external/*` on the UI's listener instead (one public port per service); the API's own bearer token applies either way |
 | `EXTERNAL_SCENARIOS` | — | Comma-separated built-in or library scenario ids that may be started externally (default-deny) |
+
+## Deploying on a platform (Railway and similar)
+
+Nothing is bound to localhost in code: the port comes from `PORT`, the bind
+address and served host names from the environment. A public deployment
+needs:
+
+| Setting | Value | Why |
+|---|---|---|
+| `GUI_HOST` | `0.0.0.0` | the default `127.0.0.1` is unreachable for the platform's proxy |
+| `OPERATOR_TOKEN` | a long random value | without it, anyone with the URL can run experiments on your provider keys, read every trace and delete data |
+| `GUI_ALLOWED_HOSTS` | `<app>.up.railway.app` (+ any custom domain) | other `Host` headers get `421` (DNS-rebinding guard) |
+| a volume, `DATA_DIR` | e.g. mount at `/data`, `DATA_DIR=/data` | the container's filesystem is wiped on every deploy; the SQLite database holds scenarios and all traces |
+| start command | `node --import tsx src/server/main.ts` | not `npm start` (it reinstalls on every start); the UI is served from `src/gui/public`, so `node dist/…` does not serve it |
+| Node | ≥ 22.13 (`.node-version`: 24) | `node:sqlite` needs a flag before 22.13 |
+| replicas | 1 | SQLite and the in-memory scheduler are single-process |
+| health check path | `/healthz` | answers `200 {"ok":true}` for any `Host` and without the operator token |
+| `OPENROUTER_API_KEY` | your key | as locally |
+
+For the [External Room API](external-room-api.md): set `EXTERNAL_API_TOKEN`,
+`EXTERNAL_SCENARIOS` and either `EXTERNAL_API_LISTENER=main` (served on the
+public URL under `/api/external/*`) or, for an adapter inside the same
+private network, `EXTERNAL_API_HOST=0.0.0.0` on its own port.
+
+A redeploy ends running experiments; they are recovered as `INTERRUPTED` by
+the new process ([recovery](reproducibility.md#durability-and-recovery)).

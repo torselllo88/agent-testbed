@@ -108,16 +108,18 @@ describe("persistence and server review fixes", () => {
   it("recovery: a crashed owner's rows at once; a silent one's after a lease (another host) or the freeze timeout (its pid lives on); a live one's never", () => {
     const t = testbed();
     const repo = new ExperimentRepository(t.db);
+    // A pid that exists on this host and is not ours (our own pid under another owner id means a previous process).
+    const livePid = process.ppid;
     let mono = 1_000_000;
     setLeaseClockForTests(t.db, () => mono);
     let wall = Date.now();
     const iso = (msAgo: number) => new Date((wall += 1) - msAgo).toISOString(); // every beat a distinct timestamp
     const lease = t.db.prepare(`INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES (?, ?, ?, ?)`);
-    lease.run("proc_live", process.pid, os.hostname(), iso(0));
+    lease.run("proc_live", livePid, os.hostname(), iso(0));
     lease.run("proc_crashed", deadPid(), os.hostname(), iso(0)); // restarted within its lease: the pid is gone
-    lease.run("proc_silent", process.pid, os.hostname(), iso(10 * 60_000)); // stale — but its pid lives on (frozen, or reused)
+    lease.run("proc_silent", livePid, os.hostname(), iso(10 * 60_000)); // stale — but its pid lives on (frozen, or reused)
     lease.run("proc_remote", 4242, "another-host", iso(10 * 60_000)); // stale, and no pid to check here
-    lease.run("proc_jumped", process.pid, os.hostname(), iso(10 * 60_000)); // looks stale after a clock jump, still beating
+    lease.run("proc_jumped", livePid, os.hostname(), iso(10 * 60_000)); // looks stale after a clock jump, still beating
     const ids = { live: "run-live", crashed: "run-crashed", silent: "run-silent", remote: "run-remote", jumped: "run-jumped", unknown: "run-without-owner" };
     for (const id of Object.values(ids)) repo.create({ id, config: kestrelConfig(), configHash: "h", testbedVersion: { version: "test" } as never });
     const own = t.db.prepare(`UPDATE experiments SET owner_id = ? WHERE id = ?`);

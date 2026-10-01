@@ -8,7 +8,7 @@ import { ScenarioRepository } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
 import { createApp } from "./app.js";
 import { composeTestbed } from "./compose.js";
-import { createExternalApp } from "./externalApp.js";
+import { createExternalApp, externalRequestHandler } from "./externalApp.js";
 
 const db = openDb();
 const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider(env.stubLatencyMs)));
@@ -66,7 +66,20 @@ if (synced.added.length || synced.updated.length) {
   console.log(`Built-in scenarios: added [${synced.added.join(", ")}], updated [${synced.updated.join(", ")}]`);
 }
 
-const server = createApp({ db, providers, evaluators, service, batches, interaction, rooms, allowedHosts: env.allowedHosts, openRouterModels: new OpenRouterModelCatalog(env.openRouter.baseUrl) });
+const externalOnMain = Boolean(env.externalApi.token) && env.externalApi.listener === "main";
+const server = createApp({
+  db,
+  providers,
+  evaluators,
+  service,
+  batches,
+  interaction,
+  rooms,
+  allowedHosts: env.allowedHosts,
+  openRouterModels: new OpenRouterModelCatalog(env.openRouter.baseUrl),
+  operatorToken: env.operatorToken,
+  externalApi: externalOnMain ? externalRequestHandler({ rooms, token: env.externalApi.token! }) : undefined,
+});
 
 server.listen(env.port, env.host, () => {
   console.log(`Agent testbed running at http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`);
@@ -75,14 +88,21 @@ server.listen(env.port, env.host, () => {
     .filter((p) => p.configured)
     .map((p) => p.id);
   console.log(`LLM providers available: ${configured.join(", ")}`);
-  if (env.host === "0.0.0.0") {
-    console.log("Bound to 0.0.0.0 — reachable from outside this machine, with no authentication. Make sure that's intended.");
+  if (env.operatorToken && env.operatorToken.length < 16) console.log("OPERATOR_TOKEN is short — use a long random value.");
+  if (env.host === "0.0.0.0" && !env.operatorToken) {
+    console.log(
+      "\n*** Bound to 0.0.0.0 WITHOUT authentication: anyone who can reach this address can run experiments on your provider keys,\n" +
+        "*** read every trace and delete data. Set OPERATOR_TOKEN unless this network is private. ***\n"
+    );
     console.log("Requests are only served for localhost / 127.0.0.1 unless you list other names in GUI_ALLOWED_HOSTS (DNS-rebinding guard).");
   }
 });
 
 // External Room API: its own listener, only /api/external/*, only with a token (docs/external-room-api.md).
-if (env.externalApi.token) {
+if (env.externalApi.token && externalOnMain) {
+  if (env.externalApi.token.length < 24) console.log("EXTERNAL_API_TOKEN is short — use a long random value.");
+  console.log(`External Room API on the main listener under /api/external (scenarios: ${env.externalApi.scenarios.join(", ") || "none allowed"})`);
+} else if (env.externalApi.token) {
   if (env.externalApi.token.length < 24) console.log("EXTERNAL_API_TOKEN is short — use a long random value.");
   createExternalApp({ rooms, token: env.externalApi.token }).listen(env.externalApi.port, env.externalApi.host, () => {
     console.log(`External Room API at http://${env.externalApi.host}:${env.externalApi.port}/api/external (scenarios: ${env.externalApi.scenarios.join(", ") || "none allowed"})`);

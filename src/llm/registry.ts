@@ -148,6 +148,9 @@ export function createProviderRegistryFromEnv(stub: StubProvider = new StubProvi
     secrets.push(azureOpenAi.apiKey);
   }
 
+  // Access tokens never belong in a trace either: scrub them like provider keys.
+  for (const token of [env.operatorToken, env.externalApi.token]) if (token) secrets.push(token);
+
   return new ProviderRegistry(providers, stub, {
     secrets,
     maxConcurrentRequests: env.llmMaxConcurrentRequests,

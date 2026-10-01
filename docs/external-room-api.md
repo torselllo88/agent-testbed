@@ -41,13 +41,16 @@ or a different chat system, needs no change to this API.
 ## 2. Setup (testbed side)
 
 The API runs on its **own listener**, which serves only `/api/external/*`. The
-operator UI stays on loopback.
+operator UI stays on loopback. On a platform with one public port per service,
+`EXTERNAL_API_LISTENER=main` serves the same API under `/api/external/*` on
+the operator listener instead — still behind this API's own bearer token.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `EXTERNAL_API_TOKEN` | *(unset → API disabled)* | Bearer token the adapter must send. Use a long random value. |
 | `EXTERNAL_API_PORT` | `3940` | Port of the external listener. |
 | `EXTERNAL_API_HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` or a private interface to reach it from another host. |
+| `EXTERNAL_API_LISTENER` | `separate` | `main`: serve the API on the operator listener (port and host above are then unused). |
 | `EXTERNAL_SCENARIOS` | *(empty → nothing startable)* | Comma-separated scenarios that may be started externally: built-in ids (`station-kestrel`) or library scenario ids. **Default-deny**, because starting a run can spend money on LLM calls. |
 
 > **Transport security.** A bearer token is not encryption. For a remote

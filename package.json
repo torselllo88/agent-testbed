@@ -15,7 +15,8 @@
     "batch": "tsx src/cli/batch.ts",
     "room:mock": "tsx src/cli/roomMock.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "node tests/e2e/run.mjs"
   },
   "engines": {
     "node": ">=22.13.0"

@@ -29,6 +29,17 @@ Add a folder next to [src/scenarios/spaceStation/](../src/scenarios/spaceStation
 Nothing in `experiment/`, `scheduling/`, `presentation/` or `transport/`
 changes; generic code must not name the scenario (a test enforces it).
 
+## Changing the core's protocol texts
+
+Any text the core shows agents — a prompt template in
+[src/experiment/protocol.ts](../src/experiment/protocol.ts), a moderator notice
+in [protocolStrings.ts](../src/experiment/protocolStrings.ts), a response
+schema — is part of the protocol fingerprint. Changing it fails
+[tests/experiment/protocolFingerprint.test.ts](../tests/experiment/protocolFingerprint.test.ts)
+until the snapshot is updated: runs before and after are a different protocol.
+New agent-visible text belongs in those modules (not inline in the runner), so
+the fingerprint covers it.
+
 ## A new scheduling strategy
 
 Leader-based, expertise-based, random, …: implement `Scheduler.next(ctx)` in

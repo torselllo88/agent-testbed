@@ -84,8 +84,10 @@ provider instability is never hidden by the denominator.
 
 - **CSV**, one row per run: a column per variable, outcome, category,
   consensus, turns, messages, tokens, cost, duration, intervention flag,
-  `config_hash`, `evaluator_version`, `task_definition_hash`.
+  `config_hash`, `evaluator_version`, `protocol_fingerprint`,
+  `task_definition_hash`.
 - **JSON:** the resolved spec, aggregates and per-run summaries.
 
-For analysis, `config_hash` + `evaluator_version` identify a condition and
-`task_definition_hash` the task (see [reproducibility](reproducibility.md#hashes)).
+For analysis, `config_hash` + `evaluator_version` + `protocol_fingerprint`
+identify a condition and `task_definition_hash` the task (see
+[reproducibility](reproducibility.md#hashes)).

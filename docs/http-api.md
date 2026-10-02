@@ -12,7 +12,7 @@ external chat rooms is the [External Room API](external-room-api.md).
 
 | Method & path | Purpose |
 |---|---|
-| `GET /api/meta` | versions, providers (with request-gate state), stub models, evaluators (with proposal schemas), schedulers, consensus rules, outcomes, builtin scenarios |
+| `GET /api/meta` | versions (incl. the current `protocolFingerprint`), providers (with request-gate state), stub models, evaluators (with proposal schemas), schedulers, consensus rules, outcomes, builtin scenarios |
 | `GET /api/providers/openrouter/models` | OpenRouter's model catalog for the editor: id, name, context, price per M tokens, structured-output support (cached 6 h; 502 if unreachable) |
 | `GET/POST /api/scenarios` | library (built-ins first, read-only) / create a user scenario (`{config}` or `{builtin}`) |
 | `POST /api/scenarios/validate` | schema and runnability check, without saving |

@@ -7,6 +7,7 @@ import { effectiveOpenRouterRouting, type ModelRef, type RuntimeConfig } from ".
 import { EventType } from "./events.js";
 import { termination, TerminateRun } from "./outcome.js";
 import { parseWithSchema } from "./parseJson.js";
+import { PROTOCOL_FEEDBACK } from "./protocol.js";
 
 export type CallPurpose = "discussion" | "proposal" | "vote" | "router";
 
@@ -98,7 +99,7 @@ export class LlmCaller {
           { role: "assistant", content: lastText },
           {
             role: "user",
-            content: `Your previous response could not be used (${lastError}). Respond again with ONLY a single JSON object in the required format — no other text.`,
+            content: PROTOCOL_FEEDBACK.parseRetry(lastError),
           }
         );
       }

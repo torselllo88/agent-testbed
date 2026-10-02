@@ -9,6 +9,7 @@ import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import { ConfigValidationError, configHash, HUMAN_INTERACTION_PROFILES, parseExperimentConfig, RunOverridesSchema, taskDefinitionHash, type RunOverrides } from "../experiment/config.js";
 import { COMMON_LANGUAGES } from "../experiment/languages.js";
+import { PROTOCOL_FINGERPRINT } from "../experiment/protocolFingerprint.js";
 import { AUTHORED_PROTOCOL_LANGUAGES } from "../experiment/protocolStrings.js";
 import { toJsonSchema } from "../experiment/jsonSchema.js";
 import { OUTCOMES } from "../experiment/outcome.js";
@@ -163,6 +164,7 @@ const ROUTES: Route[] = [
     handle: ({ res, deps }) =>
       sendJson(res, 200, {
         testbedVersion: getTestbedVersion(),
+        protocolFingerprint: PROTOCOL_FINGERPRINT,
         providers: deps.providers.status(),
         stubModels: deps.providers.stub.models(),
         evaluators: deps.evaluators.list().map((e) => ({

@@ -224,3 +224,24 @@ export function renderRouterPrompt(
     ].join("\n\n"),
   };
 }
+
+/** Feedback agents read when a response could not be used — part of the protocol, like the prompts. */
+export const PROTOCOL_FEEDBACK = {
+  /** Re-ask within the same activation after an unparseable or schema-invalid response. */
+  parseRetry: (error: string) =>
+    `Your previous response could not be used (${error}). Respond again with ONLY a single JSON object in the required format — no other text.`,
+  /** Fed back to the proposer on its next format try. */
+  proposalUnparseable: (error: string) => `the response was not a JSON object of the required shape (${error})`,
+  proposalSchemaInvalid: (error: string) => `the proposal does not match the required structure (${error})`,
+};
+
+/** Prompt note for a readiness re-check turn: which messages arrived since the agent declared readiness. */
+export function readinessRecheckNote(transcript: RoomMessage[], agentId: string, declaredAt: number | null): string {
+  const newer = transcript.filter((m) => m.index > (declaredAt ?? 0) && !(m.sender.kind === "agent" && m.sender.agentId === agentId));
+  const range = newer.length ? (newer.length === 1 ? `#${newer[0]!.index}` : `#${newer[0]!.index}–#${newer.at(-1)!.index}`) : "new messages";
+  return (
+    `You are being asked to re-confirm your readiness: you declared readyToCommit earlier, and ${range} arrived after that. ` +
+    "If those messages do not change your view, PASS (pass=true, empty message) with readyToCommit=true — do not post a restating confirmation. " +
+    "Post a message only if you have new information or an objection."
+  );
+}

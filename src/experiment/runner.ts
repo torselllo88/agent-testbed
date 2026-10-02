@@ -27,6 +27,7 @@ import {
 } from "./config.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { NarratorSender, RunExtension, RunExtensionContext, RunExtensionFactory } from "./extensions.js";
+import { PROTOCOL_FINGERPRINT } from "./protocolFingerprint.js";
 import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
 import { EventLog, EventType, redactSecrets } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
@@ -35,8 +36,10 @@ import { termination, TerminateRun, type Termination } from "./outcome.js";
 import { formatZodError } from "./parseJson.js";
 import { assertTransition, Phase } from "./phases.js";
 import {
+  PROTOCOL_FEEDBACK,
   ProposalEnvelopeSchema,
   proposalJsonSchema,
+  readinessRecheckNote,
   renderDiscussionPrompt,
   renderProposalPrompt,
   renderSystemPrompt,
@@ -422,6 +425,8 @@ export class ExperimentRunner {
       config,
       configHash: configHash(config),
       taskDefinitionHash: taskDefinitionHash(config, this.evaluator.version),
+      // The shared protocol assets agents read (prompt templates, notices, schemas) — see protocolFingerprint.ts.
+      protocolFingerprint: PROTOCOL_FINGERPRINT,
       testbedVersion: getTestbedVersion(),
       environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
@@ -616,7 +621,7 @@ export class ExperimentRunner {
       if (!result.ok) {
         lastFailure = { kind: "parse", error: result.parseError };
         this.log.append(EventType.PROPOSAL_REJECTED_FORMAT, { attempt: this.proposalAttempt, formatTry, kind: "parse", error: result.parseError, rawText: result.rawText }, proposer.id);
-        feedback = `the response was not a JSON object of the required shape (${result.parseError})`;
+        feedback = PROTOCOL_FEEDBACK.proposalUnparseable(result.parseError);
         this.completeTurn(proposer.id, turn, { kind: "proposal", result: "unparseable" });
         continue;
       }
@@ -639,7 +644,7 @@ export class ExperimentRunner {
           { attempt: this.proposalAttempt, formatTry, kind: "schema", error, proposal: envelope.proposal },
           proposer.id
         );
-        feedback = `the proposal does not match the required structure (${error})`;
+        feedback = PROTOCOL_FEEDBACK.proposalSchemaInvalid(error);
         this.completeTurn(proposer.id, turn, { kind: "proposal", result: "schema_invalid" });
         continue;
       }
@@ -930,17 +935,6 @@ export class ExperimentRunner {
       this.budget.resume();
     }
   }
-}
-
-/** Prompt note for a readiness re-check turn: which messages arrived since the agent declared readiness. */
-function readinessRecheckNote(transcript: RoomMessage[], agentId: string, declaredAt: number | null): string {
-  const newer = transcript.filter((m) => m.index > (declaredAt ?? 0) && !(m.sender.kind === "agent" && m.sender.agentId === agentId));
-  const range = newer.length ? (newer.length === 1 ? `#${newer[0]!.index}` : `#${newer[0]!.index}–#${newer.at(-1)!.index}`) : "new messages";
-  return (
-    `You are being asked to re-confirm your readiness: you declared readyToCommit earlier, and ${range} arrived after that. ` +
-    "If those messages do not change your view, PASS (pass=true, empty message) with readyToCommit=true — do not post a restating confirmation. " +
-    "Post a message only if you have new information or an objection."
-  );
 }
 
 /** A schema-valid config that still cannot run here (unknown evaluator, bad params, provider not configured, ...). */

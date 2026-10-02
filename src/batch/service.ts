@@ -320,6 +320,7 @@ export class BatchService {
       "config_hash",
       // configHash is the effective configuration; the evaluator version judging it is runtime metadata beside it.
       "evaluator_version",
+      "protocol_fingerprint",
       "task_definition_hash",
     ];
     const rows = this.runs(id)
@@ -351,6 +352,7 @@ export class BatchService {
           r.intervened,
           r.configHash,
           m.evaluatorVersion,
+          m.protocolFingerprint,
           r.taskDefinitionHash,
         ];
       });

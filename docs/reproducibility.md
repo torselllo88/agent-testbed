@@ -11,7 +11,7 @@
   latency, the effective SQLite durability mode, the provider request limit,
   the effective conversation language, the scenario's default language,
   whether the language was overridden for this run, and `headless`;
-- **the evaluator id and version.**
+- **the evaluator id and version**, and the **protocol fingerprint**.
 
 ## Hashes
 
@@ -28,9 +28,32 @@
   mean equal rules of success.
 - **`evaluatorVersion`** is runtime metadata recorded with every run
   (`metrics.evaluatorVersion`, and a batch CSV column).
+- **`protocolFingerprint`** identifies the shared protocol assets — what the
+  core itself tells every agent, independent of any scenario: the prompt
+  templates (system, discussion, proposal, vote, router), runtime notes and
+  feedback (readiness re-check, parse retry, proposal format feedback), the
+  moderator's protocol notices in every authored language, and the JSON
+  schemas agents answer with. It is computed automatically by rendering those
+  templates for fixed neutral fixtures and hashing the result
+  ([src/experiment/protocolFingerprint.ts](../src/experiment/protocolFingerprint.ts)),
+  so a refactor that keeps every text keeps it, and any change of a text
+  changes it (a snapshot test makes that change visible in review). It does
+  not describe the whole runtime: readiness logic, scheduling and parsing are
+  code, and the git commit stays the final provenance. Recorded in
+  `experiment_started`, `metrics.protocolFingerprint` and the batch CSV.
 
-For analysis, `configHash` + `evaluatorVersion` identify a condition,
-`taskDefinitionHash` the task. Runs of Kestrel in English, Kestrel in Russian
+A run's identity, then:
+
+| Field | Answers |
+|---|---|
+| `taskDefinitionHash` | what is being solved, and by which rules of success |
+| `configHash` | with which settings it runs |
+| `evaluatorVersion` | what judges it |
+| `protocolFingerprint` | by which shared rules agents interact |
+| git commit (`testbedVersion`) | which code exactly executed it |
+
+For analysis, `configHash` + `evaluatorVersion` + `protocolFingerprint`
+identify a condition, `taskDefinitionHash` the task. Runs of Kestrel in English, Kestrel in Russian
 and the benchmark share a `taskDefinitionHash`, but they are **not** the same
 experimental condition: persona, models and language change behavior.
 

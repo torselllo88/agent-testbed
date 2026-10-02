@@ -46,6 +46,8 @@ export interface ExperimentMetrics {
   extensionErrors: number;
   /** The version of the evaluator that judged the run (runtime metadata, not part of configHash; part of taskDefinitionHash). */
   evaluatorVersion: string | null;
+  /** The shared protocol assets agents read (runtime metadata, like evaluatorVersion). */
+  protocolFingerprint: string | null;
 }
 
 const inc = (map: Record<string, number>, key: string, by = 1) => {
@@ -79,6 +81,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     errors: 0,
     extensionErrors: 0,
     evaluatorVersion: null,
+    protocolFingerprint: null,
   };
 
   let startedTs: string | null = null;
@@ -91,6 +94,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
       case EventType.EXPERIMENT_STARTED:
         startedTs = e.ts;
         m.evaluatorVersion = (p.evaluator as { version?: string } | undefined)?.version ?? null;
+        m.protocolFingerprint = typeof p.protocolFingerprint === "string" ? p.protocolFingerprint : null;
         break;
       case EventType.EXPERIMENT_FINISHED:
         finishedTs = e.ts;

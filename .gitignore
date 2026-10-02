@@ -16,3 +16,6 @@ data/*
 
 *.log
 *.tar.gz
+
+# Browser end-to-end checks: screenshots
+.e2e-out/

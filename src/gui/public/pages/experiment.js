@@ -295,6 +295,7 @@ export async function renderExperiment(experimentId) {
           <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall${s.durationMs.presentation ? `, ${formatDuration(s.durationMs.presentation)} presentation pacing` : ""}${s.durationMs.paused ? `, ${formatDuration(s.durationMs.paused)} paused` : ""}</dd>
           <dt>Language</dt><dd>${escapeHtml(state.experiment.config.conversation?.language ?? "en")}</dd>
           <dt>Task definition</dt><dd class="muted small">${escapeHtml((state.experiment.taskDefinitionHash ?? "—").slice(0, 16))}</dd>
+          <dt>Evaluator · protocol</dt><dd class="muted small">v${escapeHtml(s.evaluatorVersion ?? "—")} · ${escapeHtml(s.protocolFingerprint ?? "—")}</dd>
           <dt>Routing</dt><dd>${routing || "—"}${s.routing.invalidExplicitTargets ? ` · ${s.routing.invalidExplicitTargets} invalid target(s)` : ""}${s.routing.classifierFailures ? ` · ${s.routing.classifierFailures} classifier failure(s)` : ""}</dd>
           <dt>Readiness invalidations</dt><dd>${s.readiness.invalidations}</dd>
           ${incidents.length ? `<dt>Protocol incidents</dt><dd>${incidents.map(([k, n]) => `${escapeHtml(k)} ${n}`).join(", ")}</dd>` : ""}

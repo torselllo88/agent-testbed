@@ -21,3 +21,28 @@ jobs:
       # Fully hermetic — blanks all secret env vars before running, so no
       # OPENROUTER_API_KEY/AZURE_*/BRAVE_SEARCH_API_KEY secrets are needed here.
       - run: npm test
+
+  e2e:
+    # Browser end-to-end checks (tests/e2e) in the runner's preinstalled Chrome — keyless, stub agents only.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm run test:e2e
+        env:
+          CHROME_PATH: google-chrome
+
+      - name: Screenshots of failed checks
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: .e2e-out/
+          if-no-files-found: ignore

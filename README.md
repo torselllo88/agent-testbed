@@ -176,11 +176,12 @@ isolation is enforced at runtime and by tests. See
 ## Development
 
 ```bash
-npm test         # vitest — hermetic: never reads your .env, never calls a real provider
-npm run build    # tsc type-check + compile to dist/
+npm test           # vitest — hermetic: never reads your .env, never calls a real provider
+npm run build      # tsc type-check + compile to dist/
+npm run test:e2e   # browser end-to-end checks in a headless Chrome (keyless; see tests/e2e/README.md)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the build and the tests.
+CI (`.github/workflows/ci.yml`) runs the build, the tests and the browser checks.
 
 ## Known limitations
 

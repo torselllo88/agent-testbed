@@ -72,6 +72,8 @@ interface, `RunExtension` ([src/experiment/extensions.ts](../src/experiment/exte
 This is enforced at runtime, not only by the types:
 
 - the run's config is frozen;
+- the ending snapshot (termination, evaluation and consensus) is detached and
+  deeply frozen, as are trace events handed to subscribers;
 - `post` accepts only narrator messages, and caller metadata cannot overwrite
   the message's own fields; what it returns (like every message an extension
   gets) is a detached, deeply frozen copy;

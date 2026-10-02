@@ -34,6 +34,7 @@ STATION KESTREL IS SECURE. Mission successful.`,
 MISSION FAILED.`],
   },
   missionFailure: {
+    loop_b_started_in_time: [EN_LOCKED, "The procedure completes R3 evacuation before starting loop B. Cooling starts at {{derived.loopBStartMinutes}} minutes, after the {{derived.reactorSafeWindowMinutes}}-minute reactor window. MISSION FAILED: cooling started too late."],
     r3_evacuation_in_time: [
       "Vote: {{votes.approvals}} of {{votes.eligible}} in favor. Decision locked — emergency thermal dump C authorized.",
       "Station status: service ring R3 evacuation estimate {{derived.r3EvacuationMinutes}} minutes. Remaining safe reactor window: {{derived.reactorSafeWindowMinutes}} minutes.",
@@ -141,6 +142,7 @@ const RU: PresentationStrings = {
 МИССИЯ ПРОВАЛЕНА.`],
   },
   missionFailure: {
+    loop_b_started_in_time: [RU_LOCKED, "Процедура завершает эвакуацию R3 до запуска контура Б. Охлаждение запускается на отметке {{derived.loopBStartMinutes}} мин., после безопасного окна реактора в {{derived.reactorSafeWindowMinutes}} мин. МИССИЯ ПРОВАЛЕНА: охлаждение запущено слишком поздно."],
     r3_evacuation_in_time: [
       "Голосование: «за» — {{votes.approvals}} из {{votes.eligible}}. Решение принято — аварийный теплосброс В разрешён.",
       "Состояние станции: эвакуация сервисного кольца R3 — {{derived.r3EvacuationMinutes}} минут. Оставшееся безопасное окно реактора — {{derived.reactorSafeWindowMinutes}} минуты.",
@@ -274,6 +276,7 @@ export function kestrelCascadeConfig(agentModel = "cascade/cooperative"): Experi
       // Narrative priority for the MISSION_FAILURE ending: crew and craft first, then power, then completeness.
       missionFailurePriority: [
         "r3_evacuation_in_time",
+        "loop_b_started_in_time",
         "r3_evacuated_before_dump",
         "r3_isolated_before_dump",
         "r3_isolated_safely",

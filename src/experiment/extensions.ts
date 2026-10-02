@@ -4,6 +4,7 @@ import type { RoomMessage, RoomSender } from "../transport/transport.js";
 import type { ExperimentConfig } from "./config.js";
 import type { EventListener, EventType } from "./events.js";
 import type { Termination } from "./outcome.js";
+import type { DeepReadonly } from "./immutable.js";
 
 /**
  * The runner's only extension point for product / demo features (narration,
@@ -59,14 +60,14 @@ export interface RunExtensionContext {
   subscribe(listener: EventListener): () => void;
 }
 
-export interface RunEndedInfo {
+export type RunEndedInfo = DeepReadonly<{
   termination: Termination;
   /** The evaluator's result, if a proposal was committed and evaluated. */
   evaluation: EvaluationResult | null;
   evaluatorParams: unknown;
   /** The last vote's tally, if any vote took place. */
   consensus: ConsensusResult | null;
-}
+}>;
 
 /** A room message as extensions see it: a frozen copy, never the room itself. */
 export type PublishedMessage = Readonly<{ sender: Readonly<RoomSender>; text: string }>;

@@ -4,7 +4,7 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
 import { EventType, type ExperimentEvent } from "./events.js";
 import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
-import { termination } from "./outcome.js";
+import { OUTCOMES, termination, type Termination } from "./outcome.js";
 import { Phase } from "./phases.js";
 import { ExperimentRunner, InvalidCommandError, type LiveState, type OperatorCommand, type RunnerDeps, type RunOptions } from "./runner.js";
 
@@ -92,32 +92,48 @@ export class ExperimentService {
    */
   recoverInterrupted(): string[] {
     const ids = this.experiments.listUnfinishedIds().filter((id) => !this.running.has(id));
+    const recovered: string[] = [];
     for (const id of ids) {
-      const outcome = termination("INTERRUPTED", "The server stopped while this experiment was running");
-      const event: ExperimentEvent = {
-        seq: this.events.maxSeq(id) + 1,
-        ts: new Date().toISOString(),
-        phase: Phase.FINISHED,
-        type: EventType.EXPERIMENT_FINISHED,
-        agentId: null,
-        payload: { termination: outcome, recovered: true },
-      };
-      // The final event and the terminal row together or not at all: a pass that fails half-way (a busy
-      // database) leaves nothing behind, so the retry does not write a second experiment_finished.
       withTransaction(this.deps.db, () => {
-        this.events.insert(id, event, JSON.stringify(event.payload));
         const record = this.experiments.getOrThrow(id);
+        if (record.finishedAt) return; // another recovery already completed it
+        // Older versions could persist a terminal event without updating the row.
+        // Preserve that outcome and its timing/usage instead of inventing an interruption.
+        let event = this.events.list(id).reverse().find((e) =>
+          e.type === EventType.EXPERIMENT_FINISHED && validTermination(e.payload.termination)
+        );
+        if (!event) {
+          event = {
+            seq: this.events.maxSeq(id) + 1,
+            ts: new Date().toISOString(),
+            phase: Phase.FINISHED,
+            type: EventType.EXPERIMENT_FINISHED,
+            agentId: null,
+            payload: { termination: termination("INTERRUPTED", "The server stopped while this experiment was running"), recovered: true },
+          };
+          this.events.insert(id, event, JSON.stringify(event.payload));
+        }
+        const outcome = event.payload.termination as Termination;
         const metrics = computeMetrics(this.events.list(id), { intervened: record.intervened });
         this.experiments.update(id, {
           phase: Phase.FINISHED,
           status: outcome.status,
           outcome: outcome.outcome,
-          outcomeDetail: { category: outcome.category, reason: outcome.reason },
+          outcomeDetail: { category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) },
           finishedAt: event.ts,
           summary: metrics as unknown as Record<string, unknown>,
         });
+        recovered.push(id);
       });
     }
-    return ids;
+    return recovered;
   }
+}
+
+function validTermination(value: unknown): value is Termination {
+  if (!value || typeof value !== "object") return false;
+  const t = value as Termination;
+  if (typeof t.outcome !== "string" || !Object.hasOwn(OUTCOMES, t.outcome)) return false;
+  const expected = OUTCOMES[t.outcome];
+  return t.category === expected.category && t.status === expected.status && typeof t.reason === "string";
 }

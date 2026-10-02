@@ -68,7 +68,8 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     //     name aliases for the debrief (Russian case forms).
     // v5: evaluator v5 — "R3 clear before the dump" split into evacuated-before and isolated-before, each with a
     //     truthful ending of its own.
-    version: 5,
+    // v6: evaluator v6 — evacuation before loop B consumes the reactor window; grounded deadline ending.
+    version: 6,
     config: () => kestrelCascadeConfig(),
   },
 ];

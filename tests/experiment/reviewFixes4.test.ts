@@ -154,8 +154,8 @@ describe("Cascade evaluator v5: one check per fact an ending can state", () => {
   });
 
   it("the evaluator version is in the task definition", () => {
-    expect(createEvaluatorRegistry().get("kestrel-cascade").version).toBe("5");
+    expect(createEvaluatorRegistry().get("kestrel-cascade").version).toBe("6");
     const config = parseExperimentConfig(kestrelCascadeConfig());
-    expect(taskDefinitionHash(config, "5")).not.toBe(taskDefinitionHash(config, "4"));
+    expect(taskDefinitionHash(config, "6")).not.toBe(taskDefinitionHash(config, "5"));
   });
 });

@@ -24,6 +24,15 @@ export function sendJson(res: http.ServerResponse, status: number, body: unknown
   res.end(JSON.stringify(body));
 }
 
+/** Parse client input inside the listener's error boundary, before routing or auth. */
+export function requestUrl(req: http.IncomingMessage): URL {
+  try {
+    return new URL(req.url ?? "/", "http://localhost");
+  } catch {
+    throw new HttpError(400, "Malformed request URL");
+  }
+}
+
 // A cross-origin <form enctype="text/plain"> POST needs no CORS preflight.
 // Requiring the exact application/json content type this app's own frontend
 // sends forces any cross-origin attempt through a preflight instead — which

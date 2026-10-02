@@ -9,7 +9,7 @@ import { ScenarioRepository } from "../../src/persistence/scenarioRepository.js"
 import { BUILTIN_SCENARIOS, createEvaluatorRegistry, registerBuiltinStubs } from "../../src/scenarios/index.js";
 import { createApp, type AppDeps } from "../../src/server/app.js";
 import { composeTestbed } from "../../src/server/compose.js";
-import { externalRequestHandler } from "../../src/server/externalApp.js";
+import { createExternalApp, externalRequestHandler } from "../../src/server/externalApp.js";
 
 /** Running on a platform host (e.g. Railway): operator token, health check, one public port, container pids. */
 
@@ -47,6 +47,26 @@ async function start(extra: Partial<AppDeps> | ((t: ReturnType<typeof composeTes
 const basic = (user: string, password: string) => `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
 
 describe("OPERATOR_TOKEN", () => {
+  it("rejects malformed URLs before auth and keeps serving requests", async () => {
+    const { get, t } = await start({ operatorToken: OPERATOR_TOKEN });
+    expect((await get("//[")).status).toBe(400);
+    expect((await get("/api/meta")).status).toBe(401);
+    expect((await get("/healthz")).status).toBe(200);
+
+    const external = createExternalApp({ rooms: t.rooms!, token: EXTERNAL_TOKEN });
+    servers.push(external);
+    await new Promise<void>((resolve) => external.listen(0, "127.0.0.1", resolve));
+    const port = (external.address() as AddressInfo).port;
+    const rawGet = (path: string) => new Promise<number>((resolve, reject) => {
+      const req = http.get({ host: "127.0.0.1", port, path }, (res) => {
+        res.resume();
+        res.on("end", () => resolve(res.statusCode!));
+      });
+      req.on("error", reject);
+    });
+    expect(await rawGet("//[")).toBe(400);
+    expect(await rawGet("/api/external/scenarios")).toBe(401);
+  });
   it("guards the UI and the operator API: Basic (any user) or Bearer; nothing without it", async () => {
     const { get } = await start({ operatorToken: OPERATOR_TOKEN });
     const denied = await get("/api/meta");

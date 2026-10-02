@@ -117,6 +117,12 @@ marked `interrupted`, an open debrief session becomes `INTERRUPTED`, and an
 external room binding gets one `run.state interrupted`. This happens at
 startup and every minute while the server runs.
 
+Normal completion stores the final phase, `experiment_finished` event and
+experiment summary in one transaction. Event subscribers are notified only
+after commit. Recovery also repairs older partial completions: if a valid
+terminal event already exists, it restores the row from that event without
+replacing its outcome or appending another finish event.
+
 Each run, batch and debrief records the process that owns it, and every
 process renews a lease in the database every 15 s. Recovery touches only rows
 whose owner is gone:

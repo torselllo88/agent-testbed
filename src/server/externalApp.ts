@@ -4,7 +4,7 @@ import { z } from "zod";
 import { InvalidCommandError } from "../experiment/runner.js";
 import { InteractionError } from "../interaction/service.js";
 import { RoomApiError, type ExternalRoomService } from "../rooms/service.js";
-import { decodeRouteParam, HttpError, readJsonBody, requireJsonContentType, sendJson } from "./http.js";
+import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson } from "./http.js";
 
 /**
  * The External Room API listener (docs/external-room-api.md). A separate
@@ -159,9 +159,9 @@ export function createExternalApp(deps: { rooms: ExternalRoomService; token: str
 /** The External Room API's request handler: its own listener, or mounted on the operator one (EXTERNAL_API_LISTENER=main). */
 export function externalRequestHandler(deps: { rooms: ExternalRoomService; token: string }): http.RequestListener {
   return (req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
     void (async () => {
       try {
+        const url = requestUrl(req);
         if (!url.pathname.startsWith("/api/external/")) return sendError(res, 404, "NOT_FOUND", "Not found");
         if (!authorized(req, deps.token)) return sendError(res, 401, "UNAUTHORIZED", "Missing or invalid bearer token");
         for (const route of ROUTES) {

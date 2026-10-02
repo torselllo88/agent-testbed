@@ -12,8 +12,13 @@ import { canonicalJson, type ExperimentConfig } from "../experiment/config.js";
  *   "scheduler"                  — whole objects are fine as values too
  *   "$agents"                    — virtual: value is the list of agent ids to keep (varies the number of agents)
  */
+const unsafeSegments = new Set(["__proto__", "prototype", "constructor"]);
+function safePath(path: string): boolean {
+  return path.split(".").every((key) => key.length > 0 && !unsafeSegments.has(key));
+}
+
 export const BatchVariableSchema = z.object({
-  path: z.string().min(1),
+  path: z.string().min(1).refine(safePath, "Path contains an empty or unsafe segment"),
   values: z.array(z.unknown()).min(1),
   /** Short name used in condition keys and CSV columns; defaults to the path. */
   label: z.string().min(1).optional(),
@@ -103,6 +108,7 @@ export function planRuns(conditions: BatchCondition[], repetitions: number, orde
 
 /** Applies one variable value to a deep copy of the base config (raw — validated afterwards). */
 export function applyVariable(config: Record<string, unknown>, path: string, value: unknown): void {
+  if (!safePath(path)) throw new Error(`Unsafe variable path "${path}"`);
   if (path === "$agents") {
     if (!Array.isArray(value)) throw new Error(`$agents value must be an array of agent ids`);
     const agents = config.agents as Array<{ id: string }>;
@@ -126,11 +132,14 @@ function setAtPath(target: unknown, keys: string[], value: unknown, fullPath: st
     else for (const item of target) setAtPath(item, rest, value, fullPath);
     return;
   }
+  if (Array.isArray(target) && (!/^(0|[1-9]\d*)$/.test(key) || !Object.hasOwn(target, key))) {
+    throw new Error(`Path "${fullPath}" must refer to an existing array index or "*"`);
+  }
   if (rest.length === 0) {
     container[key] = structuredClone(value);
     return;
   }
-  if (!(key in container)) throw new Error(`Path "${fullPath}" does not exist in the base config`);
+  if (!Object.hasOwn(container, key)) throw new Error(`Path "${fullPath}" does not exist in the base config`);
   setAtPath(container[key], rest, value, fullPath);
 }
 
@@ -172,6 +181,9 @@ function valuesAtPath(target: unknown, keys: string[]): unknown[] {
 }
 
 export function conditionConfig(base: ExperimentConfig, variables: BatchVariable[], condition: BatchCondition): unknown {
+  for (const variable of variables) {
+    if (!safePath(variable.path)) throw new Error(`Unsafe variable path "${variable.path}"`);
+  }
   const config = structuredClone(base) as unknown as Record<string, unknown>;
   for (const variable of variables) applyVariable(config, variable.path, condition.values[variableLabel(variable)]);
   return config;

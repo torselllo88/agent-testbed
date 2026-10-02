@@ -19,6 +19,9 @@ import type { ConstraintCheck, EvaluationResult, ScenarioEvaluator } from "../..
  * runs is powered before it is started or activated (v4); R3 is evacuated
  * before it is isolated, and — for thermal dump C — evacuated and isolated
  * before the dump fires. Any other ordering is accepted.
+ * Actions complete sequentially: the first evacuation takes r3EvacuationMinutes;
+ * other actions and repeated evacuation of the empty ring take zero model time.
+ * Evacuation before starting loop B must also fit the reactor window (v6).
  *
  * One check per fact an ending can state truthfully (v5 split "R3 clear
  * before the dump" into evacuated-before and isolated-before).
@@ -134,6 +137,9 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
   const r3EvacuatedBeforeDump = before("evacuate_r3", "activate_thermal_dump_c");
   const r3IsolatedBeforeDump = before("isolate_r3", "activate_thermal_dump_c");
   const loopBStartedAfterPower = before("route_power_to_loop_b", "start_loop_b");
+  const loopBStartMinutes = has("start_loop_b")
+    ? (before("evacuate_r3", "start_loop_b") ? params.r3EvacuationMinutes : 0)
+    : null;
   const dumpCActivatedAfterPower = before("route_power_to_thermal_dump_c", "activate_thermal_dump_c");
   // Powered before use applies to every system the plan runs — the declared path or one started on the side.
   const loopBRuns = loopB || has("start_loop_b");
@@ -145,6 +151,9 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
       ? check(loopBStartedAfterPower, loopBStartedAfterPower ? "loop B powered, then started" : "loop B is not powered before it is started (or never started)")
       : check(true, NOT_APPLICABLE),
     loop_b_power_sufficient: loopBUsed ? check(power.get("loop_b")!.ok, power.get("loop_b")!.detail) : check(true, NOT_APPLICABLE),
+    loop_b_started_in_time: loopBStartedAfterPower
+      ? check(loopBStartMinutes! <= params.reactorSafeWindowMinutes, `loop B starts at ${loopBStartMinutes} min, reactor safe window ${params.reactorSafeWindowMinutes} min`)
+      : check(true, "loop B is not powered before starting (see its start check)"),
     dump_c_activated: dumpCRuns
       ? check(dumpCActivatedAfterPower, dumpCActivatedAfterPower ? "dump C powered, then activated" : "dump C is not powered before it is activated (or never activated)")
       : check(true, NOT_APPLICABLE),
@@ -173,7 +182,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
   const violated = Object.entries(checks)
     .filter(([, c]) => !c.passed)
     .map(([name]) => name);
-  const coolingChecks = loopB ? ["loop_b_started", "loop_b_power_sufficient"] : dumpC ? ["dump_c_activated", "dump_c_power_sufficient", "r3_evacuation_in_time", "r3_evacuated_before_dump", "r3_isolated_before_dump"] : ["recovery_path_selected"];
+  const coolingChecks = loopB ? ["loop_b_started", "loop_b_power_sufficient", "loop_b_started_in_time"] : dumpC ? ["dump_c_activated", "dump_c_power_sufficient", "r3_evacuation_in_time", "r3_evacuated_before_dump", "r3_isolated_before_dump"] : ["recovery_path_selected"];
   return {
     outcome: violated.length === 0 ? "SUCCESS" : "MISSION_FAILURE",
     checks,
@@ -194,6 +203,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
       r3EvacuationMinutes: params.r3EvacuationMinutes,
       reactorSafeWindowMinutes: params.reactorSafeWindowMinutes,
       r3EvacuationInTime: evacuationInTime,
+      loopBStartMinutes,
       approachBeaconProtected: beaconProtected,
       lifeSupportPreserved: checks.life_support_preserved!.passed,
       reactorScrammed: checks.reactor_scrammed!.passed,
@@ -204,7 +214,7 @@ export function evaluateCascade(proposal: CascadeProposal, params: CascadeParams
 
 export const kestrelCascadeEvaluator: ScenarioEvaluator<CascadeProposal, CascadeParams> = {
   id: "kestrel-cascade",
-  version: "5",
+  version: "6",
   description:
     "Station Kestrel: Cascade — the committed procedure must run a feasible emergency cooling path with enough (actually available) power: loop B needs 30 kW; thermal dump C needs 18 kW and a service ring R3 evacuated and isolated before it fires, within the reactor's safe window. It must also protect the service craft's approach beacon (battery before comms shutdown), SCRAM the reactor and keep life support at its required allocation.",
   proposalSchema: CascadeProposalSchema,

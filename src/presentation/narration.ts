@@ -2,6 +2,7 @@ import type { ConsensusResult } from "../consensus/index.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { ExperimentConfig, PresentationStrings } from "../experiment/config.js";
 import type { Termination } from "../experiment/outcome.js";
+import type { DeepReadonly } from "../experiment/immutable.js";
 
 /**
  * Deterministic narration for observers: an opening and an ending, rendered
@@ -116,7 +117,7 @@ export function endingNarration(
   config: ExperimentConfig,
   language: string,
   termination: Termination,
-  evaluation: EvaluationResult | null,
+  evaluation: DeepReadonly<EvaluationResult> | null,
   evaluatorParams: unknown,
   consensus: ConsensusResult | null = null
 ): Narration | null {

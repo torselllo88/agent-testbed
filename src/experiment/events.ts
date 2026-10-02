@@ -1,5 +1,6 @@
 import type { EventRepository } from "../persistence/eventRepository.js";
 import type { Phase } from "./phases.js";
+import { deepFreeze, type DeepReadonly } from "./immutable.js";
 
 /**
  * Every event type the runtime emits. The log is append-only and is the
@@ -52,7 +53,7 @@ export interface ExperimentEvent {
   payload: Record<string, unknown>;
 }
 
-export type EventListener = (event: ExperimentEvent) => void;
+export type EventListener = (event: DeepReadonly<ExperimentEvent>) => void;
 
 export const REDACTED = "[REDACTED]";
 
@@ -75,6 +76,7 @@ export function redactSecrets(serialized: string, secrets: readonly string[]): s
 export class EventLog {
   private seq = 0;
   private readonly listeners = new Set<EventListener>();
+  private pending: ExperimentEvent[] | null = null;
 
   constructor(
     private readonly experimentId: string,
@@ -94,6 +96,32 @@ export class EventLog {
       payload: JSON.parse(serialized) as Record<string, unknown>,
     };
     this.repo.insert(this.experimentId, event, serialized);
+    deepFreeze(event);
+    if (this.pending) this.pending.push(event);
+    else this.notify(event);
+    return event;
+  }
+
+  /** Persist events and their terminal row together; observers only see committed data. */
+  atomic<T>(fn: () => T): T {
+    if (this.pending) throw new Error("Nested event transactions are not supported");
+    const previousSeq = this.seq;
+    const events: ExperimentEvent[] = [];
+    this.pending = events;
+    let result: T;
+    try {
+      result = this.repo.transaction(fn);
+    } catch (err) {
+      this.seq = previousSeq;
+      throw err;
+    } finally {
+      this.pending = null;
+    }
+    for (const event of events) this.notify(event);
+    return result;
+  }
+
+  private notify(event: ExperimentEvent): void {
     // A listener (an add-on observing the run) that throws must never break the run or its bookkeeping.
     for (const listener of this.listeners) {
       try {
@@ -102,7 +130,6 @@ export class EventLog {
         console.error(`event listener failed on ${event.type} (experiment ${this.experimentId}):`, err);
       }
     }
-    return event;
   }
 
   subscribe(listener: EventListener): () => void {

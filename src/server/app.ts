@@ -25,7 +25,7 @@ import { ExperimentRepository, type ExperimentRecord } from "../persistence/expe
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
-import { decodeRouteParam, HttpError, readJsonBody, requireJsonContentType, sendJson, serveStatic } from "./http.js";
+import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson, serveStatic } from "./http.js";
 
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "gui", "public");
 
@@ -548,15 +548,13 @@ export function createApp(deps: AppDeps): http.Server {
   };
 
   return http.createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-
-    // Liveness for a platform's health check: no host check, no auth, no data.
-    if (url.pathname === "/healthz" && (req.method === "GET" || req.method === "HEAD")) return sendJson(res, 200, { ok: true });
-    // The External Room API has its own bearer token, and its clients are remote by design.
-    if (deps.externalApi && url.pathname.startsWith("/api/external/")) return deps.externalApi(req, res);
-
     void (async () => {
       try {
+        const url = requestUrl(req);
+        // Liveness for a platform's health check: no host check, no auth, no data.
+        if (url.pathname === "/healthz" && (req.method === "GET" || req.method === "HEAD")) return sendJson(res, 200, { ok: true });
+        // The External Room API uses its own bearer token.
+        if (deps.externalApi && url.pathname.startsWith("/api/external/")) return deps.externalApi(req, res);
         if (deps.operatorToken && !operatorAuthorized(req.headers.authorization, deps.operatorToken)) {
           res.setHeader("WWW-Authenticate", 'Basic realm="Agent Testbed", charset="UTF-8"');
           return sendJson(res, 401, { error: "Authentication required (OPERATOR_TOKEN)" });

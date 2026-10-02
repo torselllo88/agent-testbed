@@ -203,7 +203,8 @@ export class BatchService {
           return;
         }
         state.running.add(started.runner.id);
-        await started.done.catch(() => undefined);
+        // A failure to persist a terminal result is an interrupted batch, not a completed one.
+        await started.done.catch((err: unknown) => { failure = err; });
         state.running.delete(started.runner.id);
       }
     };

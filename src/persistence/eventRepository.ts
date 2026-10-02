@@ -1,6 +1,6 @@
 import type { ExperimentEvent, EventType } from "../experiment/events.js";
 import type { Phase } from "../experiment/phases.js";
-import type { Db } from "./db.js";
+import { withTransaction, type Db } from "./db.js";
 
 interface EventRow {
   seq: number;
@@ -24,6 +24,10 @@ function rowToEvent(row: EventRow): ExperimentEvent {
 
 export class EventRepository {
   constructor(private readonly db: Db) {}
+
+  transaction<T>(fn: () => T): T {
+    return withTransaction(this.db, fn);
+  }
 
   /** `serializedPayload` is passed in already redacted — see EventLog.append(). */
   insert(experimentId: string, event: ExperimentEvent, serializedPayload: string): void {

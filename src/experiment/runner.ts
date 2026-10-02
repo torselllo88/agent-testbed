@@ -31,6 +31,7 @@ import { PROTOCOL_FINGERPRINT } from "./protocolFingerprint.js";
 import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
 import { EventLog, EventType, redactSecrets } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
+import { deepFreeze } from "./immutable.js";
 import { computeMetrics, type ExperimentMetrics } from "./metrics.js";
 import { termination, TerminateRun, type Termination } from "./outcome.js";
 import { formatZodError } from "./parseJson.js";
@@ -243,10 +244,10 @@ export class ExperimentRunner {
     this.consensus = createConsensusRule(this.config.consensus);
     const headless = options.headless ?? false;
     this.extensions = deps.extensions?.(this.config, { headless }) ?? [];
-    this.extensionContext = {
+    this.extensionContext = Object.freeze({
       experimentId: this.id,
       config: this.config,
-      options: { headless },
+      options: Object.freeze({ headless }),
       // Checked at runtime, not only by the types: an extension may post narration only, never as an agent or the moderator.
       post: async (sender: NarratorSender, text: string, meta?: Record<string, unknown>) => {
         if (sender?.kind !== "narrator" || typeof sender.name !== "string") throw new Error("extensions may only post as the narrator");
@@ -274,7 +275,7 @@ export class ExperimentRunner {
       },
       stopSignal: this.abort.signal,
       subscribe: (listener) => this.log.subscribe(listener),
-    };
+    } satisfies RunExtensionContext);
     // The experiment's own room. Extensions never get hold of it, so they cannot change what agents read.
     this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
@@ -333,12 +334,12 @@ export class ExperimentRunner {
     this.outcomeDecided = true;
     this.atOutcome = { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
     await this.notifyExtensions("onRunEnded", (ext) =>
-      ext.onRunEnded?.(this.extensionContext, {
+      ext.onRunEnded?.(this.extensionContext, deepFreeze(structuredClone({
         termination: outcome,
         evaluation: this.evaluation,
         evaluatorParams: this.evaluatorParams,
         consensus: this.lastConsensus,
-      })
+      })))
     );
     await this.transport.close().catch(() => undefined);
     return this.finish(outcome);
@@ -452,6 +453,9 @@ export class ExperimentRunner {
         // One step, but N concurrent LLM calls — budget checks happen before and after it, not between the calls.
         this.transition(Phase.VOTING, { proposalId: proposal.id, parallelCalls: config.agents.length });
         const consensus = await this.runVoting(proposal);
+        // All in-flight votes are accounted for, including the final round.
+        // A one-step overshoot must end as a budget outcome before any commit.
+        this.enforceHardLimits(0);
         if (consensus.reached) return this.runEvaluation(proposal);
         if (this.proposalAttempt >= config.decision.maxProposalAttempts) {
           throw new TerminateRun(
@@ -773,33 +777,40 @@ export class ExperimentRunner {
   }
 
   private finish(outcome: Termination): ExperimentMetrics {
-    this.finished = outcome;
-    this.currentAgentId = null;
-    if (this.phase !== Phase.FINISHED) this.transition(Phase.FINISHED, { outcome: outcome.outcome });
-    const at = this.atOutcome ?? { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
-    this.log.append(EventType.EXPERIMENT_FINISHED, {
-      termination: outcome,
-      usage: at.usage,
-      turns: at.turns,
-      activeElapsedMs: at.activeElapsedMs,
-      pausedMs: at.pausedMs,
-      presentationDelayMs: this.budget.heldMs(),
-    });
-
-    const record = this.experiments.getOrThrow(this.id);
-    const metrics = computeMetrics(new EventRepository(this.deps.db).list(this.id), { intervened: record.intervened });
-    this.experiments.update(this.id, {
-      phase: Phase.FINISHED,
-      status: outcome.status,
-      outcome: outcome.outcome,
-      // Provider error texts end up here too: scrub credentials as the event log does.
-      outcomeDetail: JSON.parse(
-        redactSecrets(JSON.stringify({ category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) }), this.deps.providers.secretValues())
-      ) as Record<string, unknown>,
-      finishedAt: new Date().toISOString(),
-      summary: metrics as unknown as Record<string, unknown>,
-    });
-    return metrics;
+    const previousPhase = this.phase;
+    try {
+      const metrics = this.log.atomic(() => {
+        if (this.phase !== Phase.FINISHED) this.transition(Phase.FINISHED, { outcome: outcome.outcome });
+        const at = this.atOutcome ?? { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
+        const event = this.log.append(EventType.EXPERIMENT_FINISHED, {
+          termination: outcome,
+          usage: at.usage,
+          turns: at.turns,
+          activeElapsedMs: at.activeElapsedMs,
+          pausedMs: at.pausedMs,
+          presentationDelayMs: this.budget.heldMs(),
+        });
+        const record = this.experiments.getOrThrow(this.id);
+        const metrics = computeMetrics(new EventRepository(this.deps.db).list(this.id), { intervened: record.intervened });
+        this.experiments.update(this.id, {
+          phase: Phase.FINISHED,
+          status: outcome.status,
+          outcome: outcome.outcome,
+          outcomeDetail: JSON.parse(
+            redactSecrets(JSON.stringify({ category: outcome.category, reason: outcome.reason, ...(outcome.detail ? { detail: outcome.detail } : {}) }), this.deps.providers.secretValues())
+          ) as Record<string, unknown>,
+          finishedAt: event.ts,
+          summary: metrics as unknown as Record<string, unknown>,
+        });
+        return metrics;
+      });
+      this.finished = outcome;
+      this.currentAgentId = null;
+      return metrics;
+    } catch (err) {
+      this.phase = previousPhase;
+      throw err;
+    }
   }
 
   // ---------------------------------------------------------------- helpers
@@ -992,12 +1003,4 @@ export function checkRunnable(
 
   if (problems.length > 0 || !evaluator) throw new ConfigNotRunnableError(problems);
   return { evaluator, evaluatorParams };
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  }
-  return value;
 }

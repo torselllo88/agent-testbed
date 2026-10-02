@@ -34,7 +34,7 @@ with `recovery_path` one of `loop_b`, `thermal_dump_c`, `none` and actions from
 ## Evaluator
 
 [src/scenarios/kestrelCascade/evaluator.ts](../../src/scenarios/kestrelCascade/evaluator.ts)
-(version 5) judges what the plan **does**, not only the path it names. Every
+(version 6) judges what the plan **does**, not only the path it names. Every
 unsafe plan stays expressible, and order matters only where physics says so:
 
 - the beacon goes to battery before comms go off;
@@ -45,7 +45,12 @@ unsafe plan stays expressible, and order matters only where physics says so:
 - R3 is evacuated before it is isolated — on any path — and for C, both
   evacuated and isolated before the dump fires.
 
-Any other order is accepted. Checks:
+Actions complete sequentially. The first R3 evacuation consumes
+`r3EvacuationMinutes`; other actions (and evacuating an already empty ring)
+take zero time in this abstract model. An evacuation before loop B starts
+must fit within `reactorSafeWindowMinutes`, including equality. Evacuation
+after loop B starts does not delay that start. These are simulated procedure
+minutes, independent of the experiment's wall-clock timeout. Checks:
 
 | Check | Fails when |
 |---|---|
@@ -53,6 +58,7 @@ Any other order is accepted. Checks:
 | `loop_b_started` / `dump_c_activated` | a system the plan runs is not powered before it is started / activated, or never started |
 | `loop_b_power_sufficient` / `dump_c_power_sufficient` | at the moment a system is routed, less power is available than everything routed so far needs |
 | `r3_evacuation_in_time` | dump C fires, but evacuating R3 takes longer than the reactor window |
+| `loop_b_started_in_time` | evacuation before a powered loop B starts delays it beyond the reactor window |
 | `r3_evacuated_before_dump` | dump C fires with the crew still in R3 |
 | `r3_isolated_before_dump` | dump C fires with R3 evacuated but not sealed |
 | `r3_isolated_safely` | R3 is sealed before it has been evacuated |
@@ -81,3 +87,4 @@ a system that was never powered is a start failure, not "30 kW available,
 | v3 | evaluator v3: physical order — shutdowns before routing, power before start, evacuate before isolate |
 | v4 | evaluator v4: powered-before-use for every system the plan runs; each failure narrates its own figures; name aliases for the debrief |
 | v5 | evaluator v5: "R3 clear before the dump" split into `r3_evacuated_before_dump` and `r3_isolated_before_dump`, each with a truthful ending of its own |
+| v6 | evaluator v6: evacuation before loop B consumes the reactor window; late starts fail with a grounded ending |

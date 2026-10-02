@@ -89,7 +89,9 @@ budget outcome; see [configuration](configuration.md).
 Token and cost limits are checked at step boundaries; an in-flight call is
 never cut short for tokens. A limit can therefore be overshot by one step, and
 a step is not always one call: the voting step is N parallel calls. The
-overshoot is recorded in the outcome detail. The cost cap is an emergency
+overshoot is recorded in the outcome detail. Every completed voting round is checked before commit,
+including the final round: a budget outcome takes precedence over success or
+consensus failure, while all votes and usage stay in the trace. The cost cap is an emergency
 brake, not a guarantee: cost is known only after a call returns, so per-call
 `maxOutputTokens` is what bounds the worst case. The time limit is the
 exception: it also aborts an in-flight call. Only *active* time counts toward

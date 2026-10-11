@@ -1,3 +1,16 @@
+import {
+  applyModelChoices,
+  bindChoiceFields,
+  choiceFieldsHtml,
+  defaultProvider,
+  formatPrice,
+  loadOpenRouterCatalog,
+  modelRefsOf,
+  openRouterOptions,
+  PROVIDERS,
+  readChoice,
+  summarizeRefs,
+} from "../modelChoice.js";
 import { openRunDialog } from "../runDialog.js";
 import { api, apiDetailed, app, badge, downloadJson, escapeHtml, getPath, jsonBlock, setPath, showError } from "../shared.js";
 
@@ -36,35 +49,9 @@ const TAB_GROUPS = [
 const TABS = TAB_GROUPS.flatMap((g) => g.tabs);
 const groupOf = (tab) => TAB_GROUPS.find((g) => g.tabs.some(([key]) => key === tab));
 
-const PROVIDERS = ["openrouter", "azure", "stub"];
 
 function field(label, inner, hint) {
   return `<label class="field"><span class="field-label">${escapeHtml(label)}</span>${inner}${hint ? `<span class="field-hint">${escapeHtml(hint)}</span>` : ""}</label>`;
-}
-
-/**
- * OpenRouter's model catalog, loaded once per page session (the server caches
- * it too). Model ids are stable, so the model field offers them as a
- * searchable list; free text still works for anything not listed.
- */
-let openRouterCatalog = null; // Promise<{ models } | { error }>
-function loadOpenRouterCatalog() {
-  openRouterCatalog ??= api("/api/providers/openrouter/models").catch((err) => {
-    openRouterCatalog = null; // retry on the next editor visit
-    return { error: err.message, models: [] };
-  });
-  return openRouterCatalog;
-}
-
-function formatPrice(perM) {
-  if (perM === null || perM === undefined) return "?";
-  return perM === 0 ? "free" : `$${perM < 0.1 ? perM.toFixed(3) : perM.toFixed(2)}`;
-}
-
-function openRouterOptions(models) {
-  return models
-    .map((m) => `<option value="${escapeHtml(m.id)}" label="${escapeHtml(`${m.name} · ${formatPrice(m.promptPerM)} / ${formatPrice(m.completionPerM)} per M`)}"></option>`)
-    .join("");
 }
 
 function valueAttr(v) {
@@ -93,6 +80,8 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     invalid: new Map(),
     /** Human-interaction settings put aside when the profile is switched to the default, restored when switched back. */
     stashedInteraction: null,
+    /** The "Models" panel's fields (not part of the config until applied). */
+    modelPanel: null,
     notice: null,
     openRouter: null, // { models, error? } once loaded
   };
@@ -194,6 +183,38 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
     ${openRouterModelInfo(getPath(state.draft, base))}
     ${routingFields(base)}`;
 
+  /** Choose one model for every agent (and one for the routers) instead of editing each reference. */
+  const MODEL_LISTS = { stubList: "stub-models", openRouterList: "openrouter-models" };
+  const modelPanel = () => {
+    if (readOnly) return "";
+    const refs = modelRefsOf(state.draft);
+    state.modelPanel ??= {
+      agents: { provider: defaultProvider(meta), model: "" },
+      orchestration: { provider: defaultProvider(meta), model: "" },
+    };
+    return `
+      <div class="card model-panel">
+        <h3>Models</h3>
+        <p class="muted small">Now — agents: <strong>${escapeHtml(summarizeRefs(refs.agents))}</strong>${
+          refs.orchestration.length ? `; ${refs.orchestration.map((o) => `${escapeHtml(o.label)}: <strong>${escapeHtml(`${o.ref.provider} · ${o.ref.model}`)}</strong>`).join("; ")}` : ""
+        }.</p>
+        <div class="grid-4 model-choice">
+          ${choiceFieldsHtml("mp-agents", state.modelPanel.agents, MODEL_LISTS)}
+          <div class="field"><span class="field-label">&nbsp;</span><button type="button" data-action="apply-models" data-target="agents">Apply to all agents</button></div>
+        </div>
+        ${
+          refs.orchestration.length
+            ? `<div class="grid-4 model-choice">
+                ${choiceFieldsHtml("mp-orchestration", state.modelPanel.orchestration, MODEL_LISTS)}
+                <div class="field"><span class="field-label">&nbsp;</span><button type="button" data-action="apply-models" data-target="orchestration">Apply to ${escapeHtml(refs.orchestration.map((o) => o.label).join(" and "))}</button></div>
+              </div>
+              <p class="muted small">Routers only pick who answers next — a cheap, fast model is enough.</p>`
+            : ""
+        }
+        <p class="muted small">Changes provider and model only; structured output follows what OpenRouter lists for the model. Temperature, seed and output caps stay; OpenRouter routing is cleared. Adjust single agents below afterwards.</p>
+      </div>`;
+  };
+
   const tabBody = {
     general: () => `
       ${field("Name", input("name"))}
@@ -202,6 +223,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       ${field("Shared context", textarea("task.sharedContext", 12), "Known to every agent")}`,
 
     agents: () =>
+      modelPanel() +
       state.draft.agents
         .map(
           (agent, i) => `
@@ -237,6 +259,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
       ${
         hybrid
           ? `${checkbox("scheduler.__classifierEnabled", "Use an LLM classifier when there is no valid explicit target")}
+             <p class="muted small">Tip: the <strong>Models</strong> panel on the Agents tab sets the classifier and the debrief router in one step.</p>
              ${s.classifier ? modelFields("scheduler.classifier") : `<p class="muted">Without a classifier: explicit target, else deterministic fallback.</p>`}`
           : ""
       }
@@ -535,6 +558,11 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
 
   function bind() {
     const body = document.getElementById("editor-body");
+    for (const target of ["agents", "orchestration"]) {
+      bindChoiceFields(body, `mp-${target}`, MODEL_LISTS, (choice) => {
+        state.modelPanel[target] = choice;
+      });
+    }
 
     body.addEventListener("input", (e) => {
       const el = e.target;
@@ -594,6 +622,16 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         state.draft.agents.splice(Number(e.target.dataset.index), 1);
         markDirty();
         render();
+      } else if (action === "apply-models") {
+        const target = e.target.dataset.target;
+        const choice = readChoice(body, `mp-${target}`, state.openRouter);
+        if (!choice) return setNotice(problemsHtml("Enter a model first."));
+        const changed = applyModelChoices(state.draft, { [target]: choice });
+        markDirty();
+        render();
+        setNotice(`<div class="success-banner">${escapeHtml(`${choice.provider} · ${choice.model}`)} set for ${changed} ${target === "agents" ? "agent" : "router"}${changed === 1 ? "" : "s"}${
+          choice.structuredOutput ? ` (structured output: ${choice.structuredOutput === "native" ? "native" : "prompt only"})` : ""
+        }. Save to keep it.</div>`);
       }
     });
 

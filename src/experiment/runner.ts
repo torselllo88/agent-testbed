@@ -94,6 +94,8 @@ export interface RunEnvironment {
   /** Effective conversation language of this run, and whether it came from a per-run override. */
   conversationLanguage: string;
   languageOverridden: boolean;
+  /** Models were chosen for this run only (overrides.models); the snapshot holds the models actually used. */
+  modelsOverridden: boolean;
   scenarioDefaultLanguage: string;
   /** Nobody watched this run live (batch, CLI): add-ons such as viewer pacing were told so. */
   headless: boolean;
@@ -287,6 +289,7 @@ export class ExperimentRunner {
       maxConcurrentRequests: deps.providers.maxConcurrentRequests,
       conversationLanguage: this.config.conversation.language,
       languageOverridden: this.config.conversation.language !== scenarioConfig.conversation.language,
+      modelsOverridden: Boolean(overrides?.models?.agents || overrides?.models?.orchestration),
       scenarioDefaultLanguage: scenarioConfig.conversation.language,
       headless,
     };

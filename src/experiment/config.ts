@@ -500,11 +500,40 @@ export function taskDefinitionHash(config: ExperimentConfig, evaluatorVersion: s
   return sha256(canonicalJson(taskDefinition(config, evaluatorVersion)));
 }
 
+/** One model applied to many model references at once: provider, model and (optionally) the output mode — nothing else. */
+export const ModelChoiceSchema = z
+  .object({
+    provider: z.enum(["openrouter", "azure", "stub"]),
+    model: z.string().min(1),
+    structuredOutput: z.enum(["native", "prompt"]).optional(),
+  })
+  .strict();
+export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
+
+/**
+ * A model reference with another provider and model. Temperature, seed and the
+ * output cap belong to the scenario and stay; OpenRouter routing (backend
+ * constraints for one specific model) is dropped.
+ */
+export function withModelChoice(ref: ModelRef, choice: ModelChoice): ModelRef {
+  const { routing: _routing, ...rest } = ref;
+  return { ...rest, provider: choice.provider, model: choice.model, structuredOutput: choice.structuredOutput ?? rest.structuredOutput };
+}
+
 /** Per-run settings that override the saved scenario without editing or versioning it. */
 export const RunOverridesSchema = z
   .object({
     /** Conversation language for this run only. */
     language: LanguageCodeSchema.optional(),
+    /**
+     * Models for this run only: `agents` for every agent; `orchestration` for
+     * the router classifier and the debrief router — those the scenario has
+     * (none is switched on that it does not use).
+     */
+    models: z
+      .object({ agents: ModelChoiceSchema.optional(), orchestration: ModelChoiceSchema.optional() })
+      .strict()
+      .optional(),
   })
   .strict();
 export type RunOverrides = z.infer<typeof RunOverridesSchema>;
@@ -514,5 +543,17 @@ export function applyRunOverrides(config: ExperimentConfig, overrides: RunOverri
   if (!overrides || Object.keys(overrides).length === 0) return config;
   const next = structuredClone(config);
   if (overrides.language) next.conversation = { ...next.conversation, language: overrides.language };
+  const agents = overrides.models?.agents;
+  if (agents) next.agents = next.agents.map((a) => ({ ...a, model: withModelChoice(a.model, agents) }));
+  const orchestration = overrides.models?.orchestration;
+  if (orchestration) {
+    if (next.scheduler.type === "hybrid" && next.scheduler.classifier) {
+      next.scheduler = { ...next.scheduler, classifier: withModelChoice(next.scheduler.classifier, orchestration) };
+    }
+    const router = next.humanInteraction?.debrief.router;
+    if (next.humanInteraction && router) {
+      next.humanInteraction = { ...next.humanInteraction, debrief: { ...next.humanInteraction.debrief, router: withModelChoice(router, orchestration) } };
+    }
+  }
   return next;
 }

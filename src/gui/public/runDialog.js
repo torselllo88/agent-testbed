@@ -1,9 +1,19 @@
-import { apiDetailed, escapeHtml } from "./shared.js";
+import {
+  bindChoiceFields,
+  choiceFieldsHtml,
+  defaultProvider,
+  loadOpenRouterCatalog,
+  modelRefsOf,
+  openRouterOptions,
+  readChoice,
+  summarizeRefs,
+} from "./modelChoice.js";
+import { api, apiDetailed, escapeHtml } from "./shared.js";
 
 /**
- * "Run <scenario>" dialog: per-run overrides (currently the conversation
- * language) that apply to this run only — the saved scenario is not edited
- * or versioned. Resolves once the run has started (navigating to the control
+ * "Run <scenario>" dialog: per-run overrides (the conversation language, and
+ * models) that apply to this run only — the saved scenario is not edited or
+ * versioned; the run's snapshot holds what it actually used. Resolves once the run has started (navigating to the control
  * view or the viewer), or when cancelled.
  */
 export function openRunDialog(scenario, meta) {
@@ -13,6 +23,7 @@ export function openRunDialog(scenario, meta) {
     return `${code}${code === scenario.language ? " — scenario default" : ""}${scenario.narrated ? (authored ? "" : " — narration falls back") : ""}`;
   };
 
+  const LISTS = { stubList: "rd-stub-models", openRouterList: "rd-openrouter-models" };
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -29,6 +40,23 @@ export function openRunDialog(scenario, meta) {
       <p class="muted small">Applies to this run only. Agents write in this language; ids, JSON fields and enum values stay unchanged.${
         scenario.narrated ? ` Narration is authored in: ${escapeHtml(scenario.presentationLanguages.join(", ") || "—")}.` : ""
       }</p>
+      <div class="field"><span class="field-label">Models</span>
+        <select id="rd-models">
+          <option value="scenario">As in the scenario</option>
+          <option value="choose">Choose for this run…</option>
+        </select>
+        <p class="muted small" id="rd-models-now">Loading the scenario's models…</p>
+      </div>
+      <div id="rd-models-choose" hidden>
+        <div class="grid-2">${choiceFieldsHtml("rd-agents", { provider: defaultProvider(meta), model: "" }, LISTS)}</div>
+        <div id="rd-orchestration" hidden>
+          <p class="muted small" id="rd-orchestration-label"></p>
+          <div class="grid-2">${choiceFieldsHtml("rd-orchestration", { provider: defaultProvider(meta), model: "" }, LISTS)}</div>
+        </div>
+        <p class="muted small">Provider and model for this run only; leave a model empty to keep the scenario's. Structured output follows what OpenRouter lists for the model.</p>
+      </div>
+      <datalist id="rd-stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
+      <datalist id="rd-openrouter-models"></datalist>
       <div id="rd-error"></div>
       <div class="actions">
         <button type="button" class="primary" data-go="control">Start</button>
@@ -41,6 +69,28 @@ export function openRunDialog(scenario, meta) {
   const select = overlay.querySelector("#rd-language");
   const otherWrap = overlay.querySelector("#rd-other-wrap");
   select.addEventListener("change", () => (otherWrap.hidden = select.value !== "__other"));
+
+  // Models: what the scenario uses now, and optionally others for this run.
+  const modelsSelect = overlay.querySelector("#rd-models");
+  modelsSelect.addEventListener("change", () => (overlay.querySelector("#rd-models-choose").hidden = modelsSelect.value !== "choose"));
+  bindChoiceFields(overlay, "rd-agents", LISTS);
+  bindChoiceFields(overlay, "rd-orchestration", LISTS);
+  let catalog = null;
+  loadOpenRouterCatalog().then((c) => {
+    catalog = c;
+    overlay.querySelector("#rd-openrouter-models").innerHTML = openRouterOptions(c.models);
+  });
+  api(`/api/scenarios/${encodeURIComponent(scenario.id)}`)
+    .then(({ scenario: full }) => {
+      const refs = modelRefsOf(full.config);
+      overlay.querySelector("#rd-models-now").textContent =
+        `Now — agents: ${summarizeRefs(refs.agents)}${refs.orchestration.map((o) => `; ${o.label}: ${o.ref.provider} · ${o.ref.model}`).join("")}`;
+      if (refs.orchestration.length) {
+        overlay.querySelector("#rd-orchestration").hidden = false;
+        overlay.querySelector("#rd-orchestration-label").textContent = `For the ${refs.orchestration.map((o) => o.label).join(" and ")} (a cheap, fast model is enough):`;
+      }
+    })
+    .catch(() => (overlay.querySelector("#rd-models-now").textContent = ""));
 
   return new Promise((resolve) => {
     const close = () => {
@@ -56,6 +106,11 @@ export function openRunDialog(scenario, meta) {
         if (go === "cancel") return close();
         const language = select.value === "__other" ? overlay.querySelector("#rd-other").value.trim() : select.value;
         const overrides = language && language !== scenario.language ? { language } : {};
+        if (modelsSelect.value === "choose") {
+          const agents = readChoice(overlay, "rd-agents", catalog);
+          const orchestration = overlay.querySelector("#rd-orchestration").hidden ? null : readChoice(overlay, "rd-orchestration", catalog);
+          if (agents || orchestration) overrides.models = { ...(agents ? { agents } : {}), ...(orchestration ? { orchestration } : {}) };
+        }
         try {
           const { id } = await apiDetailed(`/api/scenarios/${encodeURIComponent(scenario.id)}/run`, {
             method: "POST",

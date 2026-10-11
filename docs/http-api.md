@@ -18,7 +18,7 @@ external chat rooms is the [External Room API](external-room-api.md).
 | `POST /api/scenarios/validate` | schema and runnability check, without saving |
 | `GET/PUT/DELETE /api/scenarios/:id` | read / update (version bump on change) / delete |
 | `POST /api/scenarios/:id/duplicate` | copy (the way to edit a built-in) |
-| `POST /api/scenarios/:id/run` | start a run; optional `{overrides: {language}}` applies to this run only |
+| `POST /api/scenarios/:id/run` | start a run; optional `{overrides: {language?, models?: {agents?, orchestration?}}}` applies to this run only (see [configuration](configuration.md#experiment-config)) |
 | `GET /api/experiments?scenarioId=&batchId=&taskDefinitionHash=&batches=exclude` | list |
 | `POST /api/experiments` | start an ad-hoc run from `{config, overrides?}` |
 | `GET /api/experiments/:id` | record, live state, and `externalRoom` (the open external room binding, or null) |

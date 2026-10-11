@@ -24,6 +24,7 @@ and no real provider is called. Screenshots (named shots and failures) go to
 |---|---|
 | `core-ui` | scenario editor, live control view, operator controls, trace, rerun, theme |
 | `editor-validation` | invalid fields block Save / Validate / tab switch; people-tab settings and aliases |
+| `models` | the editor's Models panel (all agents / routers at once, saved) and models chosen in the run dialog (this run only) |
 | `openrouter-routing` | OpenRouter routing fields: parsing, warnings, save/reload, provider switch |
 | `batches` | batch form, preview and validation, run, aggregates, CSV, list filters |
 | `presentation` | editor tab groups, OBSERVE profile, viewer beats, paced part-by-part ending |

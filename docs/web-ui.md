@@ -12,9 +12,11 @@ updated in place; your own scenarios are never touched. **+ Create scenario**
 copies a built-in; **Import JSON** accepts a bare config, a scenario export or
 an experiment export.
 
-**Run dialog.** Choose the conversation language for this run only; the saved
-scenario is neither edited nor versioned. Then **Start** opens the control
-view, **Start & watch** opens viewer mode.
+**Run dialog.** Choose the conversation language and, optionally, the models
+for this run only (one provider and model for all agents, one for the
+routers); the saved scenario is neither edited nor versioned, and the run
+records what it used. Then **Start** opens the control view, **Start & watch**
+opens viewer mode.
 
 ## Scenario editor
 
@@ -22,7 +24,11 @@ The tabs come in two groups, mirroring the architecture:
 
 - **Experiment** — defines what agents know and do and how the result is judged:
   - **Task:** name, description, task text, shared context.
-  - **Agents:** id, name, role, objective, persona, provider/model/temperature/seed/max
+  - **Agents:** at the top, the **Models** panel: what the agents and routers use
+    now, one provider and model applied to all agents in one step, and one to
+    the router classifier and debrief router (provider and model only;
+    structured output follows what OpenRouter lists for the model). Then per
+    agent: id, name, role, objective, persona, provider/model/temperature/seed/max
     tokens, structured-output mode, OpenRouter routing (advanced), extra system
     prompt, private context. Each agent card separates its *task definition*
     (id, role, objective, private context) from its *behavior & model* (name,

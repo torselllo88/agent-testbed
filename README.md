@@ -66,13 +66,14 @@ To run real LLM agents:
 
 1. `cp .env.example .env` and set `OPENROUTER_API_KEY` (or the Azure OpenAI variables).
 2. Restart `npm run gui`. The Overview page shows which providers are configured.
-3. Built-ins are read-only: open **Scenarios**, press **Duplicate** on a
-   built-in, and in the copy's **Agents** tab set provider `openrouter` and a
-   model for each agent, e.g. `anthropic/claude-sonnet-5`. Different agents can
-   use different models. Point the router classifier (**Protocol** tab) at a
-   real model too, or turn it off.
-4. **Save**, then **Run**. Pick a conversation language, then **Start** (control
-   view) or **Start & watch** (viewer mode).
+3. Press **Run** on any scenario, built-ins included. In the run dialog, pick
+   a conversation language and, under **Models → Choose for this run**, a
+   provider and model for all agents (e.g. `openrouter` ·
+   `anthropic/claude-haiku-4.5`) and a cheap one for the routers. This applies
+   to that run only; the run records the models it used.
+4. To keep models in a scenario: **Duplicate** a built-in, and in the copy's
+   **Agents** tab use the **Models** panel (all agents, and all routers, in one
+   step); adjust single agents afterwards if you want a mixed crew. **Save**.
 
 Real LLM calls cost money. Every run reports its token usage and cost; runs and
 batches can be capped (`limits.totalCostCapUsd`, `limits.totalTokenCap`).

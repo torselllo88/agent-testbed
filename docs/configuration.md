@@ -88,10 +88,22 @@ Notes:
   served it (`providerMeta.upstreamProvider`, a display name rather than a
   slug). In a batch, vary it like any field: `agents.*.model.routing`.
 
-**Per-run overrides.** A run may override the conversation language without
-editing or versioning the saved scenario (`{ "overrides": { "language": "ru" } }`
-in the API, the run dialog in the UI, `--language` in the CLI). The run's
-snapshot and `configHash` are those of the overridden config.
+**Per-run overrides.** A run may override, without editing or versioning the
+saved scenario:
+
+- the conversation language — `{ "language": "ru" }` (the run dialog,
+  `--language` in the CLI);
+- the models — `{ "models": { "agents": {…}, "orchestration": {…} } }`, each
+  `{ provider, model, structuredOutput? }` (the run dialog). `agents` sets
+  every agent; `orchestration` sets the router classifier and the debrief
+  router the scenario has (none is switched on). Only provider, model and
+  (when given) the output mode change: temperature, seed and output caps
+  belong to the scenario; OpenRouter `routing` is dropped.
+
+The run's snapshot and `configHash` are those of the overridden config; the
+run environment records `languageOverridden` and `modelsOverridden`. The
+External Room API does not offer model overrides: the operator chooses models
+in the saved scenario.
 
 ## Environment (`.env`)
 

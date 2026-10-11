@@ -118,21 +118,29 @@ See [.env.example](../.env.example). All variables are optional.
 
 ## Deploying on a platform (Railway and similar)
 
-Nothing is bound to localhost in code: the port comes from `PORT`, the bind
-address and served host names from the environment. A public deployment
-needs:
+The port comes from `PORT` (the platform injects it), the bind address and
+served host names from the environment. On **Railway** (detected by its own
+`RAILWAY_*` variables) the server binds to `0.0.0.0` by default and serves the
+generated `RAILWAY_PUBLIC_DOMAIN` without further setup — but only with
+`OPERATOR_TOKEN` set: without it, it refuses to start and says why in the
+deploy log. Elsewhere, the default stays loopback.
 
 | Setting | Value | Why |
 |---|---|---|
-| `GUI_HOST` | `0.0.0.0` | the default `127.0.0.1` is unreachable for the platform's proxy |
-| `OPERATOR_TOKEN` | a long random value | without it, anyone with the URL can run experiments on your provider keys, read every trace and delete data |
-| `GUI_ALLOWED_HOSTS` | `<app>.up.railway.app` (+ any custom domain) | other `Host` headers get `421` (DNS-rebinding guard) |
+| `OPERATOR_TOKEN` | a long random value | without it, anyone with the URL can run experiments on your provider keys, read every trace and delete data (on Railway, the server does not start without it) |
+| `GUI_HOST` (or `HOST`) | `0.0.0.0` — automatic on Railway | the default `127.0.0.1` is unreachable for the platform's proxy |
+| `GUI_ALLOWED_HOSTS` | any custom domain — Railway's generated domain is automatic | other `Host` headers get `421` (DNS-rebinding guard) |
+| `PORT` | leave it to the platform | if you set it yourself, the domain's target port (Railway: Settings → Networking) must be the same |
 | a volume, `DATA_DIR` | e.g. mount at `/data`, `DATA_DIR=/data` | the container's filesystem is wiped on every deploy; the SQLite database holds scenarios and all traces |
 | start command | `node --import tsx src/server/main.ts` | not `npm start` (it reinstalls on every start); the UI is served from `src/gui/public`, so `node dist/…` does not serve it |
 | Node | ≥ 22.13 (`.node-version`: 24) | `node:sqlite` needs a flag before 22.13 |
 | replicas | 1 | SQLite and the in-memory scheduler are single-process |
 | health check path | `/healthz` | answers `200 {"ok":true}` for any `Host` and without the operator token |
 | `OPENROUTER_API_KEY` | your key | as locally |
+
+The deploy log shows what was resolved: `Agent testbed listening on 0.0.0.0:<port> (railway)`,
+`Public URL: …` and `Operator authentication: on`. `listening on 127.0.0.1`
+there means the platform was not detected and no `GUI_HOST` / `HOST` is set.
 
 For the [External Room API](external-room-api.md): set `EXTERNAL_API_TOKEN`,
 `EXTERNAL_SCENARIOS` and either `EXTERNAL_API_LISTENER=main` (served on the

@@ -11,6 +11,39 @@ if (!process.env.VITEST) {
   loadDotenv({ path: path.join(projectRoot, ".env"), quiet: true });
 }
 
+/**
+ * Where the operator listener binds and which host names it serves.
+ * - `GUI_HOST` (or the common `HOST`) wins when set.
+ * - On Railway (detected by its own `RAILWAY_*` variables) the default is
+ *   `0.0.0.0` — loopback is unreachable for the platform's proxy — and the
+ *   generated `RAILWAY_PUBLIC_DOMAIN` is served without being listed.
+ * - Anywhere else: loopback, so a plain local start is never on the network.
+ */
+export function resolveListener(vars: Record<string, string | undefined>): {
+  host: string;
+  hostExplicit: boolean;
+  platform: "railway" | null;
+  publicDomain: string | null;
+  allowedHosts: string[];
+} {
+  const platform = vars.RAILWAY_ENVIRONMENT || vars.RAILWAY_ENVIRONMENT_NAME || vars.RAILWAY_PROJECT_ID ? "railway" : null;
+  const explicit = vars.GUI_HOST || vars.HOST || "";
+  const publicDomain = vars.RAILWAY_PUBLIC_DOMAIN || null;
+  const listed = (vars.GUI_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return {
+    host: explicit || (platform ? "0.0.0.0" : "127.0.0.1"),
+    hostExplicit: Boolean(explicit),
+    platform,
+    publicDomain,
+    allowedHosts: publicDomain && !listed.includes(publicDomain) ? [...listed, publicDomain] : listed,
+  };
+}
+
+const listener = resolveListener(process.env);
+
 function parseIntEnv(value: string | undefined, fallback: number): number {
   const parsed = value ? Number.parseInt(value, 10) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -69,16 +102,19 @@ export const env = {
   llmMaxConcurrentDebriefRequests: parseIntEnv(process.env.LLM_MAX_CONCURRENT_DEBRIEF_REQUESTS, 2),
   /** PORT is what most PaaS platforms inject; GUI_PORT is the local-dev override. */
   port: parseIntEnv(process.env.PORT ?? process.env.GUI_PORT, 3939),
-  /** Loopback by default — a plain `npm start` should never be reachable from the network. */
-  host: process.env.GUI_HOST || "127.0.0.1",
+  /** Loopback by default — a plain `npm start` should never be reachable from the network (see resolveListener). */
+  host: listener.host,
+  /** GUI_HOST / HOST was set (not a default). */
+  hostExplicit: listener.hostExplicit,
+  /** The hosting platform, when detected. */
+  platform: listener.platform,
+  /** The platform's generated public domain (Railway), if any. */
+  publicDomain: listener.publicDomain,
   /**
-   * Host names the operator UI answers to besides loopback (DNS-rebinding guard).
-   * Needed only when it is reached under another name, e.g. bound to 0.0.0.0.
+   * Host names the operator UI answers to besides loopback (DNS-rebinding guard):
+   * GUI_ALLOWED_HOSTS, plus the platform's generated public domain.
    */
-  allowedHosts: (process.env.GUI_ALLOWED_HOSTS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
+  allowedHosts: listener.allowedHosts,
   /**
    * When set, the operator UI and API require it (HTTP Basic auth: any user
    * name, this as the password; or "Authorization: Bearer <token>"). Unset =

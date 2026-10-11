@@ -81,19 +81,36 @@ const server = createApp({
   externalApi: externalOnMain ? externalRequestHandler({ rooms, token: env.externalApi.token! }) : undefined,
 });
 
+const publicBind = env.host === "0.0.0.0" || env.host === "::";
+// On a hosting platform, a default (not explicitly chosen) public bind is only made with authentication on:
+// an open testbed on the internet runs experiments on your provider keys for anyone with the URL.
+if (env.platform && publicBind && !env.hostExplicit && !env.operatorToken) {
+  console.error(
+    `\n*** Running on ${env.platform} without OPERATOR_TOKEN — refusing to serve publicly without authentication.\n` +
+      "*** Set OPERATOR_TOKEN to a long random value (the UI then asks for it as a password).\n" +
+      "*** To serve it open anyway, set GUI_HOST=0.0.0.0 explicitly. ***\n"
+  );
+  process.exit(1);
+}
+
 server.listen(env.port, env.host, () => {
-  console.log(`Agent testbed running at http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`);
+  console.log(`Agent testbed listening on ${env.host}:${env.port}${env.platform ? ` (${env.platform})` : ""}`);
+  if (env.publicDomain) console.log(`Public URL: https://${env.publicDomain}`);
+  else if (!publicBind) console.log(`Open http://${env.host === "127.0.0.1" ? "localhost" : env.host}:${env.port}`);
+  console.log(`Operator authentication: ${env.operatorToken ? "on (OPERATOR_TOKEN)" : "off"}${env.allowedHosts.length ? ` · also serving host names: ${env.allowedHosts.join(", ")}` : ""}`);
   const configured = providers
     .status()
     .filter((p) => p.configured)
     .map((p) => p.id);
   console.log(`LLM providers available: ${configured.join(", ")}`);
   if (env.operatorToken && env.operatorToken.length < 16) console.log("OPERATOR_TOKEN is short — use a long random value.");
-  if (env.host === "0.0.0.0" && !env.operatorToken) {
+  if (publicBind && !env.operatorToken) {
     console.log(
-      "\n*** Bound to 0.0.0.0 WITHOUT authentication: anyone who can reach this address can run experiments on your provider keys,\n" +
+      `\n*** Bound to ${env.host} WITHOUT authentication: anyone who can reach this address can run experiments on your provider keys,\n` +
         "*** read every trace and delete data. Set OPERATOR_TOKEN unless this network is private. ***\n"
     );
+  }
+  if (publicBind && env.allowedHosts.length === 0) {
     console.log("Requests are only served for localhost / 127.0.0.1 unless you list other names in GUI_ALLOWED_HOSTS (DNS-rebinding guard).");
   }
 });

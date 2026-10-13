@@ -1,5 +1,6 @@
 import { renderBatch } from "./pages/batch.js";
 import { renderBatches } from "./pages/batches.js";
+import { renderDemo } from "./pages/demo.js";
 import { renderExperiment } from "./pages/experiment.js";
 import { renderExperiments } from "./pages/experiments.js";
 import { renderHome } from "./pages/home.js";
@@ -12,15 +13,16 @@ const ROUTES = [
   // Viewer mode: full screen, no sidebar (see styles.css body.watch-mode).
   { pattern: /^#\/watch\/([^/]+)$/, routeKey: "watch", render: (m) => renderWatch(decodeURIComponent(m[1])) },
   {
-    pattern: /^#\/scenarios\/([^/?]+)(?:\?tab=(\w+))?$/,
+    pattern: /^#\/scenarios\/([^/?]+)(?:\?tab=(\w+)(?:&from=(\w+))?)?$/,
     routeKey: "scenarios",
-    render: (m) => renderScenarioEditor(decodeURIComponent(m[1]), m[2]),
+    render: (m) => renderScenarioEditor(decodeURIComponent(m[1]), m[2], m[3]),
   },
   { pattern: /^#\/scenarios$/, routeKey: "scenarios", render: renderScenarios },
   { pattern: /^#\/experiments\/([^/]+)$/, routeKey: "experiments", render: (m) => renderExperiment(decodeURIComponent(m[1])) },
   { pattern: /^#\/experiments$/, routeKey: "experiments", render: renderExperiments },
   { pattern: /^#\/batches\/([^/]+)$/, routeKey: "batches", render: (m) => renderBatch(decodeURIComponent(m[1])) },
   { pattern: /^#\/batches$/, routeKey: "batches", render: renderBatches },
+  { pattern: /^#\/demo$/, routeKey: "demo", render: renderDemo },
 ];
 
 function router() {

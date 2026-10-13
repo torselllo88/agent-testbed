@@ -32,6 +32,7 @@ and no real provider is called. Screenshots (named shots and failures) go to
 | `cascade` | Cascade in the library and the Russian viewer: proposal card, grounded reveal |
 | `viewer-labels` | localized agent names and roles, readable proposal card |
 | `debrief` | spectator chat, the debrief, addressing, FIFO queue, operator close/reopen, phone width |
+| `viewer-stop` | Stop in the viewer: offered only while live, ends the run as stopped by the operator, no debrief follows |
 | `watch-external` | the viewer of an externally bound experiment is read-only until the binding closes |
 | `auth` | `OPERATOR_TOKEN`: 401 without it, `/healthz` open, one browser challenge, then the SPA works |
 

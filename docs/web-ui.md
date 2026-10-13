@@ -3,6 +3,21 @@
 `npm run gui` serves a vanilla-JS single-page app with no build step, on top of
 the [operator HTTP API](http-api.md).
 
+## About & demo
+
+`#/demo` (first in the sidebar): a one-screen introduction for someone seeing
+the testbed for the first time — what it is, what it can study, how adaptable
+it is — and **one button** that starts the demo run (Station Kestrel, in
+English) and opens the viewer. With OpenRouter configured it runs on real
+models (Claude Haiku for the crew, Gemini Flash Lite for the routers, chosen
+for that run only); otherwise on the scenario's scripted stub agents, and the
+caption says so. **See how the scenario is configured** opens the demo scenario's
+full settings (read-only, on the Agents tab) with a short guide to what each
+tab holds. A line of facts about the scenario (agents, vote rule, evaluator
+checks, languages, …) is read from its configuration. When the run is over, **See how this run was judged →** in
+the viewer's header leads to the experiment page. The text, scenario and
+models are defined in [src/scenarios/demo.ts](../src/scenarios/demo.ts).
+
 ## Scenario library
 
 Built-in scenarios come first, then your own. Each card has **Run**, **Edit**
@@ -83,7 +98,9 @@ debrief sessions with their usage, and operator open/close.
 full-screen room for people watching a run rather than controlling it — the
 narrator, agent names and roles, moderator notices, auto-scroll, a subtle
 "… is thinking" hint and a live/ended status. It has no debug metadata,
-technical panels or operator controls. It is a projection of the run's event
+technical panels or operator controls — except **Stop** while the run is live
+(the same as the control view's Stop, with a confirmation; no debrief follows)
+and, once it is over, **See how this run was judged →**. It is a projection of the run's event
 stream plus the room's human side (the interaction log), useful for
 rehearsals, screen recordings and live demos.
 

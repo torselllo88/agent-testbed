@@ -97,7 +97,7 @@ narration, pacing). How that works, and how to author one:
 
 ## Running experiments
 
-**Web UI** — `npm run gui`: scenario library and editor, a live control view
+**Web UI** — `npm run gui`: an About & demo page (`#/demo`: a one-screen introduction and a one-click demo run), scenario library and editor, a live control view
 with operator controls, a clean viewer mode for audiences, batches, exports.
 See [docs/web-ui.md](docs/web-ui.md).
 

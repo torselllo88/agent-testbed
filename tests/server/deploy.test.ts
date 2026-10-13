@@ -168,7 +168,8 @@ describe("where the server listens", () => {
   it("on Railway with OPERATOR_TOKEN it listens on all interfaces and serves the generated domain", async () => {
     const s = await boot({ RAILWAY_ENVIRONMENT: "production", RAILWAY_PUBLIC_DOMAIN: "my-app.up.railway.app", OPERATOR_TOKEN: "operator-token-0123456789" });
     try {
-      for (let i = 0; i < 100 && !s.log().includes("listening on"); i++) await new Promise((r) => setTimeout(r, 200));
+      // The startup block ends with the authentication line: wait for it, not for the first line.
+      for (let i = 0; i < 100 && !s.log().includes("Operator authentication:"); i++) await new Promise((r) => setTimeout(r, 200));
       expect(s.log()).toContain("listening on 0.0.0.0:");
       expect(s.log()).toContain("Public URL: https://my-app.up.railway.app");
       const res = await fetch(`http://127.0.0.1:${s.port}/api/meta`, { headers: { Host: "my-app.up.railway.app", Authorization: "Bearer operator-token-0123456789" } });

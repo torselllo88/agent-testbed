@@ -54,11 +54,26 @@ function field(label, inner, hint) {
   return `<label class="field"><span class="field-label">${escapeHtml(label)}</span>${inner}${hint ? `<span class="field-hint">${escapeHtml(hint)}</span>` : ""}</label>`;
 }
 
+/** Shown above the editor when it was opened from the About & demo page: what each tab holds. */
+const DEMO_GUIDE = `
+  <div class="info-banner demo-guide">
+    <p><strong>This is the complete configuration of the demo scenario — data, not code.</strong> Every field below can be changed in a copy (Duplicate), or varied across a batch.</p>
+    <ul>
+      <li><strong>Task</strong> — the shared facts every agent receives.</li>
+      <li><strong>Agents</strong> — each agent's role, objective, private facts, persona and model.</li>
+      <li><strong>Protocol</strong> — who speaks next, the consensus rule, the proposer, the conversation language.</li>
+      <li><strong>Limits</strong> — turns, tokens, cost and time.</li>
+      <li><strong>Evaluator</strong> — how success is checked, and the structure of the plan agents must submit.</li>
+      <li><strong>Presentation</strong> and <strong>People in the room</strong> — narration, pacing and the debrief: for viewers only, never seen by agents.</li>
+    </ul>
+    <p><a href="#/demo">← Back to the demo</a></p>
+  </div>`;
+
 function valueAttr(v) {
   return v === undefined || v === null ? "" : escapeHtml(String(v));
 }
 
-export async function renderScenarioEditor(scenarioId, initialTab) {
+export async function renderScenarioEditor(scenarioId, initialTab, from) {
   app.innerHTML = `<div class="loading">Loading…</div>`;
   let scenario, meta;
   try {
@@ -411,6 +426,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
           ${readOnly ? "" : `<button id="btn-delete" class="danger">Delete</button>`}
         </div>
       </div>
+      ${from === "demo" ? DEMO_GUIDE : ""}
       ${readOnly ? `<div class="warning-banner">Built-in scenario — read-only. Duplicate it to make an editable copy.</div>` : ""}
       <div id="editor-messages">${state.notice ?? ""}</div>
       <div class="tabs grouped">${TAB_GROUPS.map(
@@ -641,7 +657,7 @@ export async function renderScenarioEditor(scenarioId, initialTab) {
         if (state.invalid.size) return setNotice(invalidFieldsHtml()); // nor a tab with a field that does not parse
         state.tab = btn.dataset.tab;
         // Deep-linkable tab, without triggering the hash router.
-        history.replaceState(null, "", `#/scenarios/${encodeURIComponent(state.scenario.id)}?tab=${state.tab}`);
+        history.replaceState(null, "", `#/scenarios/${encodeURIComponent(state.scenario.id)}?tab=${state.tab}${from === "demo" ? "&from=demo" : ""}`);
         state.rawText = null;
         state.notice = null;
         render();

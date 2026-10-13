@@ -10,6 +10,8 @@ import { kestrelCascadeEvaluator } from "./kestrelCascade/evaluator.js";
 import { registerCascadeStubs } from "./kestrelCascade/stubScripts.js";
 import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 
+export { DEMO, demoFacts, type DemoContent, type DemoSection } from "./demo.js";
+
 /**
  * Everything scenario-specific the generic runtime can be given: evaluators
  * (by id), stub scripts (by stub model name), and ready-made configs. A new

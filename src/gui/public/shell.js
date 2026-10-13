@@ -1,9 +1,10 @@
 // Renders the persistent left-sidebar chrome once, and owns the theme
 // toggle. Route highlighting is handled separately by setActiveRoute() so
 // the sidebar itself never needs to re-render on navigation.
-import { iconBatch, iconDashboard, iconExperiment, iconMoon, iconScenario, iconSun } from "./icons.js";
+import { iconBatch, iconDashboard, iconExperiment, iconInfo, iconMoon, iconScenario, iconSun } from "./icons.js";
 
 const NAV_ITEMS = [
+  { route: "demo", href: "#/demo", icon: iconInfo, label: "About &amp; demo" },
   { route: "home", href: "#/", icon: iconDashboard, label: "Overview" },
   { route: "scenarios", href: "#/scenarios", icon: iconScenario, label: "Scenarios" },
   { route: "experiments", href: "#/experiments", icon: iconExperiment, label: "Experiments" },

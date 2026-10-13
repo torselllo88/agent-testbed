@@ -15,6 +15,8 @@ export const iconScenario = () =>
 export const iconExperiment = () =>
   svg(`<path d="M3 4.5h14v8.5H8.5L5 16v-3H3z"/><path d="M6.5 7.5h7M6.5 9.8h5"/>`);
 
+export const iconInfo = () => svg(`<circle cx="10" cy="10" r="7.5"/><path d="M10 9v5"/><path d="M10 6.2v.1"/>`);
+
 export const iconBatch = () =>
   svg(`<rect x="3" y="3" width="10" height="10" rx="1"/><path d="M6 16h10a1 1 0 0 0 1-1V6"/>`);
 

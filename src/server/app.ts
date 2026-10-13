@@ -23,7 +23,7 @@ import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
-import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
+import { BUILTIN_SCENARIOS, DEMO, demoFacts } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
 import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson, serveStatic } from "./http.js";
 
@@ -144,6 +144,11 @@ function experimentSummary(e: ExperimentRecord, running: boolean) {
     costUsd: summary.costUsd?.total ?? null,
     durationMs: summary.durationMs?.active ?? null,
   };
+}
+
+/** Whether the demo runs on real models: OpenRouter is configured. */
+function demoLive(deps: AppDeps): boolean {
+  return deps.providers.status().some((p) => p.id === "openrouter" && p.configured);
 }
 
 /** Starting a run and validating a config report the same problems in the same shape. */
@@ -268,6 +273,28 @@ const ROUTES: Route[] = [
     handle: async (ctx) => {
       const scenario = ctx.scenarios.getOrThrow(decodeRouteParam(ctx.params[0]!));
       const { overrides } = await body(ctx.req, RunScenarioBody);
+      startExperiment(ctx, scenario.config, scenario, overrides);
+    },
+  },
+
+  // ------------------------------------------------------------ demo page
+  {
+    method: "GET",
+    pattern: /^\/api\/demo$/,
+    handle: ({ res, deps, scenarios }) => {
+      const scenario = scenarios.getBuiltin(DEMO.scenario);
+      const live = demoLive(deps);
+      sendJson(res, 200, { content: DEMO.content, live, scenarioId: scenario?.id ?? null, facts: scenario ? demoFacts(scenario.config, live) : [] });
+    },
+  },
+  {
+    // One button: real models when OpenRouter is configured, the scenario's scripted stub agents otherwise.
+    method: "POST",
+    pattern: /^\/api\/demo\/run$/,
+    handle: (ctx) => {
+      const scenario = ctx.scenarios.getBuiltin(DEMO.scenario);
+      if (!scenario) throw new HttpError(404, `Demo scenario "${DEMO.scenario}" is not in the library`);
+      const overrides: RunOverrides = { language: DEMO.language, ...(demoLive(ctx.deps) ? { models: DEMO.liveModels } : {}) };
       startExperiment(ctx, scenario.config, scenario, overrides);
     },
   },

@@ -34,6 +34,9 @@ const LABELS = {
     send: "Send",
     replyTo: (n) => `Reply to ${n}`,
     needName: "Enter your name first.",
+    results: "See how this run was judged →",
+    stop: "Stop",
+    stopConfirm: "Stop this run? It ends as stopped by the operator.",
     external: "This room is connected to an external chat room — people talk there. Here you can only watch.",
   },
   ru: {
@@ -52,6 +55,9 @@ const LABELS = {
     send: "Отправить",
     replyTo: (n) => `Ответ для: ${n}`,
     needName: "Сначала введите имя.",
+    results: "Как оценён этот прогон →",
+    stop: "Остановить",
+    stopConfirm: "Остановить прогон? Он завершится как остановленный оператором.",
     external: "Эта комната подключена к внешнему чату — люди общаются там. Здесь можно только смотреть.",
   },
 };
@@ -194,6 +200,8 @@ export async function renderWatch(experimentId) {
       <header class="watch-header">
         <a class="watch-exit" href="#/experiments/${encodeURIComponent(experimentId)}" title="Control view">←</a>
         <h1>${escapeHtml(titleFor(config))}</h1>
+        <a class="watch-results" id="watch-results" href="#/experiments/${encodeURIComponent(experimentId)}" hidden>${escapeHtml(L.results)}</a>
+        <button type="button" class="watch-stop" id="watch-stop" hidden>${escapeHtml(L.stop)}</button>
         <span class="watch-status" id="watch-status"></span>
       </header>
       <main class="watch-room" id="watch-room"></main>
@@ -306,6 +314,8 @@ export async function renderWatch(experimentId) {
       : interaction.mode === "debrief"
         ? `<span class="w-debrief-dot"></span>${escapeHtml(L.debriefOpen)}`
         : escapeHtml(L.ended);
+    document.getElementById("watch-results").hidden = running;
+    document.getElementById("watch-stop").hidden = !running;
     document.getElementById("watch-typing").textContent = typingText();
     textInput.placeholder = interaction.mode === "debrief" ? L.ask : L.chat;
     document.getElementById("w-composer").hidden = Boolean(externalRoom);
@@ -322,6 +332,22 @@ export async function renderWatch(experimentId) {
     replyTo = { messageId: msg.dataset.mid, agentId: msg.dataset.agent };
     renderReply();
     textInput.focus();
+  });
+
+  // The same stop as the control view: ends the run as STOPPED_BY_OPERATOR (no debrief follows).
+  const stopButton = document.getElementById("watch-stop");
+  stopButton.addEventListener("click", async () => {
+    if (!confirm(L.stopConfirm)) return;
+    stopButton.disabled = true;
+    try {
+      await api(`${base}/control`, { method: "POST", body: JSON.stringify({ type: "stop" }) });
+      await refresh();
+      render();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      stopButton.disabled = false;
+    }
   });
 
   document.getElementById("w-composer").addEventListener("submit", async (ev) => {

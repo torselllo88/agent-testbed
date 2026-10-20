@@ -6,7 +6,8 @@
  * caller with its own token usage and can be recorded in the trace.
  */
 
-export type ProviderId = "openrouter" | "azure" | "stub";
+/** A registry key: a built-in provider, or one self-hosted OpenAI-compatible endpoint ("openai-compatible:<name>"). */
+export type ProviderId = "openrouter" | "azure" | "stub" | `openai-compatible:${string}`;
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";

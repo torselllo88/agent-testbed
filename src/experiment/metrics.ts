@@ -1,6 +1,7 @@
 import type { TokenUsage } from "../llm/provider.js";
 import { EventType, type ExperimentEvent } from "./events.js";
 import type { Termination } from "./outcome.js";
+import { communicationMetrics, type CommunicationMetrics } from "./communicationMetrics.js";
 
 interface TokenCount {
   prompt: number;
@@ -48,6 +49,8 @@ export interface ExperimentMetrics {
   evaluatorVersion: string | null;
   /** The shared protocol assets agents read (runtime metadata, like evaluatorVersion). */
   protocolFingerprint: string | null;
+  /** Who addressed whom, participation, responsiveness, time to decision (see communicationMetrics.ts). */
+  communication: CommunicationMetrics;
 }
 
 const inc = (map: Record<string, number>, key: string, by = 1) => {
@@ -82,6 +85,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     extensionErrors: 0,
     evaluatorVersion: null,
     protocolFingerprint: null,
+    communication: communicationMetrics(events),
   };
 
   let startedTs: string | null = null;

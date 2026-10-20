@@ -53,5 +53,7 @@ describe("protocol fingerprint", () => {
     const [header, row] = batches.csv(batch.id).trim().split("\n");
     const columns = header!.split(",");
     expect(row!.split(",")[columns.indexOf("protocol_fingerprint")]).toBe(PROTOCOL_FINGERPRINT);
+    // Structural communication metrics travel with every batch run too.
+    expect(columns).toEqual(expect.arrayContaining(["addressed_share", "interaction_density", "interaction_reciprocity", "participation_evenness", "silent_agents", "turns_to_first_proposal"]));
   });
 });

@@ -7,6 +7,10 @@ import {
   openRouterOptions,
   readChoice,
   summarizeRefs,
+  endpointNames,
+  fillEndpointLists,
+  providerOptions,
+  providerValue,
 } from "./modelChoice.js";
 import { api, apiDetailed, escapeHtml } from "./shared.js";
 
@@ -23,7 +27,8 @@ export function openRunDialog(scenario, meta) {
     return `${code}${code === scenario.language ? " — scenario default" : ""}${scenario.narrated ? (authored ? "" : " — narration falls back") : ""}`;
   };
 
-  const LISTS = { stubList: "rd-stub-models", openRouterList: "rd-openrouter-models" };
+  const LISTS = { stubList: "rd-stub-models", openRouterList: "rd-openrouter-models", endpointPrefix: "rd-compat-models-" };
+  const OPTIONS = providerOptions(meta);
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -48,15 +53,16 @@ export function openRunDialog(scenario, meta) {
         <p class="muted small" id="rd-models-now">Loading the scenario's models…</p>
       </div>
       <div id="rd-models-choose" hidden>
-        <div class="grid-2">${choiceFieldsHtml("rd-agents", { provider: defaultProvider(meta), model: "" }, LISTS)}</div>
+        <div class="grid-2">${choiceFieldsHtml("rd-agents", { provider: defaultProvider(meta), model: "" }, LISTS, OPTIONS)}</div>
         <div id="rd-orchestration" hidden>
           <p class="muted small" id="rd-orchestration-label"></p>
-          <div class="grid-2">${choiceFieldsHtml("rd-orchestration", { provider: defaultProvider(meta), model: "" }, LISTS)}</div>
+          <div class="grid-2">${choiceFieldsHtml("rd-orchestration", { provider: defaultProvider(meta), model: "" }, LISTS, OPTIONS)}</div>
         </div>
         <p class="muted small">Provider and model for this run only; leave a model empty to keep the scenario's. Structured output follows what OpenRouter lists for the model.</p>
       </div>
       <datalist id="rd-stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
       <datalist id="rd-openrouter-models"></datalist>
+      ${endpointNames(meta).map((name) => `<datalist id="rd-compat-models-${escapeHtml(name)}"></datalist>`).join("")}
       <div id="rd-error"></div>
       <div class="actions">
         <button type="button" class="primary" data-go="control">Start</button>
@@ -75,6 +81,7 @@ export function openRunDialog(scenario, meta) {
   modelsSelect.addEventListener("change", () => (overlay.querySelector("#rd-models-choose").hidden = modelsSelect.value !== "choose"));
   bindChoiceFields(overlay, "rd-agents", LISTS);
   bindChoiceFields(overlay, "rd-orchestration", LISTS);
+  fillEndpointLists(overlay, meta, "rd-compat-models-");
   let catalog = null;
   loadOpenRouterCatalog().then((c) => {
     catalog = c;
@@ -84,7 +91,7 @@ export function openRunDialog(scenario, meta) {
     .then(({ scenario: full }) => {
       const refs = modelRefsOf(full.config);
       overlay.querySelector("#rd-models-now").textContent =
-        `Now — agents: ${summarizeRefs(refs.agents)}${refs.orchestration.map((o) => `; ${o.label}: ${o.ref.provider} · ${o.ref.model}`).join("")}`;
+        `Now — agents: ${summarizeRefs(refs.agents)}${refs.orchestration.map((o) => `; ${o.label}: ${providerValue(o.ref)} · ${o.ref.model}`).join("")}`;
       if (refs.orchestration.length) {
         overlay.querySelector("#rd-orchestration").hidden = false;
         overlay.querySelector("#rd-orchestration-label").textContent = `For the ${refs.orchestration.map((o) => o.label).join(" and ")} (a cheap, fast model is enough):`;

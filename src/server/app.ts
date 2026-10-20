@@ -17,6 +17,7 @@ import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, withEffecti
 import type { ExperimentService } from "../experiment/service.js";
 import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
 import type { ExternalRoomService } from "../rooms/service.js";
+import { OpenAiCompatibleProvider } from "../llm/openAiCompatibleProvider.js";
 import type { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
@@ -197,6 +198,22 @@ const ROUTES: Route[] = [
         sendJson(res, 200, await deps.openRouterModels.get());
       } catch (err) {
         throw new HttpError(502, `Could not load the OpenRouter model list: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+  },
+  {
+    // The models a self-hosted OpenAI-compatible endpoint serves (its GET /models), for the editor.
+    method: "GET",
+    pattern: new RegExp(`^/api/providers/openai-compatible/${ID}/models$`),
+    handle: async ({ res, params, deps }) => {
+      const name = decodeRouteParam(params[0]!);
+      const id = `openai-compatible:${name}` as const;
+      const provider = deps.providers.has(id) ? deps.providers.get(id) : null;
+      if (!(provider instanceof OpenAiCompatibleProvider)) throw new HttpError(404, `OpenAI-compatible endpoint "${name}" is not configured`);
+      try {
+        sendJson(res, 200, { models: await provider.listModels() });
+      } catch (err) {
+        throw new HttpError(502, err instanceof Error ? err.message : String(err));
       }
     },
   },

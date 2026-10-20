@@ -45,9 +45,25 @@ export const OpenRouterRoutingSchema = z
   .strict();
 export type OpenRouterRouting = z.infer<typeof OpenRouterRoutingSchema>;
 
+export const PROVIDER_KINDS = ["openrouter", "azure", "openai-compatible", "stub"] as const;
+/** The name of a self-hosted OpenAI-compatible endpoint (vLLM, TGI, …), configured in the environment — never its URL or key. */
+export const EndpointNameSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "lower-case letters, digits, - and _");
+
+/** "openai-compatible" needs an endpoint name; every other provider must not have one. */
+function checkEndpoint(ref: { provider: string; endpoint?: string }, ctx: z.RefinementCtx): void {
+  if (ref.provider === "openai-compatible" && !ref.endpoint) {
+    ctx.addIssue({ code: "custom", path: ["endpoint"], message: `provider "openai-compatible" needs an endpoint name (one of OPENAI_COMPATIBLE_ENDPOINTS)` });
+  }
+  if (ref.provider !== "openai-compatible" && ref.endpoint !== undefined) {
+    ctx.addIssue({ code: "custom", path: ["endpoint"], message: `endpoint is only meaningful for provider "openai-compatible"` });
+  }
+}
+
 export const ModelRefSchema = z.object({
-  provider: z.enum(["openrouter", "azure", "stub"]),
-  /** OpenRouter model id, Azure deployment name, or stub script name. */
+  provider: z.enum(PROVIDER_KINDS),
+  /** openai-compatible only: which configured endpoint serves the model. */
+  endpoint: EndpointNameSchema.optional(),
+  /** OpenRouter model id, Azure deployment name, the endpoint's model name, or stub script name. */
   model: z.string().min(1),
   temperature: z.number().min(0).max(2).optional(),
   /** Best-effort only — recorded, never relied upon for reproducibility. */
@@ -66,8 +82,14 @@ export const ModelRefSchema = z.object({
   if (ref.routing && ref.provider !== "openrouter") {
     ctx.addIssue({ code: "custom", path: ["routing"], message: `routing is OpenRouter-specific and has no meaning for provider "${ref.provider}"` });
   }
+  checkEndpoint(ref, ctx);
 });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
+
+/** The registry key of the provider serving a model reference: the provider, or "openai-compatible:<endpoint>". */
+export function modelProviderKey(ref: { provider: string; endpoint?: string }): string {
+  return ref.provider === "openai-compatible" ? `openai-compatible:${ref.endpoint}` : ref.provider;
+}
 
 /**
  * The routing actually sent to OpenRouter: the configured routing plus the
@@ -503,21 +525,29 @@ export function taskDefinitionHash(config: ExperimentConfig, evaluatorVersion: s
 /** One model applied to many model references at once: provider, model and (optionally) the output mode — nothing else. */
 export const ModelChoiceSchema = z
   .object({
-    provider: z.enum(["openrouter", "azure", "stub"]),
+    provider: z.enum(PROVIDER_KINDS),
+    endpoint: EndpointNameSchema.optional(),
     model: z.string().min(1),
     structuredOutput: z.enum(["native", "prompt"]).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(checkEndpoint);
 export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
 
 /**
- * A model reference with another provider and model. Temperature, seed and the
- * output cap belong to the scenario and stay; OpenRouter routing (backend
- * constraints for one specific model) is dropped.
+ * A model reference with another provider and model (and endpoint). Temperature,
+ * seed and the output cap belong to the scenario and stay; OpenRouter routing
+ * (backend constraints for one specific model) is dropped.
  */
 export function withModelChoice(ref: ModelRef, choice: ModelChoice): ModelRef {
-  const { routing: _routing, ...rest } = ref;
-  return { ...rest, provider: choice.provider, model: choice.model, structuredOutput: choice.structuredOutput ?? rest.structuredOutput };
+  const { routing: _routing, endpoint: _endpoint, ...rest } = ref;
+  return {
+    ...rest,
+    provider: choice.provider,
+    ...(choice.provider === "openai-compatible" ? { endpoint: choice.endpoint } : {}),
+    model: choice.model,
+    structuredOutput: choice.structuredOutput ?? rest.structuredOutput,
+  };
 }
 
 /** Per-run settings that override the saved scenario without editing or versioning it. */

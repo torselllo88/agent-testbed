@@ -69,6 +69,7 @@ function startServer(label, env) {
       OPENROUTER_API_KEY: "",
       AZURE_OPENAI_API_KEY: "",
       AZURE_OPENAI_ENDPOINT: "",
+      OPENAI_COMPATIBLE_ENDPOINTS: "",
       OPERATOR_TOKEN: "",
       EXTERNAL_API_TOKEN: "",
       EXTERNAL_API_LISTENER: "",
@@ -142,13 +143,19 @@ async function main() {
   const withRoomMock = only.length === 0 || only.includes("room-mock");
   fs.mkdirSync(OUT, { recursive: true });
 
-  const [appPort, extPort, securePort, cdpPort] = await Promise.all([freePort(), freePort(), freePort(), freePort()]);
+  const [appPort, extPort, securePort, cdpPort, modelPort] = await Promise.all([freePort(), freePort(), freePort(), freePort(), freePort()]);
   const app = `http://127.0.0.1:${appPort}`;
   const secureApp = `http://127.0.0.1:${securePort}`;
   const cdp = `http://127.0.0.1:${cdpPort}`;
 
+  // A stand-in for a lab's self-hosted OpenAI-compatible model server (tests/helpers/fakeOpenAiServer.ts).
+  const fakeModels = spawn(process.execPath, ["--import", "tsx", "tests/helpers/fakeOpenAiServer.ts", "--port", String(modelPort)], { cwd: ROOT, stdio: "ignore" });
+  children.push(fakeModels);
+
   const servers = [
     startServer("server", {
+      OPENAI_COMPATIBLE_ENDPOINTS: "lab-fake",
+      OPENAI_COMPATIBLE_LAB_FAKE_BASE_URL: `http://127.0.0.1:${modelPort}/v1`,
       DATA_DIR: tempDir("data"),
       GUI_PORT: String(appPort),
       PORT: String(appPort),
@@ -175,6 +182,7 @@ async function main() {
   children.push(chrome);
 
   try {
+    await waitUntil(`http://127.0.0.1:${modelPort}/v1/models`, "fake model server");
     await waitUntil(`${app}/healthz`, "server");
     await waitUntil(`${secureApp}/healthz`, "secure server");
     await waitUntil(`${cdp}/json/version`, "Chrome");

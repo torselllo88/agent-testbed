@@ -54,8 +54,11 @@ Leader decision, weighted expertise, domain veto: implement
 
 ## A new LLM provider
 
-Implement `LlmProvider.complete()` in [src/llm/](../src/llm/) and register it in
-`createProviderRegistryFromEnv`. A failed but billed response should carry its
+Most self-hosted servers need no new provider: they speak the OpenAI API and
+connect as an `openai-compatible` endpoint (see
+[configuration](configuration.md#self-hosted-models-openai-compatible-endpoints)).
+For anything else, implement `LlmProvider.complete()` in [src/llm/](../src/llm/) and
+register it in `createProviderRegistryFromEnv`. A failed but billed response should carry its
 usage (`ProviderError.billed`), so cost accounting stays complete.
 
 ## A new run extension

@@ -7,8 +7,14 @@ import {
   loadOpenRouterCatalog,
   modelRefsOf,
   openRouterOptions,
-  PROVIDERS,
+  endpointModelOptions,
+  endpointNames,
+  loadEndpointModels,
+  modelListId,
+  providerOptions,
+  providerValue,
   readChoice,
+  splitProviderValue,
   summarizeRefs,
 } from "../modelChoice.js";
 import { openRunDialog } from "../runDialog.js";
@@ -97,6 +103,8 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
     stashedInteraction: null,
     /** The "Models" panel's fields (not part of the config until applied). */
     modelPanel: null,
+    /** Self-hosted endpoints' model lists, by endpoint name, once loaded. */
+    endpointModels: {},
     notice: null,
     openRouter: null, // { models, error? } once loaded
   };
@@ -182,12 +190,35 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
     return `<p class="muted small">${escapeHtml(facts)}</p>${warn}`;
   };
 
-  const modelList = (provider) => (provider === "stub" ? `list="stub-models"` : provider === "openrouter" ? `list="openrouter-models"` : "");
+  const modelList = (ref) => {
+    const id = modelListId(providerValue(ref), MODEL_LISTS);
+    return id ? `list="${id}"` : "";
+  };
+
+  /** What a self-hosted endpoint says about a model reference (is the model among those it serves). */
+  const endpointModelInfo = (ref) => {
+    if (ref?.provider !== "openai-compatible") return "";
+    const listed = state.endpointModels[ref.endpoint];
+    if (!listed) return `<p class="muted small">Self-hosted endpoint "${escapeHtml(ref.endpoint ?? "")}" — loading the models it serves…</p>`;
+    if (listed.error) return `<p class="muted small">Could not list the endpoint's models (${escapeHtml(listed.error)}) — enter the model name manually.</p>`;
+    if (!ref.model) return `<p class="muted small">${listed.models.length} model(s) served by "${escapeHtml(ref.endpoint)}" — start typing.</p>`;
+    return listed.models.includes(ref.model)
+      ? `<p class="muted small">Served by the self-hosted endpoint "${escapeHtml(ref.endpoint)}" · cost not reported (recorded as unknown)</p>`
+      : `<div class="warning-banner">"${escapeHtml(ref.model)}" is not among the models "${escapeHtml(ref.endpoint)}" serves (${escapeHtml(listed.models.join(", ") || "none")}).</div>`;
+  };
+  const providerSelect = (base) => {
+    const current = providerValue(getPath(state.draft, base));
+    const options = providerOptions(meta);
+    if (current && !options.some(([v]) => v === current)) options.push([current, `${current} — not configured here`]);
+    return `<select data-path="${base}.provider" data-kind="string" data-structural>${options
+      .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`)
+      .join("")}</select>`;
+  };
 
   const modelFields = (base) => `
     <div class="grid-4">
-      ${field("Provider", select(`${base}.provider`, PROVIDERS.map((p) => [p, p]), { structural: true }))}
-      ${field("Model", input(`${base}.model`, "string", `${modelList(getPath(state.draft, base)?.provider)} data-model-input`), "OpenRouter model id, Azure deployment, or stub script")}
+      ${field("Provider", providerSelect(base))}
+      ${field("Model", input(`${base}.model`, "string", `${modelList(getPath(state.draft, base))} data-model-input`), "OpenRouter model id, Azure deployment, the endpoint's model name, or stub script")}
       ${field("Temperature", input(`${base}.temperature`, "optional-number", `step="0.1" min="0" max="2"`), "blank = provider default")}
       ${field("Max output tokens", input(`${base}.maxOutputTokens`, "optional-number", `min="1"`), "blank = no cap")}
     </div>
@@ -196,10 +227,11 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
       ${field("Seed", input(`${base}.seed`, "optional-number"), "best-effort, recorded only")}
     </div>
     ${openRouterModelInfo(getPath(state.draft, base))}
+    ${endpointModelInfo(getPath(state.draft, base))}
     ${routingFields(base)}`;
 
   /** Choose one model for every agent (and one for the routers) instead of editing each reference. */
-  const MODEL_LISTS = { stubList: "stub-models", openRouterList: "openrouter-models" };
+  const MODEL_LISTS = { stubList: "stub-models", openRouterList: "openrouter-models", endpointPrefix: "compat-models-" };
   const modelPanel = () => {
     if (readOnly) return "";
     const refs = modelRefsOf(state.draft);
@@ -211,16 +243,16 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
       <div class="card model-panel">
         <h3>Models</h3>
         <p class="muted small">Now — agents: <strong>${escapeHtml(summarizeRefs(refs.agents))}</strong>${
-          refs.orchestration.length ? `; ${refs.orchestration.map((o) => `${escapeHtml(o.label)}: <strong>${escapeHtml(`${o.ref.provider} · ${o.ref.model}`)}</strong>`).join("; ")}` : ""
+          refs.orchestration.length ? `; ${refs.orchestration.map((o) => `${escapeHtml(o.label)}: <strong>${escapeHtml(`${providerValue(o.ref)} · ${o.ref.model}`)}</strong>`).join("; ")}` : ""
         }.</p>
         <div class="grid-4 model-choice">
-          ${choiceFieldsHtml("mp-agents", state.modelPanel.agents, MODEL_LISTS)}
+          ${choiceFieldsHtml("mp-agents", state.modelPanel.agents, MODEL_LISTS, providerOptions(meta))}
           <div class="field"><span class="field-label">&nbsp;</span><button type="button" data-action="apply-models" data-target="agents">Apply to all agents</button></div>
         </div>
         ${
           refs.orchestration.length
             ? `<div class="grid-4 model-choice">
-                ${choiceFieldsHtml("mp-orchestration", state.modelPanel.orchestration, MODEL_LISTS)}
+                ${choiceFieldsHtml("mp-orchestration", state.modelPanel.orchestration, MODEL_LISTS, providerOptions(meta))}
                 <div class="field"><span class="field-label">&nbsp;</span><button type="button" data-action="apply-models" data-target="orchestration">Apply to ${escapeHtml(refs.orchestration.map((o) => o.label).join(" and "))}</button></div>
               </div>
               <p class="muted small">Routers only pick who answers next — a cheap, fast model is enough.</p>`
@@ -437,6 +469,7 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
       <div class="card editor-body${groupOf(state.tab)?.label === "Presentation & demo" ? " demo" : ""}" id="editor-body">${groupOf(state.tab)?.hint ? `<p class="tab-group-hint">${escapeHtml(groupOf(state.tab).hint)}</p>` : ""}${tabBody[state.tab]()}</div>
       <datalist id="stub-models">${meta.stubModels.map((m) => `<option value="${escapeHtml(m)}">`).join("")}</datalist>
       <datalist id="openrouter-models">${state.openRouter ? openRouterOptions(state.openRouter.models) : ""}</datalist>
+      ${endpointNames(meta).map((name) => `<datalist id="compat-models-${escapeHtml(name)}">${endpointModelOptions(state.endpointModels[name]?.models ?? [])}</datalist>`).join("")}
       <datalist id="language-suggestions">${meta.languages.suggested.map((l) => `<option value="${escapeHtml(l)}">`).join("")}</datalist>
     `;
     const narratorToggle = app.querySelector('[data-path="presentation.__narratorEnabled"]');
@@ -532,10 +565,14 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
     } else if (path === "transport.type") {
       state.draft.transport = { type: value };
     } else if (path.endsWith(".provider") && getPath(state.draft, path.slice(0, -".provider".length))?.model !== undefined) {
-      // Any model reference (agent, router classifier, debrief router).
-      setPath(state.draft, path, value);
+      // Any model reference (agent, router classifier, debrief router). A self-hosted endpoint is provider + endpoint.
+      const ref = getPath(state.draft, path.slice(0, -".provider".length));
+      const { provider, endpoint } = splitProviderValue(value);
+      ref.provider = provider;
+      if (provider === "openai-compatible") ref.endpoint = endpoint;
+      else delete ref.endpoint;
       // Routing is OpenRouter-specific; the config rejects it for any other provider.
-      if (value !== "openrouter") delete getPath(state.draft, path.slice(0, -".provider".length)).routing;
+      if (provider !== "openrouter") delete ref.routing;
     } else {
       assign(path, value);
     }
@@ -753,6 +790,15 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
   }
 
   render();
+  // Self-hosted endpoints' model lists: fill in place when they arrive; re-render only if nobody is typing.
+  for (const name of endpointNames(meta)) {
+    loadEndpointModels(name).then((result) => {
+      state.endpointModels[name] = result;
+      const list = document.getElementById(`compat-models-${name}`);
+      if (list) list.innerHTML = endpointModelOptions(result.models);
+      if (!document.getElementById("editor-body")?.contains(document.activeElement)) render();
+    });
+  }
   // Fill the OpenRouter list in place when it arrives; re-render only if nobody is typing.
   loadOpenRouterCatalog().then((catalog) => {
     state.openRouter = catalog;

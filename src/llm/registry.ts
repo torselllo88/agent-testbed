@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { AzureOpenAiProvider } from "./azureOpenAiProvider.js";
 import { ConcurrencyGate } from "./concurrencyGate.js";
+import { OpenAiCompatibleProvider } from "./openAiCompatibleProvider.js";
 import { OpenRouterProvider } from "./openRouterProvider.js";
 import { ProviderError, type LlmProvider, type ProviderId } from "./provider.js";
 import { StubProvider } from "./stubProvider.js";
@@ -12,6 +13,8 @@ export interface ProviderStatus {
   hint?: string;
   /** Live request-gate state (real providers only). */
   gate?: ReturnType<ConcurrencyGate["stats"]>;
+  /** For an OpenAI-compatible endpoint: its name and server URL (never its key). */
+  endpoint?: { name: string; baseUrl?: string };
 }
 
 export interface ProviderRegistryOptions {
@@ -25,6 +28,10 @@ export interface ProviderRegistryOptions {
    * (default 2). Only used when maxConcurrentRequests is set.
    */
   poolLimits?: Record<string, number>;
+  /** Per-provider request limits that replace maxConcurrentRequests (e.g. a self-hosted endpoint sized to its GPUs). */
+  maxConcurrentByProvider?: Record<string, number>;
+  /** Providers declared in the environment but not usable (e.g. an endpoint without a URL) — listed as not configured. */
+  unavailable?: ProviderStatus[];
 }
 
 /**
@@ -38,6 +45,8 @@ export class ProviderRegistry {
   private readonly gates: Map<ProviderId, ConcurrencyGate>;
   private readonly poolGates: Map<string, ConcurrencyGate>;
   private readonly poolLimits: Record<string, number>;
+  private readonly maxConcurrentByProvider: Record<string, number>;
+  private readonly unavailable: ProviderStatus[];
   readonly maxConcurrentRequests: number | null;
 
   constructor(
@@ -54,12 +63,15 @@ export class ProviderRegistry {
     this.providers.set("stub", stub);
     this.secrets = (options.secrets ?? []).filter((s) => s.length >= 8);
     this.maxConcurrentRequests = options.maxConcurrentRequests ?? null;
+    this.maxConcurrentByProvider = options.maxConcurrentByProvider ?? {};
+    this.unavailable = options.unavailable ?? [];
+    const limitOf = (id: ProviderId) => this.maxConcurrentByProvider[id] ?? this.maxConcurrentRequests;
     this.gates =
       sharedGates ??
       new Map(
-        this.maxConcurrentRequests === null
-          ? []
-          : providers.filter((p) => p.id !== "stub").map((p) => [p.id, new ConcurrencyGate(this.maxConcurrentRequests!)] as const)
+        providers
+          .filter((p) => p.id !== "stub" && limitOf(p.id) !== null)
+          .map((p) => [p.id, new ConcurrencyGate(limitOf(p.id)!)] as const)
       );
   }
 
@@ -69,7 +81,13 @@ export class ProviderRegistry {
     return new ProviderRegistry(
       real,
       stub,
-      { secrets: this.secrets, maxConcurrentRequests: this.maxConcurrentRequests ?? undefined, poolLimits: this.poolLimits },
+      {
+        secrets: this.secrets,
+        maxConcurrentRequests: this.maxConcurrentRequests ?? undefined,
+        poolLimits: this.poolLimits,
+        maxConcurrentByProvider: this.maxConcurrentByProvider,
+        unavailable: this.unavailable,
+      },
       this.gates,
       this.poolGates
     );
@@ -118,6 +136,10 @@ export class ProviderRegistry {
         hint: this.has("azure") ? undefined : "Set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION in .env",
         ...gateOf("azure"),
       },
+      ...[...this.providers.values()]
+        .filter((p): p is OpenAiCompatibleProvider => p instanceof OpenAiCompatibleProvider)
+        .map((p) => ({ id: p.id, configured: true, endpoint: { name: p.endpoint, baseUrl: p.baseUrl }, ...gateOf(p.id) })),
+      ...this.unavailable,
       { id: "stub", configured: true },
     ];
   }
@@ -151,7 +173,23 @@ export function createProviderRegistryFromEnv(stub: StubProvider = new StubProvi
   // Access tokens never belong in a trace either: scrub them like provider keys.
   for (const token of [env.operatorToken, env.externalApi.token]) if (token) secrets.push(token);
 
+  const maxConcurrentByProvider: Record<string, number> = {};
+  const unavailable: ProviderStatus[] = [];
+  for (const endpoint of env.openAiCompatible) {
+    const id: ProviderId = `openai-compatible:${endpoint.name}`;
+    if (!endpoint.baseUrl) {
+      const key = `OPENAI_COMPATIBLE_${endpoint.name.toUpperCase().replace(/-/g, "_")}_BASE_URL`;
+      unavailable.push({ id, configured: false, hint: `Set ${key}`, endpoint: { name: endpoint.name } });
+      continue;
+    }
+    providers.push(new OpenAiCompatibleProvider({ name: endpoint.name, baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey }));
+    if (endpoint.apiKey) secrets.push(endpoint.apiKey);
+    if (endpoint.maxConcurrent) maxConcurrentByProvider[id] = endpoint.maxConcurrent;
+  }
+
   return new ProviderRegistry(providers, stub, {
+    maxConcurrentByProvider,
+    unavailable,
     secrets,
     maxConcurrentRequests: env.llmMaxConcurrentRequests,
     poolLimits: { debrief: env.llmMaxConcurrentDebriefRequests },

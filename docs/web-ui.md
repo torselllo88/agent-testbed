@@ -88,7 +88,9 @@ control metadata inline in the room.
 
 After the run the view shows the outcome, the final proposal (id and hash), the
 votes, every evaluator check, per-agent usage, routing statistics and the full
-chronological event trace with expandable payloads. Buttons: **Rerun same
+chronological event trace with expandable payloads. A **Communication** card
+summarizes who addressed whom, responses, participation and time to decision
+([metrics](reproducibility.md#metrics)). Buttons: **Rerun same
 config**, **Export JSON**. Under *People in the room*: spectator messages,
 debrief sessions with their usage, and operator open/close.
 

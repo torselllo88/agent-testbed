@@ -105,6 +105,41 @@ run environment records `languageOverridden` and `modelsOverridden`. The
 External Room API does not offer model overrides: the operator chooses models
 in the saved scenario.
 
+## Self-hosted models (OpenAI-compatible endpoints)
+
+Any server speaking the OpenAI chat-completions API — vLLM, TGI, LM Studio,
+llama.cpp server, an internal gateway — can serve agents. The experiment
+config names only a logical **endpoint**; where it is and how to reach it is
+set in the environment of the machine the run executes on, so one scenario
+runs unchanged on a laptop or a cluster node.
+
+```jsonc
+"model": { "provider": "openai-compatible", "endpoint": "lab-vllm", "model": "Qwen/Qwen2.5-72B-Instruct", "structuredOutput": "native" }
+```
+
+```bash
+OPENAI_COMPATIBLE_ENDPOINTS=lab-vllm,lab-tgi
+OPENAI_COMPATIBLE_LAB_VLLM_BASE_URL=http://gpu-node-3:8000/v1
+OPENAI_COMPATIBLE_LAB_VLLM_API_KEY=…            # optional
+OPENAI_COMPATIBLE_LAB_VLLM_MAX_CONCURRENT=16    # optional: size it to the server
+```
+
+The name is upper-cased with `-` → `_` in the variable names. Each endpoint
+is its own provider (`openai-compatible:<name>` in the trace and on the
+Overview page) with its own request limit. In the editor it appears in every
+provider list, and the model field offers the models the server lists
+(`GET /v1/models`).
+
+- **Structured output:** `native` sends `response_format: json_schema`
+  (supported by recent vLLM and TGI). For a server without it, use
+  `"structuredOutput": "prompt"` — the schema is then described in the prompt,
+  and every response is parsed and validated either way.
+- **Cost** is not reported by such servers and is recorded as unknown; token
+  usage is recorded as the server reports it.
+- **Keys** live only in the environment and are scrubbed from every trace.
+- A run naming an endpoint that is not configured where it runs is refused
+  before it starts, saying which variable to set.
+
 ## Environment (`.env`)
 
 See [.env.example](../.env.example). All variables are optional.
@@ -114,6 +149,8 @@ See [.env.example](../.env.example). All variables are optional.
 | `OPENROUTER_API_KEY` | — | Enables the OpenRouter provider (the main path: many vendors, one key) |
 | `OPENROUTER_SITE_URL`, `OPENROUTER_SITE_NAME` | — | Optional attribution headers |
 | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | — | Enables Azure OpenAI (an agent's `model` is then the deployment name) |
+| `OPENAI_COMPATIBLE_ENDPOINTS` | — | Comma-separated names of self-hosted OpenAI-compatible model servers (see [below](#self-hosted-models-openai-compatible-endpoints)) |
+| `OPENAI_COMPATIBLE_<NAME>_BASE_URL`, `_API_KEY`, `_MAX_CONCURRENT` | — | Per endpoint: server URL (required), key (optional), request limit (default `LLM_MAX_CONCURRENT_REQUESTS`) |
 | `LLM_MAX_CONCURRENT_REQUESTS` | `8` | Simultaneous in-flight requests per real provider, process-wide |
 | `LLM_MAX_CONCURRENT_DEBRIEF_REQUESTS` | `2` | The debrief's own slots per real provider, separate from the experiments' slots. People asking questions never delay a running experiment; this adds to the provider's total concurrency |
 | `SQLITE_SYNCHRONOUS` | `NORMAL` | Trace durability: `NORMAL`, `FULL`, `EXTRA`, `OFF` |

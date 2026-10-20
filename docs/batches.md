@@ -72,7 +72,9 @@ Per condition and overall:
 - outcome and category counts;
 - mean, median, min and max of total, agent and orchestration tokens, turns,
   public messages and active duration;
-- total and mean cost, and the number of calls of unknown cost.
+- total and mean cost, and the number of calls of unknown cost;
+- communication: addressed share, participation evenness and turns to the
+  first proposal (runs recorded before these metrics existed are left out).
 
 Success and consensus rates are computed over **evaluable** runs only.
 **Excluded** runs (`PROVIDER_ERROR`, `ERROR`, `INTERRUPTED`,
@@ -83,7 +85,10 @@ provider instability is never hidden by the denominator.
 ## Export
 
 - **CSV**, one row per run: a column per variable, outcome, category,
-  consensus, turns, messages, tokens, cost, duration, intervention flag,
+  consensus, turns, messages, tokens, cost, duration, communication
+  (`addressed_share`, `interaction_density`, `interaction_reciprocity`,
+  `participation_evenness`, `silent_agents`, `turns_to_first_proposal`),
+  intervention flag,
   `config_hash`, `evaluator_version`, `protocol_fingerprint`,
   `task_definition_hash`.
 - **JSON:** the resolved spec, aggregates and per-run summaries.

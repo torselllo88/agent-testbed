@@ -33,6 +33,7 @@ and no real provider is called. Screenshots (named shots and failures) go to
 | `viewer-labels` | localized agent names and roles, readable proposal card |
 | `debrief` | spectator chat, the debrief, addressing, FIFO queue, operator close/reopen, phone width |
 | `viewer-stop` | Stop in the viewer: offered only while live, ends the run as stopped by the operator, no debrief follows |
+| `self-hosted` | a self-hosted OpenAI-compatible endpoint (a fake one the runner starts): Overview, provider choice with the served models, a run on it |
 | `watch-external` | the viewer of an externally bound experiment is read-only until the binding closes |
 | `auth` | `OPERATOR_TOKEN`: 401 without it, `/healthz` open, one browser challenge, then the SPA works |
 

@@ -36,7 +36,11 @@ export interface ConditionAggregate {
   publicMessages: Stat;
   durationMs: Stat;
   costUsd: { total: number; mean: number | null; callsWithUnknownCost: number };
+  /** Structural communication (runs recorded before these metrics existed are left out). */
+  communication: { addressedShare: Stat; evenness: Stat; turnsToFirstProposal: Stat };
 }
+
+const numbers = (values: Array<number | null | undefined>): number[] => values.filter((v): v is number => typeof v === "number");
 
 export function stat(values: number[]): Stat {
   if (values.length === 0) return { n: 0, mean: null, median: null, min: null, max: null };
@@ -112,6 +116,11 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
       total: metrics.reduce((s, m) => s + m.costUsd.total, 0),
       mean: metrics.length ? metrics.reduce((s, m) => s + m.costUsd.total, 0) / metrics.length : null,
       callsWithUnknownCost: metrics.reduce((s, m) => s + m.costUsd.callsWithUnknownCost, 0),
+    },
+    communication: {
+      addressedShare: stat(numbers(metrics.map((m) => m.communication?.addressedShare))),
+      evenness: stat(numbers(metrics.map((m) => m.communication?.participation.evenness))),
+      turnsToFirstProposal: stat(numbers(metrics.map((m) => m.communication?.timeline.turnsToFirstProposal))),
     },
   };
 }

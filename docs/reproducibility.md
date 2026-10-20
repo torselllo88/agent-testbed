@@ -92,6 +92,25 @@ the outcome is decided, so add-on work at the ending (narration) is never
 experiment time. Add-on failures are counted in `extensionErrors`, never in
 `errors`.
 
+**Communication** (`metrics.communication`, from
+[communicationMetrics.ts](../src/experiment/communicationMetrics.ts)) —
+structural, deterministic, scenario-neutral: derived from the turn metadata
+(`target`, PASS), room messages and phase changes every run records.
+
+| Metric | Meaning |
+|---|---|
+| `addressed`, `broadcast`, `addressedShare` | discussion messages with a valid target / to nobody in particular |
+| `edges` | directed addressing counts, `"a->b"` — the observed interaction graph |
+| `peersAddressed` | per agent, how many different agents it addressed |
+| `interactionDensity`, `interactionReciprocity` | of the observed addressing graph: used directed pairs / all possible; share of used pairs also used in reverse (not the density of a configured topology) |
+| `responses` | after an explicit address (`target`): `addresseeSpokeNext` — the very next discussion turn was the addressee's, with a message; `addresseeSpokeLater` — the addressee posted a message at any later discussion turn of the run (any discussion segment, including after a rejected proposal; PASS turns do not count; proposal and vote turns are not discussion turns); `meanTurnsUntilAddresseeSpeaks` — mean discussion turns until it did. Agents have no "in reply to" field, so this says the addressee *spoke*, not that it *answered* |
+| `participation` | evenness (entropy of message shares normalized by log N, so groups of different sizes compare; 1 = even), Gini, silent agents |
+| `timeline` | discussion turns to all-ready, turns to the first proposal, discussion segments |
+
+They say who talked to whom, not *what* reached whom: which facts were
+shared is a scenario-specific (or semantic) question. Runs recorded before
+these metrics existed have none (`—` in the UI).
+
 **Credentials never enter the trace.** Configured keys are scrubbed from every
 payload before it is written, as defense in depth; keys are never part of
 prompts or configs to begin with.

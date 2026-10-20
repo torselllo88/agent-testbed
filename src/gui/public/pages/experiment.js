@@ -274,6 +274,7 @@ export async function renderExperiment(experimentId) {
       .join(" &nbsp; ");
 
     const incidents = Object.entries(s.protocolIncidents);
+    const communication = communicationCard(s.communication, agentName);
 
     el.innerHTML = `
       <div class="card">
@@ -317,6 +318,7 @@ export async function renderExperiment(experimentId) {
           ${votes ? `<table><thead><tr><th>Agent</th><th>Vote</th><th>Reason</th></tr></thead><tbody>${votes}</tbody></table>` : `<p class="muted">No votes.</p>`}
         </div>
       </div>
+      ${communication}
       <div class="card">
         <h2>Evaluator</h2>
         ${
@@ -544,4 +546,29 @@ export async function renderExperiment(experimentId) {
     state.timer = setTimeout(poll, POLL_MS);
   }
   schedulePoll();
+}
+
+/** Structural communication metrics (absent for runs recorded before they existed). */
+function communicationCard(c, agentName) {
+  if (!c) return "";
+  const pct = (v) => (v === null || v === undefined ? "—" : `${Math.round(v * 100)}%`);
+  const num = (v, digits = 2) => (v === null || v === undefined ? "—" : Number(v).toFixed(digits));
+  const edges = Object.entries(c.edges)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([key, n]) => {
+      const [from, to] = key.split("->");
+      return `${escapeHtml(agentName(from))} → ${escapeHtml(agentName(to))} ×${n}`;
+    });
+  return `
+      <div class="card">
+        <h2>Communication</h2>
+        <dl class="kv">
+          <dt>Addressing</dt><dd>${c.addressed} of ${c.addressed + c.broadcast} messages addressed to someone (${pct(c.addressedShare)}) · interaction density ${num(c.interactionDensity)} · reciprocity ${pct(c.interactionReciprocity)}</dd>
+          <dt>Who addressed whom</dt><dd>${edges.length ? edges.join(" · ") : "—"}</dd>
+          <dt>After an address</dt><dd>${c.responses.addressed ? `${c.responses.addressed} addressed: the addressee spoke next ${c.responses.addresseeSpokeNext}, at all ${c.responses.addresseeSpokeLater} · mean ${num(c.responses.meanTurnsUntilAddresseeSpeaks, 1)} turns until it spoke` : "—"}</dd>
+          <dt>Participation</dt><dd>evenness ${num(c.participation.evenness)} · Gini ${num(c.participation.gini)} · ${c.participation.silentAgents} silent agent(s)</dd>
+          <dt>Time to decision</dt><dd>${c.timeline.discussionTurnsToAllReady ?? "—"} discussion turns to all-ready · ${c.timeline.turnsToFirstProposal ?? "—"} turns to the first proposal · ${c.timeline.discussionSegments} discussion segment(s)</dd>
+        </dl>
+      </div>`;
 }

@@ -106,6 +106,7 @@ await step("resume runs to completion; results render", async () => {
   const outcome = await text("#results .outcome-line");
   if (!outcome.includes("SUCCESS")) throw new Error(`unexpected outcome: ${outcome}`);
   if (await js(`document.querySelector("#controls").textContent.trim().length > 0`)) throw new Error("controls still shown after finish");
+  if (!(await js(`(document.querySelector("#results")?.textContent ?? "").includes("Who addressed whom")`))) throw new Error("no Communication card");
 });
 
 await step("trace: filter by type and expand a payload", async () => {

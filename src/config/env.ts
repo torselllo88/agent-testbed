@@ -44,6 +44,34 @@ export function resolveListener(vars: Record<string, string | undefined>): {
 
 const listener = resolveListener(process.env);
 
+export interface OpenAiCompatibleEndpointEnv {
+  name: string;
+  /** Unset: declared but not usable — reported as not configured. */
+  baseUrl?: string;
+  apiKey?: string;
+  /** Per-endpoint request limit (default: LLM_MAX_CONCURRENT_REQUESTS). */
+  maxConcurrent?: number;
+}
+
+/**
+ * Self-hosted OpenAI-compatible model servers: OPENAI_COMPATIBLE_ENDPOINTS=lab-vllm,lab-tgi
+ * and, per name (upper-cased, "-" → "_"), OPENAI_COMPATIBLE_<NAME>_BASE_URL, _API_KEY
+ * (optional) and _MAX_CONCURRENT (optional). Experiment configs name only the endpoint.
+ */
+export function resolveOpenAiCompatibleEndpoints(vars: Record<string, string | undefined>): OpenAiCompatibleEndpointEnv[] {
+  const names = [...new Set((vars.OPENAI_COMPATIBLE_ENDPOINTS ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
+  return names.map((name) => {
+    const key = `OPENAI_COMPATIBLE_${name.toUpperCase().replace(/-/g, "_")}`;
+    const limit = vars[`${key}_MAX_CONCURRENT`] ? Number.parseInt(vars[`${key}_MAX_CONCURRENT`]!, 10) : NaN;
+    return {
+      name,
+      ...(vars[`${key}_BASE_URL`] ? { baseUrl: vars[`${key}_BASE_URL`] } : {}),
+      ...(vars[`${key}_API_KEY`] ? { apiKey: vars[`${key}_API_KEY`] } : {}),
+      ...(Number.isFinite(limit) && limit > 0 ? { maxConcurrent: limit } : {}),
+    };
+  });
+}
+
 function parseIntEnv(value: string | undefined, fallback: number): number {
   const parsed = value ? Number.parseInt(value, 10) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -68,6 +96,8 @@ export const env = {
     endpoint: process.env.AZURE_OPENAI_ENDPOINT || undefined,
     apiVersion: process.env.AZURE_OPENAI_API_VERSION || undefined,
   },
+  /** Self-hosted OpenAI-compatible model servers (see resolveOpenAiCompatibleEndpoints). */
+  openAiCompatible: resolveOpenAiCompatibleEndpoints(process.env),
   /**
    * Artificial latency per stub-provider call in the web server, so a stub
    * run can be watched live. The CLI and batch runs always use 0.

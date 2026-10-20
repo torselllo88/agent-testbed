@@ -147,7 +147,9 @@ Add-ons, outside the core:  presentation (narration, pacing) · interaction (spe
 ```
 
 Agents are data, not classes: one generic runtime renders each agent's prompt
-from the config and parses its JSON response. Every decision point is an
+from the config and parses its JSON response. Each agent can use its own model:
+via OpenRouter, Azure OpenAI, or a self-hosted OpenAI-compatible server
+(vLLM, TGI, …; see [configuration](docs/configuration.md#self-hosted-models-openai-compatible-endpoints)). Every decision point is an
 interface (`Scheduler`, `ConsensusRule`, `Transport`, `ScenarioEvaluator`,
 `LlmProvider`), and add-ons attach through one `RunExtension` interface whose
 isolation is enforced at runtime and by tests. See
@@ -171,6 +173,7 @@ isolation is enforced at runtime and by tests. See
 | Extending: scenarios, schedulers, decision rules, providers | [docs/extending.md](docs/extending.md) |
 | Operator HTTP API | [docs/http-api.md](docs/http-api.md) |
 | External Room API (contract for room adapters) | [docs/external-room-api.md](docs/external-room-api.md) |
+| Design sketch: communication topology (proposal, not implemented) | [docs/design/topology.md](docs/design/topology.md) |
 
 ---
 

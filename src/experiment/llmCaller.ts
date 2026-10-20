@@ -1,9 +1,9 @@
 import type { z } from "zod";
 import { estimateCostUsd } from "../llm/pricing.js";
-import { ProviderError, type ChatMessage, type CompletionResult } from "../llm/provider.js";
+import { ProviderError, type ChatMessage, type CompletionResult, type ProviderId } from "../llm/provider.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import type { BudgetTracker, UsageCategory } from "./budget.js";
-import { effectiveOpenRouterRouting, type ModelRef, type RuntimeConfig } from "./config.js";
+import { effectiveOpenRouterRouting, modelProviderKey, type ModelRef, type RuntimeConfig } from "./config.js";
 import { EventType } from "./events.js";
 import { termination, TerminateRun } from "./outcome.js";
 import { parseWithSchema } from "./parseJson.js";
@@ -131,7 +131,8 @@ export class LlmCaller {
     messages: ChatMessage[],
     parseAttempt: number
   ): Promise<{ result: CompletionResult; providerAttempts: number; eventPayload: Record<string, unknown> }> {
-    const provider = this.providers.get(spec.modelRef.provider);
+    const providerKey = modelProviderKey(spec.modelRef) as ProviderId;
+    const provider = this.providers.get(providerKey);
     const native = spec.modelRef.structuredOutput === "native";
     const routing = effectiveOpenRouterRouting(spec.modelRef);
 
@@ -143,7 +144,7 @@ export class LlmCaller {
       // call's own timeout starts, so queueing never eats into it; the wait
       // is recorded separately so provider latency stays measurable.
       const queuedAt = Date.now();
-      const release = await this.acquireSlot(spec.modelRef.provider);
+      const release = await this.acquireSlot(providerKey);
       const queueWaitMs = Date.now() - queuedAt;
 
       const startedAt = Date.now();
@@ -262,7 +263,7 @@ export class LlmCaller {
   }
 
   /** Waits for a request slot; a stop or the experiment time limit ends the wait (queued time counts as experiment time). */
-  private async acquireSlot(providerId: ModelRef["provider"]): Promise<() => void> {
+  private async acquireSlot(providerId: ProviderId): Promise<() => void> {
     const gate = this.providers.gate(providerId, this.pool);
     if (!gate) return () => {};
     try {

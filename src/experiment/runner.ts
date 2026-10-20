@@ -3,6 +3,7 @@ import { createConsensusRule, type CastVote, type ConsensusResult, type Consensu
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import type { ScenarioEvaluator } from "../evaluation/types.js";
+import type { ProviderId } from "../llm/provider.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import { sqliteSynchronousMode, type Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
@@ -15,6 +16,7 @@ import {
   applyRunOverrides,
   canonicalJson,
   configHash,
+  modelProviderKey,
   HUMAN_INTERACTION_PROFILES,
   parseExperimentConfig,
   supportedProfiles,
@@ -992,8 +994,12 @@ export function checkRunnable(
   if (config.scheduler.type === "hybrid" && config.scheduler.classifier) modelRefs.push(["router classifier", config.scheduler.classifier]);
   if (config.humanInteraction?.debrief.router) modelRefs.push(["debrief router", config.humanInteraction.debrief.router]);
   for (const [who, ref] of modelRefs) {
-    if (!deps.providers.has(ref.provider)) {
-      problems.push(`${who}: LLM provider "${ref.provider}" is not configured`);
+    if (!deps.providers.has(modelProviderKey(ref) as ProviderId)) {
+      problems.push(
+        ref.provider === "openai-compatible"
+          ? `${who}: OpenAI-compatible endpoint "${ref.endpoint}" is not configured (OPENAI_COMPATIBLE_ENDPOINTS and its _BASE_URL)`
+          : `${who}: LLM provider "${ref.provider}" is not configured`
+      );
     } else if (ref.provider === "stub" && !deps.providers.stub.models().includes(ref.model)) {
       problems.push(`${who}: unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);
     }

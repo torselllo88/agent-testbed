@@ -365,7 +365,7 @@ describe("scenario library", () => {
     const h = createHarness();
     const repo = new ScenarioRepository(h.db);
     const user = repo.create(spaceStationConfig());
-    expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: ["space-station", "station-kestrel", "station-kestrel-cascade"], updated: [] });
+    expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: ["space-station", "station-kestrel", "station-kestrel-cascade", "service-settlement"], updated: [] });
     expect(repo.syncBuiltins(BUILTIN_SCENARIOS)).toEqual({ added: [], updated: [] });
 
     const kestrel = repo.getBuiltin("station-kestrel")!;

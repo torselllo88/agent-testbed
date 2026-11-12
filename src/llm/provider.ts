@@ -40,6 +40,10 @@ export interface CompletionRequest {
   /** Best-effort only — providers honor it very differently, so it is recorded, never relied upon. */
   seed?: number;
   maxOutputTokens?: number;
+  /** Self-hosted endpoints only: switch the model's thinking mode on or off (omitted: the server's default). */
+  think?: boolean;
+  /** Ollama endpoints only: the context window for this call, in tokens (num_ctx). */
+  contextLength?: number;
   responseFormat?: JsonResponseFormat;
   routing?: ProviderRouting;
   signal?: AbortSignal;

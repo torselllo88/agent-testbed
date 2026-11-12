@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { AzureOpenAiProvider } from "./azureOpenAiProvider.js";
 import { ConcurrencyGate } from "./concurrencyGate.js";
+import { OllamaProvider } from "./ollamaProvider.js";
 import { OpenAiCompatibleProvider } from "./openAiCompatibleProvider.js";
 import { OpenRouterProvider } from "./openRouterProvider.js";
 import { ProviderError, type LlmProvider, type ProviderId } from "./provider.js";
@@ -13,8 +14,15 @@ export interface ProviderStatus {
   hint?: string;
   /** Live request-gate state (real providers only). */
   gate?: ReturnType<ConcurrencyGate["stats"]>;
-  /** For an OpenAI-compatible endpoint: its name and server URL (never its key). */
-  endpoint?: { name: string; baseUrl?: string };
+  /** For a self-hosted endpoint: its name, server URL (never its key) and the API it speaks. */
+  endpoint?: { name: string; baseUrl?: string; api?: "openai" | "ollama" };
+}
+
+/** A self-hosted model server (an "openai-compatible:<name>" endpoint), whichever API it speaks. */
+export type SelfHostedProvider = OpenAiCompatibleProvider | OllamaProvider;
+
+export function isSelfHostedProvider(provider: LlmProvider | null | undefined): provider is SelfHostedProvider {
+  return provider instanceof OpenAiCompatibleProvider || provider instanceof OllamaProvider;
 }
 
 export interface ProviderRegistryOptions {
@@ -137,8 +145,8 @@ export class ProviderRegistry {
         ...gateOf("azure"),
       },
       ...[...this.providers.values()]
-        .filter((p): p is OpenAiCompatibleProvider => p instanceof OpenAiCompatibleProvider)
-        .map((p) => ({ id: p.id, configured: true, endpoint: { name: p.endpoint, baseUrl: p.baseUrl }, ...gateOf(p.id) })),
+        .filter(isSelfHostedProvider)
+        .map((p) => ({ id: p.id, configured: true, endpoint: { name: p.endpoint, baseUrl: p.baseUrl, api: p.api }, ...gateOf(p.id) })),
       ...this.unavailable,
       { id: "stub", configured: true },
     ];
@@ -182,7 +190,16 @@ export function createProviderRegistryFromEnv(stub: StubProvider = new StubProvi
       unavailable.push({ id, configured: false, hint: `Set ${key}`, endpoint: { name: endpoint.name } });
       continue;
     }
-    providers.push(new OpenAiCompatibleProvider({ name: endpoint.name, baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey }));
+    if (endpoint.invalidApi) {
+      const key = `OPENAI_COMPATIBLE_${endpoint.name.toUpperCase().replace(/-/g, "_")}_API`;
+      unavailable.push({ id, configured: false, hint: `${key}=${endpoint.invalidApi} is not supported (use openai or ollama)`, endpoint: { name: endpoint.name, baseUrl: endpoint.baseUrl } });
+      continue;
+    }
+    providers.push(
+      endpoint.api === "ollama"
+        ? new OllamaProvider({ name: endpoint.name, baseUrl: endpoint.baseUrl })
+        : new OpenAiCompatibleProvider({ name: endpoint.name, baseUrl: endpoint.baseUrl, apiKey: endpoint.apiKey })
+    );
     if (endpoint.apiKey) secrets.push(endpoint.apiKey);
     if (endpoint.maxConcurrent) maxConcurrentByProvider[id] = endpoint.maxConcurrent;
   }

@@ -24,6 +24,7 @@ identically with or without it. Two scenarios with the same task side share a
 | Space Station Benchmark (`space-station`) | Space Station (evaluator `space-station`) | [space-station.md](space-station.md) |
 | Station Kestrel (`station-kestrel`) | the same Space Station task | [kestrel.md](kestrel.md) |
 | Station Kestrel: Cascade (`station-kestrel-cascade`) | a different, harder task (evaluator `kestrel-cascade`) | [kestrel-cascade.md](kestrel-cascade.md) |
+| Service Settlement (`service-settlement`) | a research task: six functions, hidden-profile facts, outcome classes (evaluator `service-settlement`) | [service-settlement.md](service-settlement.md) |
 
 Built-ins are read-only in the library and kept in sync with the code: when a
 built-in's version is bumped, its library entry is updated in place. Saved

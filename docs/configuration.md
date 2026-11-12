@@ -22,6 +22,7 @@ reference is [src/scenarios/spaceStation/config.ts](../src/scenarios/spaceStatio
                "temperature": 0.7, "seed": 1, "maxOutputTokens": 800,
                "structuredOutput": "native",              // or "prompt"
                "routing": { "only": ["together"] } },      // optional, OpenRouter only (see below)
+               // self-hosted endpoints only: "think": false, "contextLength": 8192 (see below)
     "objective": "…",                                      // task definition
     "persona": "…",                                        // behavior layer
     "systemPrompt": "…",                                   // optional extra instructions
@@ -32,7 +33,9 @@ reference is [src/scenarios/spaceStation/config.ts](../src/scenarios/spaceStatio
                  "classifier": { "provider": "openrouter", "model": "…" },  // or null
                  "classifierWindow": 12 },                 // or { "type": "round_robin" }
   "consensus": { "rule": "unanimity" },                    // or "majority"
-  "decision": { "proposerId": "operations", "maxProposalAttempts": 2, "maxProposalFormatRetries": 1 },
+  "decision": { "proposerId": "operations", "maxProposalAttempts": 2, "maxProposalFormatRetries": 1,
+                "proposalRequired": false },             // true: the proposer may not decline
+  "discussion": { "fixedRounds": 3 },                      // optional: fixed-length discussion (round_robin only)
   "limits": {
     "discussionTurnLimit": 24,        // soft: ends discussion, not the run
     "rediscussionTurnLimit": 8,       // soft: per return to discussion after a failed attempt
@@ -70,6 +73,24 @@ Notes:
   behavior: an agent that sees "21 of 24 turns used" hurries and agrees sooner.
   Turn it on for demos, keep it off for baseline research runs. The runtime and
   the UI always know these numbers.
+- **`discussion.fixedRounds`** makes every discussion segment last exactly
+  that many rounds of every agent (rounds × agents turns, round-robin order).
+  Readiness is still asked and recorded (`discussionTurnsToAllReady`), but
+  neither ends the discussion nor adds re-check turns — so conditions that
+  converge at different speeds still talk equally long. Needs the
+  `round_robin` scheduler; agents are told the discussion has a fixed number
+  of rounds (not how many). Omitted: the default — discussion ends when every
+  agent's readiness is current, or at the turn limit.
+- **`decision.proposalRequired: true`** takes declining away from the
+  proposer: the prompt and the response schema offer no `null`, and a null
+  proposal is answered like a format error (`proposal_rejected_format`, kind
+  `declined_not_allowed`) with another try while `maxProposalFormatRetries`
+  allow. `false` is the default and hashes like an omitted field.
+- **Every frozen proposal is judged** by the evaluator once the outcome is
+  decided — committed or not (`proposal_evaluated`; `metrics.proposals.first`
+  is first-proposal correctness). Only the committed proposal decides the
+  outcome. Both protocol options above change agent-facing texts, so they have
+  their own [protocol fingerprint](reproducibility.md#hashes).
 - **`structuredOutput: "native"`** asks the provider to enforce the response
   JSON schema. Use `"prompt"` for model routes that reject `response_format`.
   The schema is always included in the prompt, and every response is parsed and
@@ -94,11 +115,13 @@ saved scenario:
 - the conversation language — `{ "language": "ru" }` (the run dialog,
   `--language` in the CLI);
 - the models — `{ "models": { "agents": {…}, "orchestration": {…} } }`, each
-  `{ provider, model, structuredOutput? }` (the run dialog). `agents` sets
-  every agent; `orchestration` sets the router classifier and the debrief
-  router the scenario has (none is switched on). Only provider, model and
-  (when given) the output mode change: temperature, seed and output caps
-  belong to the scenario; OpenRouter `routing` is dropped.
+  `{ provider, endpoint?, model, structuredOutput?, think?, contextLength? }`
+  (the run dialog). `agents` sets every agent; `orchestration` sets the
+  router classifier and the debrief router the scenario has (none is switched
+  on). Only provider, model, (when given) the output mode and a self-hosted
+  endpoint's serving options change: temperature, seed and output caps belong
+  to the scenario; OpenRouter `routing` is dropped, and so are `think` and
+  `contextLength` when the new provider is not a self-hosted endpoint.
 
 The run's snapshot and `configHash` are those of the overridden config; the
 run environment records `languageOverridden` and `modelsOverridden`. The
@@ -139,6 +162,51 @@ provider list, and the model field offers the models the server lists
 - **Keys** live only in the environment and are scrubbed from every trace.
 - A run naming an endpoint that is not configured where it runs is refused
   before it starts, saying which variable to set.
+- **`think`** (`true` / `false`; omitted = the server's default) switches a
+  model's thinking mode, e.g. Qwen3's. On an OpenAI-API server it is sent as
+  `chat_template_kwargs.enable_thinking` (the vLLM / SGLang convention; other
+  servers ignore it — check the raw responses in the trace).
+
+### Ollama
+
+Ollama is served through **its own API** (`/api/chat`), not its
+OpenAI-compatible one: only the native API takes thinking control, the
+context window and the seed per request reliably, and a run should record
+these instead of depending on how the server happens to be configured.
+
+```bash
+OPENAI_COMPATIBLE_ENDPOINTS=lab-ollama
+OPENAI_COMPATIBLE_LAB_OLLAMA_BASE_URL=http://localhost:11434   # a trailing /v1 is ignored
+OPENAI_COMPATIBLE_LAB_OLLAMA_API=ollama
+OPENAI_COMPATIBLE_LAB_OLLAMA_MAX_CONCURRENT=1                  # = the server's OLLAMA_NUM_PARALLEL
+```
+
+```jsonc
+"model": { "provider": "openai-compatible", "endpoint": "lab-ollama", "model": "qwen3:14b",
+           "structuredOutput": "native", "temperature": 0, "seed": 1, "maxOutputTokens": 400,
+           "think": false, "contextLength": 8192 }
+```
+
+- **`contextLength`** (`num_ctx`) — set it. Ollama's default window can be
+  shorter than a long discussion, and **Ollama truncates an over-long prompt
+  silently, from the start** — the system prompt and the agent's private facts
+  go first. Each call records the window it was sent with; a call whose prompt
+  probably did not fit is flagged (`providerMeta.contextOverflowSuspected`,
+  counted in `metrics.llmCalls.contextOverflowSuspected` and the batch CSV —
+  a heuristic: the prompt is longer than the window even at 4 characters per
+  token, or the reported prompt all but fills it). A larger window needs more
+  GPU memory: check it fits next to the model before a long batch.
+- `structuredOutput: "native"` sends the schema as Ollama's `format`.
+- **Thinking** the model did anyway is kept apart from the answer
+  (`providerMeta.thinking`) and counted (`metrics.llmCalls.withThinking`);
+  with `think: false` it should be 0.
+- Ollama's timings are recorded per call (`providerMeta.durationsMs`: total,
+  model load, prompt evaluation, generation) — a cold model load shows there.
+- `contextLength` on an endpoint that speaks the OpenAI API is refused before
+  the run starts (that server's window is fixed when the model is served).
+
+Running the testbed itself next to such a server on a shared machine without
+root: [remote server](remote-server.md).
 
 ## Environment (`.env`)
 
@@ -150,7 +218,7 @@ See [.env.example](../.env.example). All variables are optional.
 | `OPENROUTER_SITE_URL`, `OPENROUTER_SITE_NAME` | — | Optional attribution headers |
 | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION` | — | Enables Azure OpenAI (an agent's `model` is then the deployment name) |
 | `OPENAI_COMPATIBLE_ENDPOINTS` | — | Comma-separated names of self-hosted OpenAI-compatible model servers (see [below](#self-hosted-models-openai-compatible-endpoints)) |
-| `OPENAI_COMPATIBLE_<NAME>_BASE_URL`, `_API_KEY`, `_MAX_CONCURRENT` | — | Per endpoint: server URL (required), key (optional), request limit (default `LLM_MAX_CONCURRENT_REQUESTS`) |
+| `OPENAI_COMPATIBLE_<NAME>_BASE_URL`, `_API_KEY`, `_MAX_CONCURRENT`, `_API` | — | Per endpoint: server URL (required), key (optional), request limit (default `LLM_MAX_CONCURRENT_REQUESTS`), API: `openai` (default) or `ollama` (see [Ollama](#ollama)) |
 | `LLM_MAX_CONCURRENT_REQUESTS` | `8` | Simultaneous in-flight requests per real provider, process-wide |
 | `LLM_MAX_CONCURRENT_DEBRIEF_REQUESTS` | `2` | The debrief's own slots per real provider, separate from the experiments' slots. People asking questions never delay a running experiment; this adds to the provider's total concurrency |
 | `SQLITE_SYNCHRONOUS` | `NORMAL` | Trace durability: `NORMAL`, `FULL`, `EXTRA`, `OFF` |
@@ -198,3 +266,6 @@ private network, `EXTERNAL_API_HOST=0.0.0.0` on its own port.
 
 A redeploy ends running experiments; they are recovered as `INTERRUPTED` by
 the new process ([recovery](reproducibility.md#durability-and-recovery)).
+
+For a shared research machine (a GPU node without root, reached over SSH),
+see [remote server](remote-server.md).

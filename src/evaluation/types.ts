@@ -12,13 +12,21 @@ export interface EvaluationResult {
   violated: string[];
   /** Derived quantities the checks were computed from (e.g. available power) — for the trace. */
   derived?: Record<string, unknown>;
+  /**
+   * Optional scenario-defined class of the outcome, finer than SUCCESS /
+   * MISSION_FAILURE (e.g. "correct", "unsafe", "overcautious") — reported in
+   * the metrics and the batch CSV as is.
+   */
+  classification?: string;
 }
 
 /**
  * Scenario-specific, deterministic judge of a committed proposal. It is
  * independent of the agents and is never consulted during the run: the
  * runtime only uses `proposalSchema` (structure, not correctness) before
- * voting, and calls `evaluate` once, after commit.
+ * voting, and calls `evaluate` after commit — and, once the outcome is
+ * decided, on every other frozen proposal (first-proposal correctness), where
+ * it can no longer change anything. `evaluate` must therefore be pure.
  */
 export interface ScenarioEvaluator<P = unknown, Params = unknown> {
   readonly id: string;

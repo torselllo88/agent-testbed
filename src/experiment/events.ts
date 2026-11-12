@@ -36,6 +36,12 @@ export const EventType = {
   VOTE_CAST: "vote_cast",
   CONSENSUS_RESULT: "consensus_result",
   EVALUATION_RESULT: "evaluation_result",
+  /**
+   * Every frozen proposal judged by the evaluator once the outcome is decided —
+   * committed or not (first-proposal correctness). A metric, never the outcome;
+   * no agent sees it, since it is computed only after the run's decision.
+   */
+  PROPOSAL_EVALUATED: "proposal_evaluated",
   OPERATOR_INTERVENTION: "operator_intervention",
   /** A recoverable protocol problem (unparseable turn, invalid vote, router failure, ...). */
   PROTOCOL_INCIDENT: "protocol_incident",

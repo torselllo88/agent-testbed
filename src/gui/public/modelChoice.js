@@ -104,16 +104,22 @@ export function structuredOutputFor(choice, catalog) {
  * Mirrors withModelChoice in src/experiment/config.ts (run overrides): another
  * provider and model, and the output mode when known. Temperature, seed and
  * the output cap belong to the scenario and stay; OpenRouter routing (backend
- * constraints for one specific model) is dropped.
+ * constraints for one specific model) is dropped, and so are a self-hosted
+ * endpoint's serving options (think, contextLength) for any other provider.
  */
 export function withModelChoice(ref, choice) {
-  const { routing: _routing, endpoint: _endpoint, ...rest } = ref ?? {};
+  const { routing: _routing, endpoint: _endpoint, think, contextLength, ...rest } = ref ?? {};
+  const selfHosted = choice.provider === COMPAT;
+  const thinkNext = choice.think ?? think;
+  const contextNext = choice.contextLength ?? contextLength;
   return {
     ...rest,
     provider: choice.provider,
-    ...(choice.provider === COMPAT ? { endpoint: choice.endpoint } : {}),
+    ...(selfHosted ? { endpoint: choice.endpoint } : {}),
     model: choice.model,
     structuredOutput: choice.structuredOutput ?? rest.structuredOutput ?? "native",
+    ...(selfHosted && thinkNext !== undefined ? { think: thinkNext } : {}),
+    ...(selfHosted && contextNext !== undefined ? { contextLength: contextNext } : {}),
   };
 }
 
@@ -162,14 +168,25 @@ export function summarizeRefs(refs) {
 const placeholderFor = (value) =>
   value === "openrouter" ? "e.g. anthropic/claude-haiku-4.5" : value === "azure" ? "deployment name" : value === "stub" ? "stub script" : "a model the endpoint serves";
 
-/** A provider select and a model field, keyed by an id prefix (not bound to the config). choice.provider is a provider value. */
+const isSelfHostedValue = (value) => splitProviderValue(value).provider === COMPAT;
+
+/**
+ * A provider select and a model field, keyed by an id prefix (not bound to the
+ * config) — plus, for a self-hosted endpoint, its serving options (thinking,
+ * context window). choice.provider is a provider value.
+ */
 export function choiceFieldsHtml(prefix, choice, lists, options) {
   const list = modelListId(choice.provider, lists);
+  const think = choice.think === undefined ? "" : String(choice.think);
   return `
     <label class="field"><span class="field-label">Provider</span>
       <select id="${prefix}-provider">${options.map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === choice.provider ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>
     <label class="field"><span class="field-label">Model</span>
-      <input type="text" id="${prefix}-model" value="${escapeHtml(choice.model ?? "")}" ${list ? `list="${list}"` : ""} placeholder="${placeholderFor(choice.provider)}" /></label>`;
+      <input type="text" id="${prefix}-model" value="${escapeHtml(choice.model ?? "")}" ${list ? `list="${list}"` : ""} placeholder="${placeholderFor(choice.provider)}" /></label>
+    <label class="field" data-self-hosted="${prefix}" ${isSelfHostedValue(choice.provider) ? "" : "hidden"}><span class="field-label">Thinking</span>
+      <select id="${prefix}-think">${[["", "keep / server default"], ["false", "off"], ["true", "on"]].map(([v, l]) => `<option value="${v}" ${v === think ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label class="field" data-self-hosted="${prefix}" ${isSelfHostedValue(choice.provider) ? "" : "hidden"}><span class="field-label">Context window</span>
+      <input type="number" min="1" id="${prefix}-context" value="${choice.contextLength ?? ""}" placeholder="tokens (Ollama only)" /></label>`;
 }
 
 /** Keeps a choice's model list in step with its provider select. */
@@ -182,10 +199,20 @@ export function bindChoiceFields(root, prefix, lists, onChange) {
     if (list) model.setAttribute("list", list);
     else model.removeAttribute("list");
     model.placeholder = placeholderFor(provider.value);
-    onChange?.({ provider: provider.value, model: model.value.trim() });
+    for (const el of root.querySelectorAll(`[data-self-hosted="${prefix}"]`)) el.hidden = !isSelfHostedValue(provider.value);
+    const think = root.querySelector(`#${prefix}-think`)?.value;
+    const context = Number.parseInt(root.querySelector(`#${prefix}-context`)?.value ?? "", 10);
+    onChange?.({
+      provider: provider.value,
+      model: model.value.trim(),
+      ...(think ? { think: think === "true" } : {}),
+      ...(Number.isFinite(context) && context > 0 ? { contextLength: context } : {}),
+    });
   };
   provider.addEventListener("change", sync);
   model.addEventListener("input", sync);
+  root.querySelector(`#${prefix}-think`)?.addEventListener("change", sync);
+  root.querySelector(`#${prefix}-context`)?.addEventListener("input", sync);
 }
 
 /** The current value of a choice's fields, as a model choice ({ provider, endpoint?, model, structuredOutput? }); null without a model. */
@@ -194,6 +221,12 @@ export function readChoice(root, prefix, catalog) {
   const model = root.querySelector(`#${prefix}-model`)?.value.trim();
   if (!value || !model) return null;
   const choice = { ...splitProviderValue(value), model };
+  if (choice.provider === COMPAT) {
+    const think = root.querySelector(`#${prefix}-think`)?.value;
+    const context = Number.parseInt(root.querySelector(`#${prefix}-context`)?.value ?? "", 10);
+    if (think) choice.think = think === "true";
+    if (Number.isFinite(context) && context > 0) choice.contextLength = context;
+  }
   const mode = structuredOutputFor(choice, catalog);
   return mode ? { ...choice, structuredOutput: mode } : choice;
 }

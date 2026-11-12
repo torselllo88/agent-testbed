@@ -17,9 +17,8 @@ import { checkRunnable, ConfigNotRunnableError, InvalidCommandError, withEffecti
 import type { ExperimentService } from "../experiment/service.js";
 import { InteractionError, type HumanInteractionService } from "../interaction/service.js";
 import type { ExternalRoomService } from "../rooms/service.js";
-import { OpenAiCompatibleProvider } from "../llm/openAiCompatibleProvider.js";
 import type { OpenRouterModelCatalog } from "../llm/openRouterModels.js";
-import type { ProviderRegistry } from "../llm/registry.js";
+import { isSelfHostedProvider, type ProviderRegistry } from "../llm/registry.js";
 import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
@@ -209,7 +208,7 @@ const ROUTES: Route[] = [
       const name = decodeRouteParam(params[0]!);
       const id = `openai-compatible:${name}` as const;
       const provider = deps.providers.has(id) ? deps.providers.get(id) : null;
-      if (!(provider instanceof OpenAiCompatibleProvider)) throw new HttpError(404, `OpenAI-compatible endpoint "${name}" is not configured`);
+      if (!isSelfHostedProvider(provider)) throw new HttpError(404, `Self-hosted endpoint "${name}" is not configured`);
       try {
         sendJson(res, 200, { models: await provider.listModels() });
       } catch (err) {

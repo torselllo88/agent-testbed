@@ -23,7 +23,7 @@ const SAFE_PLAN = {
   vent_reactor_section: false,
 };
 
-interface ChatRequest {
+export interface ChatRequest {
   model: string;
   messages: Array<{ role: string; content: string }>;
   response_format?: { type: string; json_schema?: { name?: string } };
@@ -40,7 +40,8 @@ function kindOf(req: ChatRequest): string {
   return "agent_turn";
 }
 
-function answer(req: ChatRequest): Record<string, unknown> {
+/** The deterministic answer to one request (shared with the fake Ollama server). */
+export function answer(req: ChatRequest): Record<string, unknown> {
   switch (kindOf(req)) {
     case "final_proposal":
       return { rationale: "Shed both nonessential loads and run loop B.", proposal: SAFE_PLAN };

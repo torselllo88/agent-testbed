@@ -49,6 +49,15 @@ export const PROVIDER_KINDS = ["openrouter", "azure", "openai-compatible", "stub
 /** The name of a self-hosted OpenAI-compatible endpoint (vLLM, TGI, …), configured in the environment — never its URL or key. */
 export const EndpointNameSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "lower-case letters, digits, - and _");
 
+/** think and contextLength are settings of a self-hosted model server: no other provider takes them. */
+function checkServingOptions(ref: { provider: string; think?: boolean; contextLength?: number }, ctx: z.RefinementCtx): void {
+  for (const key of ["think", "contextLength"] as const) {
+    if (ref[key] !== undefined && ref.provider !== "openai-compatible") {
+      ctx.addIssue({ code: "custom", path: [key], message: `${key} is only meaningful for a self-hosted endpoint (provider "openai-compatible")` });
+    }
+  }
+}
+
 /** "openai-compatible" needs an endpoint name; every other provider must not have one. */
 function checkEndpoint(ref: { provider: string; endpoint?: string }, ctx: z.RefinementCtx): void {
   if (ref.provider === "openai-compatible" && !ref.endpoint) {
@@ -70,6 +79,18 @@ export const ModelRefSchema = z.object({
   seed: z.number().int().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   /**
+   * Self-hosted endpoints only: switch the model's thinking (reasoning) mode on
+   * or off — Ollama's "think"; on an OpenAI-API server, chat_template_kwargs.
+   * enable_thinking (vLLM, SGLang). Omitted = the server's default.
+   */
+  think: z.boolean().optional(),
+  /**
+   * Ollama endpoints only: the context window of every call, in tokens
+   * (num_ctx). Omitted = the server's default, which may be shorter than a
+   * long discussion — and Ollama truncates an over-long prompt silently.
+   */
+  contextLength: z.number().int().positive().optional(),
+  /**
    * "native": ask the provider to enforce the response JSON schema.
    * "prompt": describe the schema in the prompt only — for models whose
    * provider route rejects response_format. Either way the response is parsed
@@ -83,6 +104,7 @@ export const ModelRefSchema = z.object({
     ctx.addIssue({ code: "custom", path: ["routing"], message: `routing is OpenRouter-specific and has no meaning for provider "${ref.provider}"` });
   }
   checkEndpoint(ref, ctx);
+  checkServingOptions(ref, ctx);
 });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 
@@ -158,8 +180,34 @@ export const DecisionConfigSchema = z.object({
   maxProposalAttempts: z.number().int().positive().default(2),
   /** Extra proposer activations, with the schema errors fed back, after a proposal fails schema validation. */
   maxProposalFormatRetries: z.number().int().min(0).default(1),
+  /**
+   * true: the proposer must submit a proposal — declining ("proposal": null) is
+   * not offered, and is answered like a format error. Omitted or false: the
+   * proposer may decline (the default). false is normalized away, so it hashes
+   * like the default it is.
+   */
+  proposalRequired: z
+    .boolean()
+    .optional()
+    .transform((v) => (v === true ? true : undefined)),
 });
 export type DecisionConfig = z.infer<typeof DecisionConfigSchema>;
+
+/**
+ * How long a discussion segment lasts. Omitted (the default): until every
+ * agent has declared readiness that is still current, or the segment's turn
+ * limit — with a re-check turn for any agent whose readiness went stale.
+ * fixedRounds: exactly that many rounds of every agent (rounds × agents turns,
+ * in round-robin order) in every segment; readiness is still asked and
+ * recorded, but neither ends the discussion nor adds turns. So conditions that
+ * reach agreement at different speeds still talk equally long.
+ */
+export const DiscussionConfigSchema = z
+  .object({
+    fixedRounds: z.number().int().positive(),
+  })
+  .strict();
+export type DiscussionConfig = z.infer<typeof DiscussionConfigSchema>;
 
 export const LimitsConfigSchema = z.object({
   /** Soft: reaching it moves DISCUSSION -> decision. Not a failure by itself. */
@@ -417,6 +465,7 @@ export const ExperimentConfigSchema = z
     scheduler: SchedulerConfigSchema,
     consensus: ConsensusConfigSchema,
     decision: DecisionConfigSchema,
+    discussion: DiscussionConfigSchema.optional(),
     limits: LimitsConfigSchema.default({}),
     agentVisibility: AgentVisibilityConfigSchema.default({}),
     conversation: ConversationConfigSchema.default({}),
@@ -437,6 +486,20 @@ export const ExperimentConfigSchema = z
     }
     if (!ids.has(cfg.decision.proposerId)) {
       ctx.addIssue({ code: "custom", path: ["decision", "proposerId"], message: `unknown agent "${cfg.decision.proposerId}"` });
+    }
+    if (cfg.discussion) {
+      if (cfg.scheduler.type !== "round_robin") {
+        ctx.addIssue({ code: "custom", path: ["discussion", "fixedRounds"], message: "fixed rounds need the round_robin scheduler (a round is one turn of every agent, in order)" });
+      }
+      const discussionTurns = cfg.discussion.fixedRounds * cfg.agents.length;
+      // The first attempt at least: the discussion, one proposal turn and every agent's vote.
+      if (discussionTurns + 1 + cfg.agents.length > cfg.limits.globalTurnLimit) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["limits", "globalTurnLimit"],
+          message: `${cfg.discussion.fixedRounds} rounds of ${cfg.agents.length} agents are ${discussionTurns} discussion turns: the global turn limit (${cfg.limits.globalTurnLimit}) leaves no room for the proposal and the vote`,
+        });
+      }
     }
     const start = cfg.scheduler.startAgentId;
     if (start !== undefined && !ids.has(start)) {
@@ -529,24 +592,37 @@ export const ModelChoiceSchema = z
     endpoint: EndpointNameSchema.optional(),
     model: z.string().min(1),
     structuredOutput: z.enum(["native", "prompt"]).optional(),
+    /** Self-hosted endpoints only (see ModelRefSchema). */
+    think: z.boolean().optional(),
+    contextLength: z.number().int().positive().optional(),
   })
   .strict()
-  .superRefine(checkEndpoint);
+  .superRefine((choice, ctx) => {
+    checkEndpoint(choice, ctx);
+    checkServingOptions(choice, ctx);
+  });
 export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
 
 /**
  * A model reference with another provider and model (and endpoint). Temperature,
  * seed and the output cap belong to the scenario and stay; OpenRouter routing
- * (backend constraints for one specific model) is dropped.
+ * (backend constraints for one specific model) is dropped. The serving options
+ * of a self-hosted endpoint (think, contextLength) come from the choice, else
+ * stay — and are dropped for any other provider.
  */
 export function withModelChoice(ref: ModelRef, choice: ModelChoice): ModelRef {
-  const { routing: _routing, endpoint: _endpoint, ...rest } = ref;
+  const { routing: _routing, endpoint: _endpoint, think, contextLength, ...rest } = ref;
+  const selfHosted = choice.provider === "openai-compatible";
+  const thinkNext = choice.think ?? think;
+  const contextNext = choice.contextLength ?? contextLength;
   return {
     ...rest,
     provider: choice.provider,
-    ...(choice.provider === "openai-compatible" ? { endpoint: choice.endpoint } : {}),
+    ...(selfHosted ? { endpoint: choice.endpoint } : {}),
     model: choice.model,
     structuredOutput: choice.structuredOutput ?? rest.structuredOutput,
+    ...(selfHosted && thinkNext !== undefined ? { think: thinkNext } : {}),
+    ...(selfHosted && contextNext !== undefined ? { contextLength: contextNext } : {}),
   };
 }
 

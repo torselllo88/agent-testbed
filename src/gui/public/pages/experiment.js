@@ -28,6 +28,7 @@ const DEBUG_TYPES = new Set([
   "vote_cast",
   "consensus_result",
   "evaluation_result",
+  "proposal_evaluated",
   "protocol_incident",
   "operator_intervention",
   "error",
@@ -130,7 +131,8 @@ export async function renderExperiment(experimentId) {
       case "proposal_rejected_format":
         return `${p.kind}: ${p.error}`;
       case "evaluation_result":
-        return `${p.outcome}${p.violated?.length ? ` — violated: ${p.violated.join(", ")}` : ""}`;
+      case "proposal_evaluated":
+        return `${e.type === "proposal_evaluated" ? `${p.proposalId}${p.committed ? " (committed)" : ""}: ` : ""}${p.outcome}${p.classification ? ` [${p.classification}]` : ""}${p.violated?.length ? ` — violated: ${p.violated.join(", ")}` : ""}`;
       case "protocol_incident":
         return `${p.kind}: ${p.error ?? ""}`;
       case "operator_intervention":
@@ -288,11 +290,18 @@ export async function renderExperiment(experimentId) {
         <dl class="kv">
           <dt>Consensus</dt><dd>${s.consensusReached ? badge("reached", "ok") : badge("not reached", "neutral")} ${s.votes.rounds.length} voting round(s)</dd>
           <dt>Proposals</dt><dd>${s.proposals.attempts} attempt(s), ${s.proposals.formatRejections} format rejection(s), ${s.proposals.declined} declined</dd>
+          ${
+            s.proposals.first
+              ? `<dt>First proposal</dt><dd>${outcomeBadge(s.proposals.first.outcome)}${s.proposals.first.classification ? ` ${badge(s.proposals.first.classification, "neutral")}` : ""} <span class="muted small">${s.proposals.first.committed ? "committed" : "not committed"}${s.proposals.first.violated.length ? ` · violated: ${escapeHtml(s.proposals.first.violated.join(", "))}` : ""}</span></dd>`
+              : ""
+          }
           <dt>Turns</dt><dd>${s.turns.total} (${Object.entries(s.turns.byKind).map(([k, n]) => `${k} ${n}`).join(", ")})</dd>
           <dt>Messages</dt><dd>${s.messages.public} public, ${s.messages.system} moderator, ${s.passes.total} passes</dd>
           <dt>Tokens</dt><dd>${formatNumber(s.tokens.agent)} agent + ${formatNumber(s.tokens.orchestration)} orchestration = <strong>${formatNumber(s.tokens.total)}</strong></dd>
           <dt>Cost (est.)</dt><dd>${formatCost(s.costUsd.total)} (agent ${formatCost(s.costUsd.agent)}, orchestration ${formatCost(s.costUsd.orchestration)})${s.costUsd.callsWithUnknownCost ? ` — ${s.costUsd.callsWithUnknownCost} call(s) of unknown cost` : ""}</dd>
-          <dt>LLM calls</dt><dd>${s.llmCalls.total} (${s.llmCalls.failed} failed, ${s.llmCalls.parseFailures} unparseable)</dd>
+          <dt>LLM calls</dt><dd>${s.llmCalls.total} (${s.llmCalls.failed} failed, ${s.llmCalls.parseFailures} unparseable)${
+            s.llmCalls.contextOverflowSuspected ? ` ${badge(`${s.llmCalls.contextOverflowSuspected} prompt(s) may exceed the context window`, "bad")}` : ""
+          }${s.llmCalls.withThinking ? ` ${badge(`${s.llmCalls.withThinking} with thinking`, "neutral")}` : ""}</dd>
           <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall${s.durationMs.presentation ? `, ${formatDuration(s.durationMs.presentation)} presentation pacing` : ""}${s.durationMs.paused ? `, ${formatDuration(s.durationMs.paused)} paused` : ""}</dd>
           <dt>Language</dt><dd>${escapeHtml(state.experiment.config.conversation?.language ?? "en")}</dd>
           <dt>Task definition</dt><dd class="muted small">${escapeHtml((state.experiment.taskDefinitionHash ?? "—").slice(0, 16))}</dd>
@@ -323,7 +332,7 @@ export async function renderExperiment(experimentId) {
         <h2>Evaluator</h2>
         ${
           s.evaluation
-            ? `<p>${outcomeBadge(s.evaluation.outcome)} <span class="muted">${escapeHtml(s.evaluation.evaluator)} v${escapeHtml(s.evaluation.evaluatorVersion)}</span></p>
+            ? `<p>${outcomeBadge(s.evaluation.outcome)}${s.evaluation.classification ? ` ${badge(s.evaluation.classification, "neutral")}` : ""} <span class="muted">${escapeHtml(s.evaluation.evaluator)} v${escapeHtml(s.evaluation.evaluatorVersion)}</span></p>
                <table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead><tbody>${checks}</tbody></table>`
             : `<p class="muted">Nothing was committed, so nothing was evaluated.</p>`
         }

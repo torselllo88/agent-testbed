@@ -69,7 +69,14 @@ Batch runs never open a debrief.
 Per condition and overall:
 
 - success rate with a 95% Wilson interval, and consensus rate;
-- outcome and category counts;
+- first-proposal correctness (`firstProposal`): how many first proposals
+  passed every check, whatever the vote made of them, with its own Wilson
+  interval;
+- outcome and category counts, and the scenario's outcome classes
+  (`classifications`, e.g. `{ correct: 31, unsafe: 6, overcautious: 3 }`)
+  where the evaluator reports them;
+- prompts that probably did not fit a self-hosted model's context window
+  (`contextOverflowSuspected`, should be 0);
 - mean, median, min and max of total, agent and orchestration tokens, turns,
   public messages and active duration;
 - total and mean cost, and the number of calls of unknown cost;
@@ -85,7 +92,11 @@ provider instability is never hidden by the denominator.
 ## Export
 
 - **CSV**, one row per run: a column per variable, outcome, category,
-  consensus, turns, messages, tokens, cost, duration, communication
+  consensus, the outcome class and the failed checks (`outcome_class`,
+  `violated`, `;`-separated), the same for the first proposal
+  (`first_proposal_outcome`, `first_proposal_class`,
+  `first_proposal_violated`), turns, messages, tokens, cost, serving warnings
+  (`context_overflow_suspected`, `calls_with_thinking`), duration, communication
   (`addressed_share`, `interaction_density`, `interaction_reciprocity`,
   `participation_evenness`, `silent_agents`, `turns_to_first_proposal`),
   intervention flag,

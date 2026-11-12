@@ -28,6 +28,16 @@ export interface ConditionAggregate {
   /** Wilson score interval, 95%. */
   successRateCI95: [number, number] | null;
   consensusRate: number | null;
+  /**
+   * First-proposal correctness: among evaluable runs whose first proposal was
+   * frozen (and judged — runs recorded before this metric are left out), how
+   * many first proposals passed every check, whatever the vote made of them.
+   */
+  firstProposal: { n: number; success: number; rate: number | null; ci95: [number, number] | null };
+  /** The scenario's outcome classes of committed outcomes (evaluators that report one), e.g. { correct: 7, unsafe: 2 }. */
+  classifications: Record<string, number>;
+  /** Calls whose prompt probably did not fit the context window, over all runs — should be 0. */
+  contextOverflowSuspected: number;
   outcomes: Record<string, number>;
   categories: Record<string, number>;
   intervened: number;
@@ -90,6 +100,14 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     }
   }
 
+  const firsts = evaluableMetrics.map((m) => m.proposals?.first).filter((f) => f != null);
+  const firstSuccess = firsts.filter((f) => f.outcome === "SUCCESS").length;
+  const classifications: Record<string, number> = {};
+  for (const m of metrics) {
+    const c = (m.evaluation as { classification?: unknown } | null)?.classification;
+    if (typeof c === "string") inc(classifications, c);
+  }
+
   return {
     key,
     runs: runs.length,
@@ -101,6 +119,9 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     successRate: evaluable.length ? success / evaluable.length : null,
     successRateCI95: wilson(success, evaluable.length),
     consensusRate: evaluable.length ? evaluableMetrics.filter((m) => m.consensusReached).length / evaluable.length : null,
+    firstProposal: { n: firsts.length, success: firstSuccess, rate: firsts.length ? firstSuccess / firsts.length : null, ci95: wilson(firstSuccess, firsts.length) },
+    classifications,
+    contextOverflowSuspected: metrics.reduce((s, m) => s + (m.llmCalls?.contextOverflowSuspected ?? 0), 0),
     outcomes,
     categories,
     intervened: finished.filter((r) => r.intervened).length,

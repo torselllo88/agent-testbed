@@ -225,6 +225,12 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
     <div class="grid-4">
       ${field("Structured output", select(`${base}.structuredOutput`, [["native", "native (provider-enforced schema)"], ["prompt", "prompt only"]], { structural: true }))}
       ${field("Seed", input(`${base}.seed`, "optional-number"), "best-effort, recorded only")}
+      ${
+        getPath(state.draft, base)?.provider === "openai-compatible"
+          ? `${field("Thinking", triState(`${base}.think`, ["server default"]), "false switches a model's thinking mode off")}
+             ${field("Context window", input(`${base}.contextLength`, "optional-number", `min="1"`), "tokens; Ollama endpoints only — blank = server default")}`
+          : ""
+      }
     </div>
     ${openRouterModelInfo(getPath(state.draft, base))}
     ${endpointModelInfo(getPath(state.draft, base))}
@@ -570,7 +576,12 @@ export async function renderScenarioEditor(scenarioId, initialTab, from) {
       const { provider, endpoint } = splitProviderValue(value);
       ref.provider = provider;
       if (provider === "openai-compatible") ref.endpoint = endpoint;
-      else delete ref.endpoint;
+      else {
+        delete ref.endpoint;
+        // Serving options of a self-hosted endpoint; the config rejects them for any other provider.
+        delete ref.think;
+        delete ref.contextLength;
+      }
       // Routing is OpenRouter-specific; the config rejects it for any other provider.
       if (provider !== "openrouter") delete ref.routing;
     } else {

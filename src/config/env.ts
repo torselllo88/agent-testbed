@@ -51,23 +51,31 @@ export interface OpenAiCompatibleEndpointEnv {
   apiKey?: string;
   /** Per-endpoint request limit (default: LLM_MAX_CONCURRENT_REQUESTS). */
   maxConcurrent?: number;
+  /** Which API the server speaks: the OpenAI chat-completions API (default) or Ollama's own. */
+  api: "openai" | "ollama";
+  /** _API was set to something else: the endpoint is reported as not configured. */
+  invalidApi?: string;
 }
 
 /**
  * Self-hosted OpenAI-compatible model servers: OPENAI_COMPATIBLE_ENDPOINTS=lab-vllm,lab-tgi
  * and, per name (upper-cased, "-" → "_"), OPENAI_COMPATIBLE_<NAME>_BASE_URL, _API_KEY
- * (optional) and _MAX_CONCURRENT (optional). Experiment configs name only the endpoint.
+ * (optional), _MAX_CONCURRENT (optional) and _API (optional: "openai", the default, or
+ * "ollama" for Ollama's own API). Experiment configs name only the endpoint.
  */
 export function resolveOpenAiCompatibleEndpoints(vars: Record<string, string | undefined>): OpenAiCompatibleEndpointEnv[] {
   const names = [...new Set((vars.OPENAI_COMPATIBLE_ENDPOINTS ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
   return names.map((name) => {
     const key = `OPENAI_COMPATIBLE_${name.toUpperCase().replace(/-/g, "_")}`;
     const limit = vars[`${key}_MAX_CONCURRENT`] ? Number.parseInt(vars[`${key}_MAX_CONCURRENT`]!, 10) : NaN;
+    const api = (vars[`${key}_API`] ?? "").trim().toLowerCase() || "openai";
     return {
       name,
       ...(vars[`${key}_BASE_URL`] ? { baseUrl: vars[`${key}_BASE_URL`] } : {}),
       ...(vars[`${key}_API_KEY`] ? { apiKey: vars[`${key}_API_KEY`] } : {}),
       ...(Number.isFinite(limit) && limit > 0 ? { maxConcurrent: limit } : {}),
+      api: api === "ollama" ? "ollama" : "openai",
+      ...(api !== "openai" && api !== "ollama" ? { invalidApi: api } : {}),
     };
   });
 }

@@ -37,7 +37,11 @@
   templates for fixed neutral fixtures and hashing the result
   ([src/experiment/protocolFingerprint.ts](../src/experiment/protocolFingerprint.ts)),
   so a refactor that keeps every text keeps it, and any change of a text
-  changes it (a snapshot test makes that change visible in review). It does
+  changes it (a snapshot test makes that change visible in review). It is
+  **per protocol variant**: options that change what agents are told (fixed
+  discussion rounds, a required proposal) add their texts only for runs that
+  use them, so a run on the default protocol keeps the default fingerprint
+  when a variant is added. `/api/meta` reports the default one. It does
   not describe the whole runtime: readiness logic, scheduling and parsing are
   code, and the git commit stays the final provenance. Recorded in
   `experiment_started`, `metrics.protocolFingerprint` and the batch CSV.
@@ -67,7 +71,7 @@ Event types, in the order they typically appear:
 | `phase_changed` | from, to, why (e.g. `discussionEnd: all_ready`) |
 | `routing_decision` | chosen agent, source, reason, details (invalid target, classifier failure) |
 | `turn_started` / `turn_completed` | turn number, kind, result |
-| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown) — for a failed attempt too, when the provider billed it (e.g. an upstream failure mid-response), duration, request-queue wait, parse result, temperature, seed |
+| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, a self-hosted endpoint's serving options as sent (`think`, `contextLength`) and, for Ollama, its timings, thinking the model did anyway and a context-overflow warning (`providerMeta`), requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown) — for a failed attempt too, when the provider billed it (e.g. an upstream failure mid-response), duration, request-queue wait, parse result, temperature, seed |
 | `message_posted` | a public room message: agent, moderator notice, or narration (with its source template and language; never shown to agents) |
 | `presentation_delay` | a viewer-pacing wait before a visible message: waited, target gap, time since the previous message |
 | `extension_note` | something an add-on put on record (e.g. pacing skipped for a headless run) |
@@ -75,7 +79,8 @@ Event types, in the order they typically appear:
 | `readiness_changed` / `readiness_invalidated` | readiness transitions |
 | `proposal_requested` / `proposal_rejected_format` / `proposal_declined` / `proposal_frozen` | the proposal sequence; `proposal_frozen` is the immutable artifact with its hash |
 | `vote_cast` / `consensus_result` | each vote references the proposal id and hash |
-| `evaluation_result` | outcome, every check with detail, derived values |
+| `evaluation_result` | outcome, every check with detail, derived values, and the scenario's outcome class when it has one (`classification`) |
+| `proposal_evaluated` | every frozen proposal — committed or not — judged once the outcome is decided: the same fields, plus `attempt` and `committed`. First-proposal correctness; never the outcome, never seen by agents |
 | `operator_intervention` | every operator command; `flowAltering` marks the ones that make the run non-autonomous |
 | `protocol_incident` / `error` | recoverable protocol problems / unexpected errors (`metrics.errors`) |
 | `extension_error` | an add-on (narration, pacing, …) failed; the run goes on unchanged. Counted apart, in `metrics.extensionErrors` — an integration problem, not an experiment error |
@@ -106,6 +111,19 @@ structural, deterministic, scenario-neutral: derived from the turn metadata
 | `responses` | after an explicit address (`target`): `addresseeSpokeNext` — the very next discussion turn was the addressee's, with a message; `addresseeSpokeLater` — the addressee posted a message at any later discussion turn of the run (any discussion segment, including after a rejected proposal; PASS turns do not count; proposal and vote turns are not discussion turns); `meanTurnsUntilAddresseeSpeaks` — mean discussion turns until it did. Agents have no "in reply to" field, so this says the addressee *spoke*, not that it *answered* |
 | `participation` | evenness (entropy of message shares normalized by log N, so groups of different sizes compare; 1 = even), Gini, silent agents |
 | `timeline` | discussion turns to all-ready, turns to the first proposal, discussion segments |
+
+`timeline.discussionTurnsToAllReady` is also known for fixed-round
+discussions, which go on after everyone is ready: the runner records when
+that first happened (`allReadyAtTurn` on the phase change to PROPOSAL).
+
+**Decision quality beyond the outcome.** `proposals.evaluated` /
+`proposals.first`: every frozen proposal as the evaluator judged it
+(outcome, failed checks, class), the first one being first-proposal
+correctness. `evaluation.classification`: the scenario's class of the
+committed outcome (e.g. Service Settlement: `correct`, `unsafe`,
+`invalid`, `overcautious`). `llmCalls.contextOverflowSuspected` and
+`llmCalls.withThinking`: serving problems of self-hosted models, which
+would otherwise look like agent behavior.
 
 They say who talked to whom, not *what* reached whom: which facts were
 shared is a scenario-specific (or semantic) question. Runs recorded before

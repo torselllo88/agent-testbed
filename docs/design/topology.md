@@ -1,6 +1,8 @@
 # Design sketch: communication topology
 
-*Status: proposal for discussion — nothing here is implemented.*
+*Status: proposal for discussion. Implemented since: the protocol fingerprint
+per variant and first-proposal correctness (`proposal_evaluated`); the
+topology itself is not.*
 
 ## Goal
 

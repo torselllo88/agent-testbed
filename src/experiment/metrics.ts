@@ -25,7 +25,16 @@ export interface ExperimentMetrics {
     byAgent: Record<string, TokenCount>;
   };
   costUsd: { total: number; agent: number; orchestration: number; callsWithUnknownCost: number };
-  llmCalls: { total: number; failed: number; parseFailures: number; byPurpose: Record<string, number> };
+  llmCalls: {
+    total: number;
+    failed: number;
+    parseFailures: number;
+    byPurpose: Record<string, number>;
+    /** Calls whose prompt probably did not fit the endpoint's context window (Ollama; a heuristic — see ollamaProvider.ts). */
+    contextOverflowSuspected: number;
+    /** Calls on which the model reported thinking (e.g. think was meant to be off). */
+    withThinking: number;
+  };
   routing: { decisions: number; bySource: Record<string, number>; invalidExplicitTargets: number; classifierFailures: number };
   readiness: { invalidations: number };
   proposals: {
@@ -34,6 +43,10 @@ export interface ExperimentMetrics {
     declined: number;
     frozen: number;
     final: { id: string; proposerId: string; body: unknown; rationale: string; hash: string } | null;
+    /** Every frozen proposal as the evaluator judged it once the outcome was decided, committed or not. */
+    evaluated: ProposalEvaluation[];
+    /** The first of them — first-proposal correctness, next to the run's outcome. Null: no proposal was frozen (or the run predates this metric). */
+    first: ProposalEvaluation | null;
   };
   votes: {
     rounds: Array<{ proposalId: string; reached: boolean; approvals: number; required: number; votes: unknown }>;
@@ -51,6 +64,15 @@ export interface ExperimentMetrics {
   protocolFingerprint: string | null;
   /** Who addressed whom, participation, responsiveness, time to decision (see communicationMetrics.ts). */
   communication: CommunicationMetrics;
+}
+
+export interface ProposalEvaluation {
+  proposalId: string;
+  attempt: number;
+  committed: boolean;
+  outcome: string;
+  violated: string[];
+  classification: string | null;
 }
 
 const inc = (map: Record<string, number>, key: string, by = 1) => {
@@ -73,10 +95,10 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     passes: { total: 0, byAgent: {} },
     tokens: { agent: 0, orchestration: 0, total: 0, byAgent: {} },
     costUsd: { total: 0, agent: 0, orchestration: 0, callsWithUnknownCost: 0 },
-    llmCalls: { total: 0, failed: 0, parseFailures: 0, byPurpose: {} },
+    llmCalls: { total: 0, failed: 0, parseFailures: 0, byPurpose: {}, contextOverflowSuspected: 0, withThinking: 0 },
     routing: { decisions: 0, bySource: {}, invalidExplicitTargets: 0, classifierFailures: 0 },
     readiness: { invalidations: 0 },
-    proposals: { attempts: 0, formatRejections: 0, declined: 0, frozen: 0, final: null },
+    proposals: { attempts: 0, formatRejections: 0, declined: 0, frozen: 0, final: null, evaluated: [], first: null },
     votes: { rounds: [], final: null },
     consensusReached: false,
     evaluation: null,
@@ -135,6 +157,9 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         inc(m.llmCalls.byPurpose, String(p.purpose));
         if (p.error) m.llmCalls.failed += 1;
         if (p.parseOk === false) m.llmCalls.parseFailures += 1;
+        const meta = (p.providerMeta ?? {}) as Record<string, unknown>;
+        if (meta.contextOverflowSuspected === true) m.llmCalls.contextOverflowSuspected += 1;
+        if (typeof meta.thinking === "string" && meta.thinking.trim()) m.llmCalls.withThinking += 1;
         const usage = p.usage as TokenUsage | null;
         const tokens = usage ? usage.promptTokens + usage.completionTokens : 0;
         const cost = typeof p.costUsd === "number" ? p.costUsd : null;
@@ -203,6 +228,17 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
       }
       case EventType.EVALUATION_RESULT:
         m.evaluation = p;
+        break;
+      case EventType.PROPOSAL_EVALUATED:
+        m.proposals.evaluated.push({
+          proposalId: String(p.proposalId),
+          attempt: Number(p.attempt),
+          committed: p.committed === true,
+          outcome: String(p.outcome),
+          violated: Array.isArray(p.violated) ? p.violated.map(String) : [],
+          classification: typeof p.classification === "string" ? p.classification : null,
+        });
+        m.proposals.first ??= m.proposals.evaluated[0]!;
         break;
       case EventType.PROTOCOL_INCIDENT:
         inc(m.protocolIncidents, String(p.kind));

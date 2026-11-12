@@ -87,6 +87,7 @@ batches can be capped (`limits.totalCostCapUsd`, `limits.totalTokenCap`).
 | [Space Station Benchmark](docs/scenarios/space-station.md) | Four functional roles must pool their facts to route enough power to a backup coolant loop. Neutral: no names, narration or pacing. The research baseline. | `space-station` | any (agents); stubs: en |
 | [Station Kestrel](docs/scenarios/kestrel.md) | The same task and evaluator (the same `taskDefinitionHash`) with named officers, personas, a narrator, viewer pacing and a post-run debrief. | `space-station` | en, ru authored |
 | [Station Kestrel: Cascade](docs/scenarios/kestrel-cascade.md) | A harder task with the Kestrel crew: two plausible recovery paths, an ordered action list and facts split so that no officer can find the safe plan alone. | `kestrel-cascade` | en, ru authored |
+| [Service Settlement](docs/scenarios/service-settlement.md) | Six organizational functions decide a contractor's milestone payment. Hidden-profile facts (the requested plan looks right on the shared facts), fixed discussion rounds, outcome classes (correct / unsafe / invalid / overcautious). A research task. | `service-settlement` | en |
 
 A scenario separates the task (facts, roles, private information, decision
 rules, evaluator) from behavior and presentation (names, personas, language,
@@ -169,6 +170,7 @@ isolation is enforced at runtime and by tests. See
 | Batch experiments | [docs/batches.md](docs/batches.md) |
 | People in the room: spectators and debrief | [docs/people-in-the-room.md](docs/people-in-the-room.md) |
 | Web UI | [docs/web-ui.md](docs/web-ui.md) |
+| Running on a remote server (shared GPU node, no root, UI over SSH) | [docs/remote-server.md](docs/remote-server.md) |
 | Architecture | [docs/architecture.md](docs/architecture.md) |
 | Extending: scenarios, schedulers, decision rules, providers | [docs/extending.md](docs/extending.md) |
 | Operator HTTP API | [docs/http-api.md](docs/http-api.md) |

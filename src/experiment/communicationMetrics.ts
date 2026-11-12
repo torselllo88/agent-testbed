@@ -79,6 +79,7 @@ export function communicationMetrics(events: ExperimentEvent[]): CommunicationMe
   let turnsToFirstProposal: number | null = null;
   let discussionTurnsToAllReady: number | null = null;
   let discussionSegments = 0;
+  let segmentStart = 0;
   for (const e of events) {
     if (e.type === EventType.TURN_STARTED) turnsSoFar += 1;
     else if (e.type === EventType.AGENT_META && e.agentId) {
@@ -87,8 +88,17 @@ export function communicationMetrics(events: ExperimentEvent[]): CommunicationMe
     } else if (e.type === EventType.PROPOSAL_REQUESTED && turnsToFirstProposal === null) {
       turnsToFirstProposal = turnsSoFar;
     } else if (e.type === EventType.PHASE_CHANGED) {
-      if (e.payload.to === "DISCUSSION") discussionSegments += 1;
-      if (e.payload.discussionEnd === "all_ready" && discussionTurnsToAllReady === null) discussionTurnsToAllReady = turns.length;
+      if (e.payload.to === "DISCUSSION") {
+        discussionSegments += 1;
+        segmentStart = turns.length;
+      }
+      if (discussionTurnsToAllReady === null) {
+        if (e.payload.discussionEnd === "all_ready") discussionTurnsToAllReady = turns.length;
+        // Fixed rounds go on after everyone is ready; the runner records when that first happened.
+        else if (e.payload.discussionEnd === "fixed_rounds" && typeof e.payload.allReadyAtTurn === "number") {
+          discussionTurnsToAllReady = segmentStart + e.payload.allReadyAtTurn;
+        }
+      }
     }
   }
 

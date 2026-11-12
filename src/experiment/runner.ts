@@ -4,7 +4,7 @@ import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
 import type { ScenarioEvaluator } from "../evaluation/types.js";
 import type { ProviderId } from "../llm/provider.js";
-import type { ProviderRegistry } from "../llm/registry.js";
+import { isSelfHostedProvider, type ProviderRegistry } from "../llm/registry.js";
 import { sqliteSynchronousMode, type Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository } from "../persistence/experimentRepository.js";
@@ -29,7 +29,7 @@ import {
 } from "./config.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { NarratorSender, RunExtension, RunExtensionContext, RunExtensionFactory } from "./extensions.js";
-import { PROTOCOL_FINGERPRINT } from "./protocolFingerprint.js";
+import { protocolFingerprintFor } from "./protocolFingerprint.js";
 import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
 import { EventLog, EventType, redactSecrets } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
@@ -40,7 +40,7 @@ import { formatZodError } from "./parseJson.js";
 import { assertTransition, Phase } from "./phases.js";
 import {
   PROTOCOL_FEEDBACK,
-  ProposalEnvelopeSchema,
+  proposalEnvelopeSchema,
   proposalJsonSchema,
   readinessRecheckNote,
   renderDiscussionPrompt,
@@ -157,7 +157,7 @@ export interface LiveState {
   termination: Termination | null;
 }
 
-type DiscussionEnd = "all_ready" | "discussion_turn_limit" | "operator";
+type DiscussionEnd = "all_ready" | "discussion_turn_limit" | "fixed_rounds" | "operator";
 
 /**
  * Runs one experiment from INITIALIZING to FINISHED. Owns the lifecycle —
@@ -207,6 +207,9 @@ export class ExperimentRunner {
   private readonly environment: RunEnvironment;
   private readonly strings: ProtocolStrings;
   private evaluation: EvaluationResult | null = null;
+  /** Every frozen proposal, in order — each is judged once the outcome is decided (proposal_evaluated). */
+  private readonly frozenProposals: FrozenProposal[] = [];
+  private committedProposalId: string | null = null;
   private lastConsensus: ConsensusResult | null = null;
   private readonly extensions: RunExtension[];
   private readonly extensionContext: RunExtensionContext;
@@ -283,7 +286,7 @@ export class ExperimentRunner {
     // The experiment's own room. Extensions never get hold of it, so they cannot change what agents read.
     this.transport = (deps.createTransport ?? ((c) => createTransport(c.transport)))(this.config);
     this.readiness = new ReadinessTracker(this.config.agents.map((a) => a.id));
-    this.discussion.turnLimit = this.config.limits.discussionTurnLimit;
+    this.discussion.turnLimit = this.segmentTurnLimit(1);
     this.environment = {
       stubLatencyMs: deps.providers.stub.latency,
       origin: options.origin ?? "interactive",
@@ -336,6 +339,7 @@ export class ExperimentRunner {
         outcome = termination("ERROR", message);
       }
     }
+    this.evaluateProposals();
     this.outcomeDecided = true;
     this.atOutcome = { usage: this.budget.totals(), turns: this.budget.turnsUsed(), activeElapsedMs: this.budget.activeElapsedMs(), pausedMs: this.budget.pausedMs() };
     await this.notifyExtensions("onRunEnded", (ext) =>
@@ -432,7 +436,7 @@ export class ExperimentRunner {
       configHash: configHash(config),
       taskDefinitionHash: taskDefinitionHash(config, this.evaluator.version),
       // The shared protocol assets agents read (prompt templates, notices, schemas) — see protocolFingerprint.ts.
-      protocolFingerprint: PROTOCOL_FINGERPRINT,
+      protocolFingerprint: protocolFingerprintFor(config),
       testbedVersion: getTestbedVersion(),
       environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
@@ -479,12 +483,23 @@ export class ExperimentRunner {
       // (shorter) turn allowance and everyone's readiness reset.
       this.proposalAttempt += 1;
       this.readiness.reset();
-      this.discussion = { segment: this.discussion.segment + 1, turnsUsed: 0, turnLimit: config.limits.rediscussionTurnLimit };
+      this.discussion = { segment: this.discussion.segment + 1, turnsUsed: 0, turnLimit: this.segmentTurnLimit(this.discussion.segment + 1) };
       this.transition(Phase.DISCUSSION, { segment: this.discussion.segment, turnLimit: this.discussion.turnLimit });
     }
   }
 
+  /** Discussion turns of a segment: fixed rounds of every agent, or the configured (soft) limit of a first / later segment. */
+  private segmentTurnLimit(segment: number): number {
+    const { discussion, limits, agents } = this.config;
+    if (discussion) return discussion.fixedRounds * agents.length;
+    return segment === 1 ? limits.discussionTurnLimit : limits.rediscussionTurnLimit;
+  }
+
   private async runDiscussion(): Promise<void> {
+    // Fixed rounds: readiness is recorded, but neither ends the discussion nor adds re-check turns.
+    const fixed = this.config.discussion !== undefined;
+    // When everyone's readiness was first current at once (fixed rounds only: otherwise that ends the discussion).
+    let allReadyAtTurn: number | null = null;
     let end: DiscussionEnd;
     for (;;) {
       await this.checkpoint();
@@ -493,12 +508,12 @@ export class ExperimentRunner {
         end = "operator";
         break;
       }
-      if (this.readiness.allReady()) {
+      if (!fixed && this.readiness.allReady()) {
         end = "all_ready";
         break;
       }
       if (this.discussion.turnsUsed >= this.discussion.turnLimit) {
-        end = "discussion_turn_limit";
+        end = fixed ? "fixed_rounds" : "discussion_turn_limit";
         break;
       }
       this.enforceHardLimits(1);
@@ -506,14 +521,20 @@ export class ExperimentRunner {
       const decision = await this.route();
       await this.discussionTurn(decision.agentId, decision.source === "readiness_recheck");
       this.discussion.turnsUsed += 1;
+      if (fixed && allReadyAtTurn === null && this.readiness.allReady()) allReadyAtTurn = this.discussion.turnsUsed;
     }
     this.pendingNextAgentId = null;
-    this.transition(Phase.PROPOSAL, { discussionEnd: end, discussionTurnsUsed: this.discussion.turnsUsed, proposalAttempt: this.proposalAttempt });
+    this.transition(Phase.PROPOSAL, {
+      discussionEnd: end,
+      discussionTurnsUsed: this.discussion.turnsUsed,
+      proposalAttempt: this.proposalAttempt,
+      ...(fixed ? { allReadyAtTurn } : {}),
+    });
   }
 
   private async route(): Promise<RoutingDecision> {
     let decision: RoutingDecision;
-    const stale = this.readiness.staleBlockingConsensus();
+    const stale = this.config.discussion ? [] : this.readiness.staleBlockingConsensus();
     if (this.pendingNextAgentId) {
       decision = { agentId: this.pendingNextAgentId, source: "operator", reason: "selected by operator" };
       this.pendingNextAgentId = null;
@@ -602,7 +623,8 @@ export class ExperimentRunner {
   private async runProposal(): Promise<FrozenProposal | "declined"> {
     const { decision } = this.config;
     const proposer = this.agents.get(decision.proposerId)!;
-    const schema = proposalJsonSchema(this.evaluator.proposalSchema);
+    const required = decision.proposalRequired === true;
+    const schema = proposalJsonSchema(this.evaluator.proposalSchema, required);
     this.log.append(EventType.PROPOSAL_REQUESTED, { attempt: this.proposalAttempt, proposerId: proposer.id }, proposer.id);
 
     let feedback: string | undefined;
@@ -622,7 +644,7 @@ export class ExperimentRunner {
           { role: "system", content: renderSystemPrompt(this.config, proposer) },
           { role: "user", content: renderProposalPrompt(this.config, proposer, transcript, schema, feedback) },
         ],
-        response: { name: "final_proposal", schema: ProposalEnvelopeSchema, jsonSchema: schema },
+        response: { name: "final_proposal", schema: proposalEnvelopeSchema(required), jsonSchema: schema },
         context: { agentId: proposer.id, purpose: "proposal", proposalAttempt: this.proposalAttempt, formatTry, turn },
         turn,
       });
@@ -636,6 +658,18 @@ export class ExperimentRunner {
       }
 
       const envelope = result.value;
+      if (envelope.proposal === null && required) {
+        // Declining is not offered: answered like a format error, with another try if any remain.
+        lastFailure = { kind: "schema", error: "proposal is null, but a proposal is required" };
+        this.log.append(
+          EventType.PROPOSAL_REJECTED_FORMAT,
+          { attempt: this.proposalAttempt, formatTry, kind: "declined_not_allowed", error: lastFailure.error, rationale: envelope.rationale },
+          proposer.id
+        );
+        feedback = PROTOCOL_FEEDBACK.proposalRequired();
+        this.completeTurn(proposer.id, turn, { kind: "proposal", result: "declined_not_allowed" });
+        continue;
+      }
       if (envelope.proposal === null) {
         this.log.append(EventType.PROPOSAL_DECLINED, { attempt: this.proposalAttempt, rationale: envelope.rationale }, proposer.id);
         if (envelope.rationale.trim()) await this.publish({ kind: "agent", agentId: proposer.id }, envelope.rationale.trim());
@@ -667,6 +701,7 @@ export class ExperimentRunner {
         hash: sha256(canonicalJson(validated.data)),
       });
       this.log.append(EventType.PROPOSAL_FROZEN, { ...frozen }, proposer.id);
+      this.frozenProposals.push(frozen);
       this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen" });
       await this.publish(
         { kind: "system" },
@@ -765,6 +800,7 @@ export class ExperimentRunner {
   }
 
   private runEvaluation(proposal: FrozenProposal): Termination {
+    this.committedProposalId = proposal.id;
     this.transition(Phase.COMMITTED, { proposalId: proposal.id, proposalHash: proposal.hash });
     this.transition(Phase.EVALUATION, { evaluator: this.evaluator.id, evaluatorVersion: this.evaluator.version });
     const result = this.evaluator.evaluate(proposal.body, this.evaluatorParams);
@@ -779,6 +815,33 @@ export class ExperimentRunner {
     return result.outcome === "SUCCESS"
       ? termination("SUCCESS", "Committed proposal passed every evaluator check")
       : termination("MISSION_FAILURE", `Committed proposal violated: ${result.violated.join(", ")}`, { violated: result.violated });
+  }
+
+  /**
+   * Judges every frozen proposal — committed or not — once the outcome is
+   * decided, so first-proposal correctness is known even when the vote failed
+   * or the run ended early. Pure and deterministic: nothing here can change the
+   * outcome, and no agent sees it.
+   */
+  private evaluateProposals(): void {
+    for (const proposal of this.frozenProposals) {
+      const committed = proposal.id === this.committedProposalId;
+      try {
+        const result = committed && this.evaluation ? this.evaluation : this.evaluator.evaluate(proposal.body, this.evaluatorParams);
+        this.log.append(EventType.PROPOSAL_EVALUATED, {
+          evaluator: this.evaluator.id,
+          evaluatorVersion: this.evaluator.version,
+          proposalId: proposal.id,
+          proposalHash: proposal.hash,
+          attempt: proposal.attempt,
+          committed,
+          ...result,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.log.append(EventType.ERROR, { message: `Evaluating proposal ${proposal.id} failed: ${message}`, stack: err instanceof Error ? err.stack : undefined });
+      }
+    }
   }
 
   private finish(outcome: Termination): ExperimentMetrics {
@@ -974,6 +1037,12 @@ export function withEffectiveEvaluatorParams(config: ExperimentConfig, evaluator
   return { ...config, evaluator: { ...config.evaluator, params: evaluatorParams as Record<string, unknown> } };
 }
 
+/** The API a self-hosted endpoint speaks; null for any other provider. */
+function apiOf(providers: ProviderRegistry, ref: ExperimentConfig["agents"][number]["model"]): "openai" | "ollama" | null {
+  const provider = providers.get(modelProviderKey(ref) as ProviderId);
+  return isSelfHostedProvider(provider) ? provider.api : null;
+}
+
 export function checkRunnable(
   deps: Pick<RunnerDeps, "providers" | "evaluators">,
   config: ExperimentConfig
@@ -999,6 +1068,10 @@ export function checkRunnable(
         ref.provider === "openai-compatible"
           ? `${who}: OpenAI-compatible endpoint "${ref.endpoint}" is not configured (OPENAI_COMPATIBLE_ENDPOINTS and its _BASE_URL)`
           : `${who}: LLM provider "${ref.provider}" is not configured`
+      );
+    } else if (ref.contextLength !== undefined && apiOf(deps.providers, ref) !== "ollama") {
+      problems.push(
+        `${who}: contextLength is set, but endpoint "${ref.endpoint}" speaks the OpenAI API, whose context window the server fixes — set it there, or use an Ollama endpoint (OPENAI_COMPATIBLE_<NAME>_API=ollama)`
       );
     } else if (ref.provider === "stub" && !deps.providers.stub.models().includes(ref.model)) {
       problems.push(`${who}: unknown stub model "${ref.model}" (available: ${deps.providers.stub.models().join(", ")})`);

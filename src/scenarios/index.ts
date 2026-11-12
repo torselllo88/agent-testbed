@@ -9,6 +9,9 @@ import { kestrelCascadeConfig } from "./kestrelCascade/config.js";
 import { kestrelCascadeEvaluator } from "./kestrelCascade/evaluator.js";
 import { registerCascadeStubs } from "./kestrelCascade/stubScripts.js";
 import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
+import { serviceSettlementConfig } from "./serviceSettlement/config.js";
+import { serviceSettlementEvaluator } from "./serviceSettlement/evaluator.js";
+import { registerSettlementStubs } from "./serviceSettlement/stubScripts.js";
 
 export { DEMO, demoFacts, type DemoContent, type DemoSection } from "./demo.js";
 
@@ -74,15 +77,24 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     version: 6,
     config: () => kestrelCascadeConfig(),
   },
+  {
+    id: "service-settlement",
+    name: "Service Settlement",
+    summary: "Research task — six functions decide a contractor's milestone payment; hidden-profile facts, fixed rounds, outcome classes",
+    // v1: initial — instance dev-01, 3 fixed rounds, required proposal, one attempt.
+    version: 1,
+    config: () => serviceSettlementConfig(),
+  },
 ];
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {
-  return new EvaluatorRegistry().register(spaceStationEvaluator).register(kestrelCascadeEvaluator);
+  return new EvaluatorRegistry().register(spaceStationEvaluator).register(kestrelCascadeEvaluator).register(serviceSettlementEvaluator);
 }
 
 export function registerBuiltinStubs(stub: StubProvider): StubProvider {
   registerGenericStubs(stub);
   registerSpaceStationStubs(stub);
   registerCascadeStubs(stub);
+  registerSettlementStubs(stub);
   return stub;
 }

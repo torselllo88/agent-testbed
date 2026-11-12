@@ -61,8 +61,8 @@ describe("configuration", () => {
         OPENAI_COMPATIBLE_LAB_VLLM_MAX_CONCURRENT: "16",
       })
     ).toEqual([
-      { name: "lab-vllm", baseUrl: "http://gpu-3:8000/v1", apiKey: "secret-key-123", maxConcurrent: 16 },
-      { name: "lab-tgi" },
+      { name: "lab-vllm", baseUrl: "http://gpu-3:8000/v1", apiKey: "secret-key-123", maxConcurrent: 16, api: "openai" },
+      { name: "lab-tgi", api: "openai" },
     ]);
   });
 

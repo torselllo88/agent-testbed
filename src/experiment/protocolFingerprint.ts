@@ -33,11 +33,30 @@ import { AUTHORED_PROTOCOL_LANGUAGES, protocolStrings } from "./protocolStrings.
  * What it is not: a description of the whole runtime. Readiness logic,
  * scheduling and parsing leniency are code; the git commit stays the final
  * provenance. Debrief prompts are not part of it: no experiment depends on them.
+ *
+ * Per protocol variant: options that change what agents are told (fixed
+ * discussion rounds, a required proposal) add their own texts to the hashed
+ * assets only for runs that use them. A run on the default protocol hashes
+ * exactly the default set, so its fingerprint does not change when a new
+ * variant is added.
  */
+
+/** The protocol options that change agent-facing texts. */
+export interface ProtocolVariant {
+  fixedRounds: boolean;
+  proposalRequired: boolean;
+}
+const DEFAULT_VARIANT: ProtocolVariant = { fixedRounds: false, proposalRequired: false };
+
+export function protocolVariant(config: ExperimentConfig): ProtocolVariant {
+  return { fixedRounds: config.discussion !== undefined, proposalRequired: config.decision.proposalRequired === true };
+}
+
+const isDefault = (v: ProtocolVariant) => !v.fixedRounds && !v.proposalRequired;
 
 const FIXTURE_PROPOSAL_SCHEMA = z.object({ choice: z.enum(["a", "b"]), amount: z.number() });
 
-function fixtureConfig(language: string, discussionBudget: boolean): ExperimentConfig {
+function fixtureConfig(language: string, discussionBudget: boolean, variant: ProtocolVariant): ExperimentConfig {
   const agent = (id: string, full: boolean) => ({
     id,
     name: `Name ${id}`,
@@ -55,7 +74,8 @@ function fixtureConfig(language: string, discussionBudget: boolean): ExperimentC
     agents: [agent("agent_a", true), agent("agent_b", false)],
     scheduler: { type: "round_robin", startAgentId: "agent_a" },
     consensus: { rule: "unanimity" },
-    decision: { proposerId: "agent_a" },
+    decision: { proposerId: "agent_a", ...(variant.proposalRequired ? { proposalRequired: true } : {}) },
+    ...(variant.fixedRounds ? { discussion: { fixedRounds: 2 } } : {}),
     agentVisibility: { discussionBudget },
     conversation: { language },
     evaluator: { id: "fixture" },
@@ -72,13 +92,12 @@ const TRANSCRIPT: RoomMessage[] = [
 const PROGRESS = { discussionTurnsUsed: 3, discussionTurnLimit: 10, proposalAttempt: 1, maxProposalAttempts: 2 };
 const PROPOSAL = { proposerName: "Name agent_a", rationale: "a rationale", body: { choice: "a", amount: 1 } };
 
-/** The rendered protocol assets — deterministic, scenario-free. */
-export function protocolAssets(): Record<string, unknown> {
-  const schema = proposalJsonSchema(FIXTURE_PROPOSAL_SCHEMA);
+function renderPrompts(variant: ProtocolVariant): Record<string, unknown> {
+  const schema = proposalJsonSchema(FIXTURE_PROPOSAL_SCHEMA, variant.proposalRequired);
   const prompts: Record<string, unknown> = {};
   for (const language of ["en", "ru", "sr-Latn"]) {
     for (const budget of [false, true]) {
-      const config = fixtureConfig(language, budget);
+      const config = fixtureConfig(language, budget, variant);
       const key = `${language}/${budget ? "budget" : "no-budget"}`;
       prompts[key] = config.agents.map((agent) => ({
         system: renderSystemPrompt(config, agent),
@@ -92,6 +111,13 @@ export function protocolAssets(): Record<string, unknown> {
       prompts[`${key}/router`] = renderRouterPrompt(config, TRANSCRIPT, "agent_a", ["agent_b"]);
     }
   }
+  return prompts;
+}
+
+/** The rendered protocol assets of a variant (default: the default protocol) — deterministic, scenario-free. */
+export function protocolAssets(variant: ProtocolVariant = DEFAULT_VARIANT): Record<string, unknown> {
+  const schema = proposalJsonSchema(FIXTURE_PROPOSAL_SCHEMA);
+  const prompts = renderPrompts(DEFAULT_VARIANT);
   const notices: Record<string, unknown> = {};
   for (const language of [...AUTHORED_PROTOCOL_LANGUAGES, "sr-Latn"]) {
     const s = protocolStrings(language);
@@ -101,7 +127,7 @@ export function protocolAssets(): Record<string, unknown> {
       votes: (["APPROVE", "REJECT", "INVALID"] as const).flatMap((vote) => [s.voteLine({ agentName: "A", vote, reason: "why" }), s.voteLine({ agentName: "A", vote, reason: "" })]),
     };
   }
-  return {
+  const assets: Record<string, unknown> = {
     prompts,
     feedback: {
       parseRetry: PROTOCOL_FEEDBACK.parseRetry("<error>"),
@@ -113,12 +139,34 @@ export function protocolAssets(): Record<string, unknown> {
     languageNames: Object.fromEntries(COMMON_LANGUAGES.map((code) => [code, languageName(code)])),
     schemas: { turn: TURN_JSON_SCHEMA, vote: VOTE_JSON_SCHEMA, router: ROUTER_JSON_SCHEMA, proposalEnvelope: schema },
   };
+  if (isDefault(variant)) return assets;
+  return {
+    ...assets,
+    variant: {
+      flags: variant,
+      prompts: renderPrompts(variant),
+      ...(variant.proposalRequired
+        ? { feedback: { proposalRequired: PROTOCOL_FEEDBACK.proposalRequired() }, proposalEnvelope: proposalJsonSchema(FIXTURE_PROPOSAL_SCHEMA, true) }
+        : {}),
+    },
+  };
 }
 
-/** sha256 of the canonical rendered protocol assets (first 16 hex digits). */
-export function computeProtocolFingerprint(): string {
-  return sha256(canonicalJson(protocolAssets())).slice(0, 16);
+/** sha256 of the canonical rendered protocol assets of a variant (first 16 hex digits). */
+export function computeProtocolFingerprint(variant: ProtocolVariant = DEFAULT_VARIANT): string {
+  return sha256(canonicalJson(protocolAssets(variant))).slice(0, 16);
 }
 
-/** This build's protocol fingerprint, recorded with every run. */
+/** This build's fingerprint of the default protocol. */
 export const PROTOCOL_FINGERPRINT = computeProtocolFingerprint();
+
+const byVariant = new Map<string, string>([["false/false", PROTOCOL_FINGERPRINT]]);
+
+/** The fingerprint of the protocol a run with this config uses — recorded with every run. */
+export function protocolFingerprintFor(config: ExperimentConfig): string {
+  const variant = protocolVariant(config);
+  const key = `${variant.fixedRounds}/${variant.proposalRequired}`;
+  let fingerprint = byVariant.get(key);
+  if (!fingerprint) byVariant.set(key, (fingerprint = computeProtocolFingerprint(variant)));
+  return fingerprint;
+}

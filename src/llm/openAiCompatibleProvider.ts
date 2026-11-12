@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
-import { toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider, type ProviderId } from "./provider.js";
+import { ProviderError, toProviderError, type CompletionRequest, type CompletionResult, type LlmProvider, type ProviderId } from "./provider.js";
 
 export interface OpenAiCompatibleEndpointConfig {
   /** Logical name used in experiment configs ("endpoint": "lab-vllm"). */
@@ -23,6 +23,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   readonly id: ProviderId;
   readonly endpoint: string;
   readonly baseUrl: string;
+  readonly api = "openai" as const;
   private readonly client: OpenAI;
 
   constructor(config: OpenAiCompatibleEndpointConfig) {
@@ -40,12 +41,18 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const body: ChatCompletionCreateParamsNonStreaming = {
+    if (request.contextLength !== undefined) {
+      // The window of an OpenAI-API server is fixed when the model is served; it cannot be set per request.
+      throw new ProviderError(`OpenAI-compatible endpoint "${this.endpoint}": contextLength can only be set per request on an Ollama endpoint`, false);
+    }
+    const body: ChatCompletionCreateParamsNonStreaming & { chat_template_kwargs?: Record<string, unknown> } = {
       model: request.model,
       messages: request.messages,
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.seed !== undefined ? { seed: request.seed } : {}),
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
+      // The convention of vLLM and SGLang for models with a thinking mode (Qwen3, …); other servers ignore it.
+      ...(request.think !== undefined ? { chat_template_kwargs: { enable_thinking: request.think } } : {}),
       ...(request.responseFormat
         ? {
             response_format: {

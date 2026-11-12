@@ -156,6 +156,9 @@ export class LlmCaller {
         requestedModel: spec.modelRef.model,
         temperature: spec.modelRef.temperature ?? null,
         seed: spec.modelRef.seed ?? null,
+        // Serving options of a self-hosted endpoint, as sent (null: the server's default).
+        think: spec.modelRef.think ?? null,
+        contextLength: spec.modelRef.contextLength ?? null,
         structuredOutput: spec.modelRef.structuredOutput,
         responseFormat: spec.response.name,
         parseAttempt,
@@ -176,6 +179,8 @@ export class LlmCaller {
           temperature: spec.modelRef.temperature,
           seed: spec.modelRef.seed,
           maxOutputTokens: spec.modelRef.maxOutputTokens,
+          think: spec.modelRef.think,
+          contextLength: spec.modelRef.contextLength,
           responseFormat: native ? { name: spec.response.name, schema: spec.response.jsonSchema } : undefined,
           routing: routing ?? undefined,
           signal,

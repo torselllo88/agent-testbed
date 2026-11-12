@@ -40,17 +40,22 @@ export const TURN_JSON_SCHEMA = toJsonSchema(TurnStrict, "agent_turn");
 /**
  * Envelope only — the proposal body is validated against the scenario's schema separately, so "unparseable" and "schema-invalid" stay distinct outcomes.
  * The "proposal" key must be present: only an explicit null is a deliberate decline; a missing key (a bare body, a wrong key) is a format error.
+ * required: declining is not offered (decision.proposalRequired) — the runner answers a null like a format error.
  */
-export const ProposalEnvelopeSchema = z
-  .object({
-    rationale: z.string().default(""),
-    proposal: z.unknown(),
-  })
-  .and(z.custom<object>((v) => v !== null && typeof v === "object" && "proposal" in v, { message: 'missing "proposal" (use null to decline)' }))
-  .transform((v) => v as { rationale: string; proposal: unknown });
+export function proposalEnvelopeSchema(required = false) {
+  const missing = required ? 'missing "proposal"' : 'missing "proposal" (use null to decline)';
+  return z
+    .object({
+      rationale: z.string().default(""),
+      proposal: z.unknown(),
+    })
+    .and(z.custom<object>((v) => v !== null && typeof v === "object" && "proposal" in v, { message: missing }))
+    .transform((v) => v as { rationale: string; proposal: unknown });
+}
+export const ProposalEnvelopeSchema = proposalEnvelopeSchema();
 export type ProposalEnvelope = z.infer<typeof ProposalEnvelopeSchema>;
-export function proposalJsonSchema(proposalSchema: z.ZodTypeAny): Record<string, unknown> {
-  return toJsonSchema(z.object({ rationale: z.string(), proposal: proposalSchema.nullable() }), "final_proposal");
+export function proposalJsonSchema(proposalSchema: z.ZodTypeAny, required = false): Record<string, unknown> {
+  return toJsonSchema(z.object({ rationale: z.string(), proposal: required ? proposalSchema : proposalSchema.nullable() }), "final_proposal");
 }
 
 const VoteStrict = z.object({ vote: z.enum(["APPROVE", "REJECT"]), reason: z.string() });
@@ -124,7 +129,9 @@ ${agent.persona.trim()}`
       "- Participants speak one at a time. On your turn you either post ONE message to the room, or PASS if you have nothing useful to add.",
       "- Everything you post is visible to every participant. Your private information is visible only to you — share what is relevant, because others cannot see it otherwise.",
       "- To address a specific participant, set \"target\" to their id; they are likely to speak next. Use null if no one in particular.",
-      "- Set \"readyToCommit\" to true only when you believe the room already has enough information to agree on a final decision. Readiness you declared becomes stale when someone posts new information, and you will be asked again.",
+      config.discussion
+        ? "- Set \"readyToCommit\" to true when you believe the room already has enough information to agree on a final decision. The discussion lasts a fixed number of rounds — every participant speaks once per round, always in the same order — and does not end early when everyone is ready."
+        : "- Set \"readyToCommit\" to true only when you believe the room already has enough information to agree on a final decision. Readiness you declared becomes stale when someone posts new information, and you will be asked again.",
       "- When the discussion ends, one participant is asked to submit a formal proposal, and then every participant votes on exactly that proposal.",
       "- Be concise. Do not repeat information that has already been established.",
     ].join("\n"),
@@ -175,7 +182,10 @@ export function renderProposalPrompt(
   return [
     ...contextSections(config, agent, transcript),
     "The DISCUSSION phase has ended. You have been asked to submit the room's final proposal. Every participant will vote on exactly what you submit.",
-    'Put the complete decision in "proposal", using exactly the structure required by the schema. Put a short explanation for the other participants in "rationale". If you believe no acceptable proposal can be made yet, set "proposal" to null and explain why in "rationale".',
+    'Put the complete decision in "proposal", using exactly the structure required by the schema. Put a short explanation for the other participants in "rationale". ' +
+      (config.decision.proposalRequired
+        ? "A proposal is required: submit the best complete decision the information available to you supports."
+        : 'If you believe no acceptable proposal can be made yet, set "proposal" to null and explain why in "rationale".'),
     feedback ? `Your previous submission was not accepted: ${feedback}` : "",
     jsonInstruction(schema),
   ]
@@ -233,6 +243,8 @@ export const PROTOCOL_FEEDBACK = {
   /** Fed back to the proposer on its next format try. */
   proposalUnparseable: (error: string) => `the response was not a JSON object of the required shape (${error})`,
   proposalSchemaInvalid: (error: string) => `the proposal does not match the required structure (${error})`,
+  /** A null proposal where declining is not offered (decision.proposalRequired). */
+  proposalRequired: () => 'a proposal is required here: "proposal" cannot be null — submit the best complete decision the information available to you supports',
 };
 
 /** Prompt note for a readiness re-check turn: which messages arrived since the agent declared readiness. */

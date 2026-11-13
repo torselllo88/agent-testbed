@@ -202,6 +202,21 @@ OPENAI_COMPATIBLE_LAB_OLLAMA_MAX_CONCURRENT=1                  # = the server's 
   with `think: false` it should be 0.
 - Ollama's timings are recorded per call (`providerMeta.durationsMs`: total,
   model load, prompt evaluation, generation) — a cold model load shows there.
+- **Where the model was loaded** is recorded per call: right after it, the
+  testbed asks the server (`GET /api/ps`) and keeps the model's size, the part
+  in GPU memory and the context window it is loaded with
+  (`providerMeta.serving`). On a shared GPU, someone else's job can leave too
+  little memory, and Ollama then keeps part of the model in CPU memory: much
+  slower, and **not numerically the same computation** — even at temperature
+  0 with a fixed seed the answers may differ from a run fully on the GPU. Such
+  calls are flagged (`providerMeta.partialGpuOffload`) and counted
+  (`metrics.llmCalls.partialGpuOffload`, `minGpuFraction`; the batch CSV's
+  `calls_partial_gpu_offload`, `min_gpu_fraction`), so those runs can be
+  found and left out or repeated. What cannot be determined is recorded as
+  such (`providerMeta.servingUnknown`, `metrics.llmCalls.servingUnknown`):
+  `/api/ps` failed, the model was already unloaded, or another request had
+  reloaded it with a different context window in between. The check never
+  fails a call.
 - `contextLength` on an endpoint that speaks the OpenAI API is refused before
   the run starts (that server's window is fixed when the model is served).
 

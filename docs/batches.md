@@ -77,6 +77,8 @@ Per condition and overall:
   where the evaluator reports them;
 - prompts that probably did not fit a self-hosted model's context window
   (`contextOverflowSuspected`, should be 0);
+- runs with calls served while a self-hosted model was partly in CPU memory
+  (`runsWithPartialGpuOffload`, should be 0 — the batch page warns);
 - mean, median, min and max of total, agent and orchestration tokens, turns,
   public messages and active duration;
 - total and mean cost, and the number of calls of unknown cost;
@@ -96,7 +98,8 @@ provider instability is never hidden by the denominator.
   `violated`, `;`-separated), the same for the first proposal
   (`first_proposal_outcome`, `first_proposal_class`,
   `first_proposal_violated`), turns, messages, tokens, cost, serving warnings
-  (`context_overflow_suspected`, `calls_with_thinking`), duration, communication
+  (`context_overflow_suspected`, `calls_with_thinking`, `calls_partial_gpu_offload`,
+  `calls_serving_unknown`, `min_gpu_fraction`), duration, communication
   (`addressed_share`, `interaction_density`, `interaction_reciprocity`,
   `participation_evenness`, `silent_agents`, `turns_to_first_proposal`),
   intervention flag,

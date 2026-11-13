@@ -38,6 +38,13 @@ export interface ConditionAggregate {
   classifications: Record<string, number>;
   /** Calls whose prompt probably did not fit the context window, over all runs — should be 0. */
   contextOverflowSuspected: number;
+  /**
+   * Finished runs with at least one call served while the model was partly in
+   * CPU memory (Ollama) — should be 0: such runs are slower and not
+   * numerically comparable to the others. Find them by the CSV's
+   * calls_partial_gpu_offload.
+   */
+  runsWithPartialGpuOffload: number;
   outcomes: Record<string, number>;
   categories: Record<string, number>;
   intervened: number;
@@ -122,6 +129,7 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     firstProposal: { n: firsts.length, success: firstSuccess, rate: firsts.length ? firstSuccess / firsts.length : null, ci95: wilson(firstSuccess, firsts.length) },
     classifications,
     contextOverflowSuspected: metrics.reduce((s, m) => s + (m.llmCalls?.contextOverflowSuspected ?? 0), 0),
+    runsWithPartialGpuOffload: metrics.filter((m) => (m.llmCalls?.partialGpuOffload ?? 0) > 0).length,
     outcomes,
     categories,
     intervened: finished.filter((r) => r.intervened).length,

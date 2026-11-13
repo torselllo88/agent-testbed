@@ -8,7 +8,9 @@ import { answer } from "./fakeOpenAiServer.js";
  * over real HTTP, answering the testbed's protocol like the fake
  * OpenAI-compatible server (everyone ready, the Space Station's safe plan,
  * everyone approves). It records every request body as sent, so tests can
- * check what reached the server (think, options, format).
+ * check what reached the server (think, options, format). GET /api/ps reports
+ * the last model asked for as loaded, with the context window it was asked
+ * with and the GPU share in `placement`.
  *
  *   node --import tsx tests/helpers/fakeOllamaServer.ts --port 11434
  */
@@ -24,9 +26,22 @@ export interface OllamaChatBody {
   options?: Record<string, number>;
 }
 
+export interface FakePlacement {
+  /** Share of the loaded model in GPU memory (default 1). */
+  gpuFraction: number;
+  /** Overrides the context window /api/ps reports (default: the last request's num_ctx, else 4096). */
+  contextLength?: number;
+  /** Answer /api/ps with this HTTP status instead. */
+  psStatus?: number;
+  /** Report no model loaded. */
+  unloaded?: boolean;
+}
+
 export interface FakeOllamaServer {
   url: string;
   requests: OllamaChatBody[];
+  /** What GET /api/ps reports; change it any time. */
+  placement: FakePlacement;
   /** Replaces the next responses: a status and body, or extra fields merged into a normal answer. */
   respondWith(next: { status?: number; body?: unknown; extra?: Record<string, unknown> }): void;
   close(): Promise<void>;
@@ -35,6 +50,8 @@ export interface FakeOllamaServer {
 export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promise<FakeOllamaServer> {
   const requests: OllamaChatBody[] = [];
   const queued: Array<{ status?: number; body?: unknown; extra?: Record<string, unknown> }> = [];
+  const placement: FakePlacement = { gpuFraction: 1 };
+  let loaded: OllamaChatBody | null = null;
   const server = http.createServer((req, res) => {
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { "Content-Type": "application/json" });
@@ -42,6 +59,23 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
     };
     if (req.method === "GET" && req.url === "/api/tags") {
       return send(200, { models: FAKE_OLLAMA_MODELS.map((name) => ({ name, model: name, size: 1 })) });
+    }
+    if (req.method === "GET" && req.url === "/api/ps") {
+      if (placement.psStatus) return send(placement.psStatus, { error: "failure" });
+      if (!loaded || placement.unloaded) return send(200, { models: [] });
+      const size = 18_000_000_000;
+      return send(200, {
+        models: [
+          {
+            name: loaded.model,
+            model: loaded.model,
+            size,
+            size_vram: Math.round(size * placement.gpuFraction),
+            context_length: placement.contextLength ?? loaded.options?.num_ctx ?? 4096,
+            expires_at: "2000-01-01T00:30:00Z",
+          },
+        ],
+      });
     }
     if (req.method !== "POST" || req.url !== "/api/chat") return send(404, { error: "not found" });
     let raw = "";
@@ -52,6 +86,7 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
       const next = queued.shift();
       if (next?.status) return send(next.status, next.body ?? { error: "failure" });
       if (!FAKE_OLLAMA_MODELS.includes(body.model)) return send(404, { error: `model "${body.model}" not found, try pulling it first` });
+      loaded = body;
       send(200, {
         model: body.model,
         created_at: "2000-01-01T00:00:00Z",
@@ -73,6 +108,7 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
   return {
     url: `http://${host}:${address.port}`,
     requests,
+    placement,
     respondWith: (next) => queued.push(next),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

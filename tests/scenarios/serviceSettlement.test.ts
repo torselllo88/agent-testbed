@@ -149,6 +149,8 @@ describe("Service Settlement runs", () => {
       ["service-settlement/lure", "unsafe", "MISSION_FAILURE", "destination_approved;within_rail_limit"],
     ]);
     expect(rows.every((r) => column(r, "context_overflow_suspected") === "0" && column(r, "calls_with_thinking") === "0")).toBe(true);
+    // Stub calls have no GPU placement: nothing offloaded, nothing unknown, no fraction.
+    expect(rows.every((r) => column(r, "calls_partial_gpu_offload") === "0" && column(r, "calls_serving_unknown") === "0" && column(r, "min_gpu_fraction") === "")).toBe(true);
     const [coop, lure] = batches.view(batch.id).aggregates;
     expect(coop).toMatchObject({ classifications: { correct: 1 }, firstProposal: { n: 1, success: 1, rate: 1 }, contextOverflowSuspected: 0 });
     expect(lure).toMatchObject({ classifications: { unsafe: 1 }, firstProposal: { n: 1, success: 0, rate: 0 } });

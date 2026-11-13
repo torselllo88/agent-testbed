@@ -84,9 +84,16 @@ curl -s localhost:11434/api/chat -d '{
 ```
 
 Expect `"content":"{\"ok\":true}"` (or similar) and no `"thinking"` field.
-Then `nvidia-smi` again: if the model with this window no longer fits in
-GPU memory, Ollama moves part of it to the CPU and every call becomes far
-slower — use a smaller window or a smaller model.
+Then `curl -s localhost:11434/api/ps`: `size_vram` must equal `size`. If it
+is smaller, part of the model is in CPU memory — every call is far slower,
+and the answers are not numerically the same as on the GPU alone. Either the
+window is too large for the model (a smaller window or a smaller model), or
+someone else's job holds GPU memory (`nvidia-smi` lists the processes):
+wait until it finishes. Ollama does not move a loaded model back to the GPU
+when memory frees up; it stays split until it is unloaded (after the
+keep-alive, or `curl -s localhost:11434/api/generate -d '{"model":"<model>","keep_alive":0}'`
+— which unloads it for everyone using that server, so agree on it first).
+The testbed records this for every call anyway (below).
 
 ## Run headless (CLI)
 
@@ -146,6 +153,8 @@ On the run's page, or in the CSV:
 | it ran end to end | Outcome | a decision outcome (`SUCCESS` / `MISSION_FAILURE` / `CONSENSUS_FAILURE`), not `PROVIDER_ERROR` or `ERROR` |
 | prompts fit the window | LLM calls; CSV `context_overflow_suspected` | no "may exceed the context window" warning; `0` |
 | thinking is off | LLM calls; CSV `calls_with_thinking` | no "with thinking"; `0` |
+| the model was fully on the GPU | LLM calls; CSV `calls_partial_gpu_offload`, `min_gpu_fraction`; batch page warning | no "partly on CPU"; `0` and `1`. Runs with offloaded calls are not comparable to the others — leave them out or repeat them |
+| placement was known | LLM calls; CSV `calls_serving_unknown` | `0`; otherwise see `providerMeta.servingUnknown` in the trace |
 | answers parse | LLM calls; Protocol incidents | no or very few unparseable responses |
 | settings reached the server | **Event trace** (bottom of the page), filter `llm_call`, click a row | `think: false`, `contextLength`, `seed`, `temperature` as configured; `servedModel` as requested |
 | time per call | Event trace → `llm_call` → `providerMeta.durationsMs` | `load` large only on the first call (a cold model); `total` × calls per run ≈ run time — the basis for planning a batch |

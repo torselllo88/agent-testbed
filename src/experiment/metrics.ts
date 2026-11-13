@@ -34,6 +34,16 @@ export interface ExperimentMetrics {
     contextOverflowSuspected: number;
     /** Calls on which the model reported thinking (e.g. think was meant to be off). */
     withThinking: number;
+    /**
+     * Ollama: calls served while part of the model was in CPU memory (GET
+     * /api/ps right after the call) — slower, and not numerically the same
+     * computation as fully on the GPU, so not comparable run to run.
+     */
+    partialGpuOffload: number;
+    /** Ollama: calls whose placement could not be determined (see providerMeta.servingUnknown). */
+    servingUnknown: number;
+    /** Ollama: the smallest share of the model in GPU memory over the run's calls (1 = fully); null: no call recorded one. */
+    minGpuFraction: number | null;
   };
   routing: { decisions: number; bySource: Record<string, number>; invalidExplicitTargets: number; classifierFailures: number };
   readiness: { invalidations: number };
@@ -95,7 +105,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     passes: { total: 0, byAgent: {} },
     tokens: { agent: 0, orchestration: 0, total: 0, byAgent: {} },
     costUsd: { total: 0, agent: 0, orchestration: 0, callsWithUnknownCost: 0 },
-    llmCalls: { total: 0, failed: 0, parseFailures: 0, byPurpose: {}, contextOverflowSuspected: 0, withThinking: 0 },
+    llmCalls: { total: 0, failed: 0, parseFailures: 0, byPurpose: {}, contextOverflowSuspected: 0, withThinking: 0, partialGpuOffload: 0, servingUnknown: 0, minGpuFraction: null },
     routing: { decisions: 0, bySource: {}, invalidExplicitTargets: 0, classifierFailures: 0 },
     readiness: { invalidations: 0 },
     proposals: { attempts: 0, formatRejections: 0, declined: 0, frozen: 0, final: null, evaluated: [], first: null },
@@ -160,6 +170,12 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         const meta = (p.providerMeta ?? {}) as Record<string, unknown>;
         if (meta.contextOverflowSuspected === true) m.llmCalls.contextOverflowSuspected += 1;
         if (typeof meta.thinking === "string" && meta.thinking.trim()) m.llmCalls.withThinking += 1;
+        if (meta.partialGpuOffload === true) m.llmCalls.partialGpuOffload += 1;
+        if (typeof meta.servingUnknown === "string") m.llmCalls.servingUnknown += 1;
+        const gpuFraction = (meta.serving as { gpuFraction?: unknown } | null | undefined)?.gpuFraction;
+        if (typeof gpuFraction === "number" && typeof meta.servingUnknown !== "string") {
+          m.llmCalls.minGpuFraction = Math.min(m.llmCalls.minGpuFraction ?? 1, gpuFraction);
+        }
         const usage = p.usage as TokenUsage | null;
         const tokens = usage ? usage.promptTokens + usage.completionTokens : 0;
         const cost = typeof p.costUsd === "number" ? p.costUsd : null;

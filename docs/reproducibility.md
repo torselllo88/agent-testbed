@@ -71,7 +71,7 @@ Event types, in the order they typically appear:
 | `phase_changed` | from, to, why (e.g. `discussionEnd: all_ready`) |
 | `routing_decision` | chosen agent, source, reason, details (invalid target, classifier failure) |
 | `turn_started` / `turn_completed` | turn number, kind, result |
-| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, a self-hosted endpoint's serving options as sent (`think`, `contextLength`) and, for Ollama, its timings, thinking the model did anyway and a context-overflow warning (`providerMeta`), requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown) — for a failed attempt too, when the provider billed it (e.g. an upstream failure mid-response), duration, request-queue wait, parse result, temperature, seed |
+| `llm_call` | **every** provider attempt, including retries, failed and aborted ones: full rendered prompt, raw response, requested **and served** model, a self-hosted endpoint's serving options as sent (`think`, `contextLength`) and, for Ollama, its timings, thinking the model did anyway, a context-overflow warning and where the model was loaded — the share in GPU memory, from `/api/ps` after the call (`providerMeta`), requested and effective OpenRouter routing plus the backend that served the call, usage, cost and its source (reported / estimated / unknown) — for a failed attempt too, when the provider billed it (e.g. an upstream failure mid-response), duration, request-queue wait, parse result, temperature, seed |
 | `message_posted` | a public room message: agent, moderator notice, or narration (with its source template and language; never shown to agents) |
 | `presentation_delay` | a viewer-pacing wait before a visible message: waited, target gap, time since the previous message |
 | `extension_note` | something an add-on put on record (e.g. pacing skipped for a headless run) |
@@ -123,7 +123,10 @@ correctness. `evaluation.classification`: the scenario's class of the
 committed outcome (e.g. Service Settlement: `correct`, `unsafe`,
 `invalid`, `overcautious`). `llmCalls.contextOverflowSuspected` and
 `llmCalls.withThinking`: serving problems of self-hosted models, which
-would otherwise look like agent behavior.
+would otherwise look like agent behavior. `llmCalls.partialGpuOffload`,
+`minGpuFraction` and `servingUnknown`: whether a self-hosted model ran
+fully on the GPU — part of it in CPU memory (a shared GPU) is not the same
+computation, so a fixed seed does not make such a run comparable.
 
 They say who talked to whom, not *what* reached whom: which facts were
 shared is a scenario-specific (or semantic) question. Runs recorded before

@@ -301,7 +301,11 @@ export async function renderExperiment(experimentId) {
           <dt>Cost (est.)</dt><dd>${formatCost(s.costUsd.total)} (agent ${formatCost(s.costUsd.agent)}, orchestration ${formatCost(s.costUsd.orchestration)})${s.costUsd.callsWithUnknownCost ? ` — ${s.costUsd.callsWithUnknownCost} call(s) of unknown cost` : ""}</dd>
           <dt>LLM calls</dt><dd>${s.llmCalls.total} (${s.llmCalls.failed} failed, ${s.llmCalls.parseFailures} unparseable)${
             s.llmCalls.contextOverflowSuspected ? ` ${badge(`${s.llmCalls.contextOverflowSuspected} prompt(s) may exceed the context window`, "bad")}` : ""
-          }${s.llmCalls.withThinking ? ` ${badge(`${s.llmCalls.withThinking} with thinking`, "neutral")}` : ""}</dd>
+          }${s.llmCalls.withThinking ? ` ${badge(`${s.llmCalls.withThinking} with thinking`, "neutral")}` : ""}${
+            s.llmCalls.partialGpuOffload
+              ? ` ${badge(`${s.llmCalls.partialGpuOffload} partly on CPU (min ${Math.round((s.llmCalls.minGpuFraction ?? 0) * 100)}% on GPU)`, "bad")}`
+              : ""
+          }${s.llmCalls.servingUnknown ? ` ${badge(`${s.llmCalls.servingUnknown} with unknown GPU placement`, "neutral")}` : ""}</dd>
           <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall${s.durationMs.presentation ? `, ${formatDuration(s.durationMs.presentation)} presentation pacing` : ""}${s.durationMs.paused ? `, ${formatDuration(s.durationMs.paused)} paused` : ""}</dd>
           <dt>Language</dt><dd>${escapeHtml(state.experiment.config.conversation?.language ?? "en")}</dd>
           <dt>Task definition</dt><dd class="muted small">${escapeHtml((state.experiment.taskDefinitionHash ?? "—").slice(0, 16))}</dd>

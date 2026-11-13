@@ -78,6 +78,14 @@ export async function renderBatch(batchId) {
           overall.providerErrors
             ? `<div class="warning-banner">${overall.providerErrors} run(s) ended in PROVIDER_ERROR and are excluded from the success and consensus rates — this reflects provider instability, not coordination. Check it before comparing conditions.</div>`
             : ""
+        }${
+          overall.runsWithPartialGpuOffload
+            ? `<div class="warning-banner">${overall.runsWithPartialGpuOffload} run(s) had calls served while the model was partly in CPU memory (the GPU was shared): slower, and not numerically the same computation as on the GPU alone. Find them by the CSV column calls_partial_gpu_offload before comparing conditions.</div>`
+            : ""
+        }${
+          overall.contextOverflowSuspected
+            ? `<div class="warning-banner">${overall.contextOverflowSuspected} call(s) had a prompt that may not have fit the context window — the start of the prompt may have been cut off. See the CSV column context_overflow_suspected.</div>`
+            : ""
         }
         <p class="muted small">Success and consensus rates are computed over evaluable runs only; excluded runs (provider errors, internal errors, interruptions, operator stops) are listed in their own column. Brackets: 95% Wilson interval. Tokens: median total (agent + orchestration).</p>
         <table>

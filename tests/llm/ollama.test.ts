@@ -5,6 +5,8 @@ import { ConfigNotRunnableError, ExperimentRunner } from "../../src/experiment/r
 import { contextOverflowSuspected, OllamaProvider } from "../../src/llm/ollamaProvider.js";
 import { OpenAiCompatibleProvider } from "../../src/llm/openAiCompatibleProvider.js";
 import { ProviderError } from "../../src/llm/provider.js";
+import { aggregate } from "../../src/batch/aggregate.js";
+import type { ExperimentRecord } from "../../src/persistence/experimentRepository.js";
 import { isSelfHostedProvider, ProviderRegistry } from "../../src/llm/registry.js";
 import { StubProvider } from "../../src/llm/stubProvider.js";
 import { createInMemoryDb } from "../../src/persistence/db.js";
@@ -61,6 +63,35 @@ describe("Ollama provider", () => {
     });
     expect(result.providerMeta).not.toHaveProperty("contextOverflowSuspected");
     expect(result.providerMeta).not.toHaveProperty("thinking");
+    // Where the model was loaded, from /api/ps right after the call.
+    expect(result.providerMeta).toMatchObject({ serving: { size: 18_000_000_000, sizeVram: 18_000_000_000, gpuFraction: 1, contextLength: 8192 } });
+    expect(result.providerMeta).not.toHaveProperty("partialGpuOffload");
+    expect(result.providerMeta).not.toHaveProperty("servingUnknown");
+  });
+
+  it("records a model partly in CPU memory, and what it cannot determine — without failing the call", async () => {
+    const server = await fakeServer();
+    const provider = new OllamaProvider({ name: "lab-ollama", baseUrl: server.url });
+    const call = () => provider.complete({ model: FAKE_OLLAMA_MODELS[0]!, messages: MESSAGES, contextLength: 8192 });
+
+    server.placement.gpuFraction = 0.733;
+    expect((await call()).providerMeta).toMatchObject({ partialGpuOffload: true, serving: { gpuFraction: 0.733, sizeVram: 13_194_000_000 } });
+
+    // Reloaded by someone else's request with another window: the snapshot is not of this call's load.
+    server.placement.contextLength = 32768;
+    const reloaded = (await call()).providerMeta!;
+    expect(reloaded).toMatchObject({ serving: { contextLength: 32768 }, servingUnknown: expect.stringMatching(/reloaded by another request/) });
+    expect(reloaded).not.toHaveProperty("partialGpuOffload");
+    delete server.placement.contextLength;
+
+    server.placement.unloaded = true;
+    expect((await call()).providerMeta).toMatchObject({ serving: null, servingUnknown: expect.stringMatching(/was not loaded/) });
+    server.placement.unloaded = false;
+
+    server.placement.psStatus = 500;
+    const failed = await call();
+    expect(failed.text).not.toBe("");
+    expect(failed.providerMeta).toMatchObject({ serving: null, servingUnknown: "GET /api/ps: HTTP 500" });
   });
 
   it("leaves out what is not configured, and keeps thinking the model did anyway apart from the answer", async () => {
@@ -185,7 +216,7 @@ describe("a run on an Ollama endpoint", () => {
     const calls = new EventRepository(deps.db).list(runner.id).filter((e) => e.type === "llm_call");
     expect(calls.every((c) => c.payload.think === false && c.payload.contextLength === 8192)).toBe(true);
     expect(calls[0]!.payload.providerMeta).toMatchObject({ api: "ollama", contextLength: 8192 });
-    expect(metrics.llmCalls).toMatchObject({ contextOverflowSuspected: 0, withThinking: 0 });
+    expect(metrics.llmCalls).toMatchObject({ contextOverflowSuspected: 0, withThinking: 0, partialGpuOffload: 0, servingUnknown: 0, minGpuFraction: 1 });
     expect(isSelfHostedProvider(deps.providers.get("openai-compatible:lab-ollama"))).toBe(true);
     expect(deps.providers.status().find((s) => s.id === "openai-compatible:lab-ollama")?.endpoint).toMatchObject({ api: "ollama" });
   });
@@ -194,6 +225,16 @@ describe("a run on an Ollama endpoint", () => {
     const server = await fakeServer();
     const metrics = await new ExperimentRunner(harness(server), ollamaConfig({ contextLength: 300 })).run();
     expect(metrics.llmCalls.contextOverflowSuspected).toBe(metrics.llmCalls.total);
+  });
+
+  it("calls served partly from CPU memory are counted, and the batch aggregate counts the run", async () => {
+    const server = await fakeServer();
+    server.placement.gpuFraction = 0.7;
+    const metrics = await new ExperimentRunner(harness(server), ollamaConfig()).run();
+    expect(metrics.termination?.outcome).toBe("SUCCESS");
+    expect(metrics.llmCalls).toMatchObject({ partialGpuOffload: metrics.llmCalls.total, servingUnknown: 0, minGpuFraction: 0.7 });
+    const record = { finishedAt: "x", summary: metrics, status: "FINISHED", outcome: "SUCCESS", intervened: false } as unknown as ExperimentRecord;
+    expect(aggregate("c", [record]).runsWithPartialGpuOffload).toBe(1);
   });
 
   it("contextLength on an endpoint that speaks the OpenAI API is refused before the run starts", () => {

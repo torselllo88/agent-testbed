@@ -24,6 +24,37 @@ interface OllamaChatResponse {
 
 const ms = (ns: number | undefined) => (typeof ns === "number" ? Math.round(ns / 1e6) : null);
 
+/** Ollama's /api/ps entry for a loaded model (the fields the testbed reads). */
+interface OllamaPsModel {
+  name?: string;
+  model?: string;
+  size?: number;
+  size_vram?: number;
+  context_length?: number;
+}
+
+/**
+ * Where the model that answered a call was loaded, from GET /api/ps right
+ * after the call: its size, the part of it in GPU memory, and the context
+ * window it was loaded with. A model only partly in GPU memory (the GPU is
+ * shared, and someone else's job took the rest) runs much slower and — the
+ * reason it is recorded — is not numerically the same computation as fully on
+ * the GPU, so even at temperature 0 with a fixed seed it may answer
+ * differently.
+ */
+export interface OllamaServing {
+  size: number;
+  sizeVram: number;
+  /** sizeVram / size, 3 decimals; 1 = fully in GPU memory. */
+  gpuFraction: number;
+  contextLength: number | null;
+}
+
+/** /api/ps is local and cheap; a slow one must not hold up the run. */
+const PS_TIMEOUT_MS = 5_000;
+
+const withTag = (model: string) => (model.includes(":") ? model : `${model}:latest`);
+
 /**
  * Whether a prompt probably did not fit the context window. Ollama truncates
  * an over-long prompt from the start without an error — dropping the system
@@ -101,6 +132,7 @@ export class OllamaProvider implements LlmProvider {
     const completionTokens = data.eval_count;
     const thinking = data.message?.thinking;
     const overflow = contextOverflowSuspected(request.messages, request.contextLength, promptTokens);
+    const placement = await this.serving(data.model || request.model, request.contextLength, request.signal);
     return {
       text: data.message?.content ?? "",
       requestedModel: request.model,
@@ -115,11 +147,45 @@ export class OllamaProvider implements LlmProvider {
         api: "ollama",
         contextLength: request.contextLength ?? null,
         ...(overflow ? { contextOverflowSuspected: true } : {}),
+        ...placement,
         // Thinking the model did anyway (e.g. think was not switched off): kept, never parsed as the answer.
         ...(thinking ? { thinking } : {}),
         durationsMs: { total: ms(data.total_duration), load: ms(data.load_duration), promptEval: ms(data.prompt_eval_duration), eval: ms(data.eval_duration) },
       },
     };
+  }
+
+  /**
+   * Where the model was loaded when the call finished (GET /api/ps). Never
+   * fails the call: what cannot be determined is recorded as such
+   * (servingUnknown) — the server did not answer, the model was already
+   * unloaded, or another request had reloaded it with a different context
+   * window in between (so the snapshot is not of the load that served this call).
+   */
+  private async serving(model: string, contextLength: number | undefined, signal: AbortSignal | undefined): Promise<Record<string, unknown>> {
+    let models: OllamaPsModel[];
+    try {
+      const timeout = AbortSignal.timeout(PS_TIMEOUT_MS);
+      const res = await this.fetch(`${this.root}/api/ps`, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+      if (!res.ok) return { serving: null, servingUnknown: `GET /api/ps: HTTP ${res.status}` };
+      models = ((await res.json()) as { models?: OllamaPsModel[] }).models ?? [];
+    } catch (err) {
+      return { serving: null, servingUnknown: `GET /api/ps failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    const entry = models.find((m) => [m.name, m.model].some((n) => n && withTag(n) === withTag(model)));
+    if (!entry || typeof entry.size !== "number" || typeof entry.size_vram !== "number" || entry.size <= 0) {
+      return { serving: null, servingUnknown: `${model} was not loaded when the call finished` };
+    }
+    const serving: OllamaServing = {
+      size: entry.size,
+      sizeVram: entry.size_vram,
+      gpuFraction: Math.round((Math.min(entry.size_vram, entry.size) / entry.size) * 1000) / 1000,
+      contextLength: typeof entry.context_length === "number" ? entry.context_length : null,
+    };
+    if (contextLength !== undefined && serving.contextLength !== null && serving.contextLength !== contextLength) {
+      return { serving, servingUnknown: `loaded with a ${serving.contextLength}-token context window, the call asked for ${contextLength}: reloaded by another request in between` };
+    }
+    return { serving, ...(serving.sizeVram < serving.size ? { partialGpuOffload: true } : {}) };
   }
 
   /** The models the server has pulled (GET /api/tags) — offered in the editor. */

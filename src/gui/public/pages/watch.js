@@ -236,6 +236,7 @@ export async function renderWatch(experimentId) {
     if (p.sender.kind === "narrator") {
       return `<div class="w-narration"><div class="w-narrator">${escapeHtml(p.sender.name)}</div><div class="w-text">${escapeHtml(p.text)}</div></div>`;
     }
+    if (p.sender.kind === "system" && p.notice?.copy) return "";
     if (p.sender.kind === "system" && p.notice?.kind === "proposal_submitted") {
       const frozen = events.find((e) => e.type === "proposal_frozen" && e.payload.id === p.notice.proposalId);
       const text = frozen ? renderProposal(config, frozen.payload, labelOf(frozen.payload.proposerId).name) : null;

@@ -50,7 +50,15 @@ export const unanimity = thresholdRule("unanimity", (eligible) => eligible);
 /** Strictly more than half of the eligible agents must approve (a tie fails). */
 export const majority = thresholdRule("majority", (eligible) => Math.floor(eligible / 2) + 1);
 
-export const CONSENSUS_RULES = { unanimity, majority } as const;
+/** No vote: the proposer's proposal is the decision. The runner never asks this rule to decide. */
+export const none: ConsensusRule = {
+  id: "none",
+  decide() {
+    throw new Error('consensus rule "none" takes no votes');
+  },
+};
+
+export const CONSENSUS_RULES = { unanimity, majority, none } as const;
 
 export function createConsensusRule(config: ConsensusConfig): ConsensusRule {
   return CONSENSUS_RULES[config.rule];

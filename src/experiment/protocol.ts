@@ -3,6 +3,7 @@ import type { RoomMessage } from "../transport/transport.js";
 import type { AgentConfig, ExperimentConfig } from "./config.js";
 import { languageName } from "./languages.js";
 import { toJsonSchema } from "./jsonSchema.js";
+import { resolveLayout } from "./topology.js";
 
 /**
  * The testbed's agent protocol: what an agent is told about the room, and
@@ -113,10 +114,41 @@ function languageInstruction(code: string): string {
   );
 }
 
-export function renderSystemPrompt(config: ExperimentConfig, agent: AgentConfig): string {
+/** The agent's neighbours in a communication topology, as the prompt names them; null = complete (everyone hears everyone). */
+function neighbourList(config: ExperimentConfig, agent: AgentConfig): string | null {
+  const neighbours = resolveLayout(config).neighbours;
+  if (!neighbours) return null;
+  const names = new Map(config.agents.map((a) => [a.id, a.name]));
+  const list = neighbours[agent.id] ?? [];
+  return list.length ? list.map((id) => `${names.get(id) ?? id} (${id})`).join(", ") : "none";
+}
+
+/** A single agent deciding alone (calibration: full or public information) — no room, no discussion, no vote. */
+const isSolo = (config: ExperimentConfig) => config.agents.length === 1;
+
+function renderSoloSystemPrompt(config: ExperimentConfig, agent: AgentConfig): string {
   return [
     `You are ${agent.name} (id "${agent.id}"), role: ${agent.role}.`,
-    `You are one of ${config.agents.length} participants in a shared discussion room:`,
+    agent.objective.trim() ? `Your objective: ${agent.objective.trim()}` : "",
+    agent.persona.trim() ? `Your character — let it shape how you communicate and react, never what facts you report:\n${agent.persona.trim()}` : "",
+    agent.systemPrompt.trim(),
+    "How the decision works:\n- You decide alone: there is no discussion and no vote. You are asked once for the final decision, on the information given to you.",
+    `Language: write your rationale in ${languageName(config.conversation.language)} (${config.conversation.language}). JSON field names, participant ids and enum values (the values the schema lists) stay exactly as specified; never translate them.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function renderSystemPrompt(config: ExperimentConfig, agent: AgentConfig): string {
+  if (isSolo(config)) return renderSoloSystemPrompt(config, agent);
+  // A topology other than complete (communication.topology) changes how the room is described; complete keeps every text as it was.
+  const network = neighbourList(config, agent);
+  const fixed = config.discussion !== undefined;
+  return [
+    `You are ${agent.name} (id "${agent.id}"), role: ${agent.role}.`,
+    network === null
+      ? `You are one of ${config.agents.length} participants in a shared discussion room:`
+      : `You are one of ${config.agents.length} participants in a discussion:`,
     roster(config, agent),
     agent.objective.trim() ? `Your objective: ${agent.objective.trim()}` : "",
     agent.persona.trim()
@@ -127,14 +159,33 @@ ${agent.persona.trim()}`
     [
       "How the room works:",
       "- Participants speak one at a time. On your turn you either post ONE message to the room, or PASS if you have nothing useful to add.",
-      "- Everything you post is visible to every participant. Your private information is visible only to you — share what is relevant, because others cannot see it otherwise.",
-      "- To address a specific participant, set \"target\" to their id; they are likely to speak next. Use null if no one in particular.",
+      network === null
+        ? "- Everything you post is visible to every participant. Your private information is visible only to you — share what is relevant, because others cannot see it otherwise."
+        : `- Messages travel only between neighbours in a communication network. Your neighbours: ${network}. Everything you post reaches only them, and you see only what they post, plus the moderator's notices. Your private information is visible only to you — share what is relevant, because others cannot see it otherwise.`,
+      network === null && !fixed
+        ? "- To address a specific participant, set \"target\" to their id; they are likely to speak next. Use null if no one in particular."
+        : `- To address a specific participant, set "target" to their id, or null if no one in particular. Addressing someone does not change the speaking order${network === null ? "" : " or who receives your message"}.`,
       config.discussion
         ? "- Set \"readyToCommit\" to true when you believe the room already has enough information to agree on a final decision. The discussion lasts a fixed number of rounds — every participant speaks once per round, always in the same order — and does not end early when everyone is ready."
         : "- Set \"readyToCommit\" to true only when you believe the room already has enough information to agree on a final decision. Readiness you declared becomes stale when someone posts new information, and you will be asked again.",
-      "- When the discussion ends, one participant is asked to submit a formal proposal, and then every participant votes on exactly that proposal.",
-      "- Be concise. Do not repeat information that has already been established.",
-    ].join("\n"),
+      config.consensus.rule === "none"
+        ? "- When the discussion ends, one participant is asked to submit the group's final decision. There is no vote: that submission is the decision."
+        : "- When the discussion ends, one participant is asked to submit a formal proposal, and then every participant votes on exactly that proposal.",
+      // In a network, "already established" differs from agent to agent: the line would discourage passing information on.
+      network === null ? "- Be concise. Do not repeat information that has already been established." : "- Be concise.",
+    ]
+      .join("\n")
+      .split("\n")
+      // In a network there is no shared room: the group, not "the room", has the information.
+      .map((line) =>
+        network === null
+          ? line
+          : line
+              .replace("How the room works:", "How the discussion works:")
+              .replace("post ONE message to the room", "post ONE message")
+              .replace("the room already has enough information", "the group already has enough information")
+      )
+      .join("\n"),
     languageInstruction(config.conversation.language),
   ]
     .filter(Boolean)
@@ -146,7 +197,11 @@ function contextSections(config: ExperimentConfig, agent: AgentConfig, transcrip
     `TASK:\n${config.task.description.trim()}`,
     config.task.sharedContext.trim() ? `SHARED CONTEXT (known to everyone):\n${config.task.sharedContext.trim()}` : "",
     `YOUR PRIVATE INFORMATION (only you can see this):\n${agent.privateContext.trim() || "(none)"}`,
-    `ROOM TRANSCRIPT (oldest first):\n${renderTranscript(transcript, config, agent.id)}`,
+    isSolo(config)
+      ? ""
+      : resolveLayout(config).neighbours
+      ? `MESSAGES YOU CAN SEE (oldest first — yours, your neighbours' and the moderator's):\n${renderTranscript(transcript, config, agent.id)}`
+      : `ROOM TRANSCRIPT (oldest first):\n${renderTranscript(transcript, config, agent.id)}`,
   ].filter(Boolean);
 }
 
@@ -181,8 +236,14 @@ export function renderProposalPrompt(
 ): string {
   return [
     ...contextSections(config, agent, transcript),
-    "The DISCUSSION phase has ended. You have been asked to submit the room's final proposal. Every participant will vote on exactly what you submit.",
-    'Put the complete decision in "proposal", using exactly the structure required by the schema. Put a short explanation for the other participants in "rationale". ' +
+    isSolo(config)
+      ? "Submit the final decision now. There is no vote: what you submit is the decision."
+      : config.consensus.rule === "none"
+      ? "The DISCUSSION phase has ended. You have been asked to submit the group's final decision. There is no vote: what you submit is the decision."
+      : "The DISCUSSION phase has ended. You have been asked to submit the room's final proposal. Every participant will vote on exactly what you submit.",
+    (config.consensus.rule === "none"
+      ? 'Put the complete decision in "proposal", using exactly the structure required by the schema. Put a short explanation of it in "rationale". '
+      : 'Put the complete decision in "proposal", using exactly the structure required by the schema. Put a short explanation for the other participants in "rationale". ') +
       (config.decision.proposalRequired
         ? "A proposal is required: submit the best complete decision the information available to you supports."
         : 'If you believe no acceptable proposal can be made yet, set "proposal" to null and explain why in "rationale".'),
@@ -197,12 +258,15 @@ export function renderVotePrompt(
   config: ExperimentConfig,
   agent: AgentConfig,
   transcript: RoomMessage[],
-  proposal: { proposerName: string; rationale: string; body: unknown }
+  /** rationale null: it did not reach this voter (a topology: it travels only to the proposer's neighbours). */
+  proposal: { proposerName: string; rationale: string | null; body: unknown }
 ): string {
   return [
     ...contextSections(config, agent, transcript),
     `VOTING phase. ${proposal.proposerName} submitted this final proposal:\n${JSON.stringify(proposal.body, null, 2)}`,
-    `Proposer's rationale: ${proposal.rationale || "(none)"}`,
+    proposal.rationale === null
+      ? "Proposer's rationale: (not shown to you — it reached only the proposer's neighbours)"
+      : `Proposer's rationale: ${proposal.rationale || "(none)"}`,
     "Vote independently on exactly this proposal, using your private information. Approve only if you believe it is correct and safe as written. You cannot see anyone else's vote.",
     jsonInstruction(VOTE_JSON_SCHEMA),
   ]

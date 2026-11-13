@@ -10,6 +10,11 @@ const PATH_PRESETS = [
   ["limits.agentTokenLimit", "[20000, null]"],
   ["agentVisibility.discussionBudget", "[false, true]"],
   ["decision.maxProposalAttempts", "[1, 2]"],
+  ["discussion.fixedRounds", "[2, 3]"],
+  ["communication", '[{"topology": {"type": "complete"}}, {"topology": {"type": "ring"}}]'],
+  ["randomization", '[{"seed": 1}, {"seed": 2}, {"seed": 3}]'],
+  ["$instance", '["dev-01"]'], // task instances of the base scenario's family (or inline { "id", "params", "seed" })
+  ["$solo", '["full", "public"]'], // calibration: the proposer alone, with every agent's information or only its own
   ["$agents", '[["agent_a", "agent_b", "agent_c"], ["agent_a", "agent_b"]]'], // replace with the base scenario's agent ids
 ];
 

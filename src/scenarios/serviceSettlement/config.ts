@@ -31,7 +31,8 @@ export function serviceSettlementConfig(params: SettlementParams = SETTLEMENT_DE
       ...roles[id],
       model: { provider: "stub", model: agentModel, structuredOutput: "native", temperature: 0, seed: 1, maxOutputTokens: 400 },
     })),
-    scheduler: { type: "round_robin", startAgentId: "operations" },
+    // Config order — Operations first. No startAgentId, so a batch can draw the order instead (randomization.seed).
+    scheduler: { type: "round_robin" },
     consensus: { rule: "unanimity" },
     decision: { proposerId: "operations", maxProposalAttempts: 1, maxProposalFormatRetries: 1, proposalRequired: true },
     discussion: { fixedRounds: 3 },

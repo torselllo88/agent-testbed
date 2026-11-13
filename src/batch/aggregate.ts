@@ -27,6 +27,7 @@ export interface ConditionAggregate {
   successRate: number | null;
   /** Wilson score interval, 95%. */
   successRateCI95: [number, number] | null;
+  /** Over evaluable runs that had a vote; null when none had (consensus rule "none"). */
   consensusRate: number | null;
   /**
    * First-proposal correctness: among evaluable runs whose first proposal was
@@ -82,6 +83,7 @@ export function wilson(successes: number, n: number, z = 1.96): [number, number]
 }
 
 const inc = (m: Record<string, number>, k: string) => (m[k] = (m[k] ?? 0) + 1);
+const rate = <T>(items: T[], hit: (item: T) => boolean): number | null => (items.length ? items.filter(hit).length / items.length : null);
 
 /**
  * Aggregates finished runs. Aborted runs (provider errors, interruptions,
@@ -125,7 +127,7 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     success,
     successRate: evaluable.length ? success / evaluable.length : null,
     successRateCI95: wilson(success, evaluable.length),
-    consensusRate: evaluable.length ? evaluableMetrics.filter((m) => m.consensusReached).length / evaluable.length : null,
+    consensusRate: rate(evaluableMetrics.filter((m) => m.consensusRule !== "none"), (m) => m.consensusReached),
     firstProposal: { n: firsts.length, success: firstSuccess, rate: firsts.length ? firstSuccess / firsts.length : null, ci95: wilson(firstSuccess, firsts.length) },
     classifications,
     contextOverflowSuspected: metrics.reduce((s, m) => s + (m.llmCalls?.contextOverflowSuspected ?? 0), 0),

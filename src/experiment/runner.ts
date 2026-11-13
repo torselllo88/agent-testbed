@@ -53,6 +53,7 @@ import {
   VoteResponseSchema,
 } from "./protocol.js";
 import { ReadinessTracker, type AgentReadiness, type ReadinessChange } from "./readiness.js";
+import { audienceOf, hears, resolveLayout, temporalReach, type Layout } from "./topology.js";
 
 export interface RunnerDeps {
   db: Db;
@@ -181,6 +182,10 @@ export class ExperimentRunner {
   private readonly transport: Transport;
   private readonly readiness: ReadinessTracker;
   private readonly agents: Map<string, AgentConfig>;
+  /** Speaking order and who hears whom (communication.topology, randomization). */
+  private readonly layout: Layout;
+  /** The agents each restricted message reached, by transport message id; a message not listed reached everyone. */
+  private readonly audiences = new Map<string, readonly string[]>();
   private readonly abort = new AbortController();
 
   private phase: Phase = Phase.INITIALIZING;
@@ -239,6 +244,7 @@ export class ExperimentRunner {
     this.id = options.id ?? randomUUID();
     this.strings = protocolStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
+    this.layout = resolveLayout(this.config);
 
     this.evaluator = runnable.evaluator;
     this.evaluatorParams = this.config.evaluator.params;
@@ -444,6 +450,7 @@ export class ExperimentRunner {
       scheduler: this.scheduler.type,
       consensusRule: this.consensus.id,
       agents: config.agents.map((a) => ({ id: a.id, name: a.name, role: a.role, model: a.model })),
+      layout: this.layoutRecord(),
     });
     this.budget.start();
 
@@ -458,6 +465,8 @@ export class ExperimentRunner {
       await this.runDiscussion();
 
       const proposal = await this.runProposal();
+      // No vote: the proposer's proposal is the decision.
+      if (proposal !== "declined" && this.consensus.id === "none") return this.runEvaluation(proposal, false);
       if (proposal !== "declined") {
         // One step, but N concurrent LLM calls — budget checks happen before and after it, not between the calls.
         this.transition(Phase.VOTING, { proposalId: proposal.id, parallelCalls: config.agents.length });
@@ -567,7 +576,8 @@ export class ExperimentRunner {
     const agentTurn = this.discussionTurnsByAgent.get(agentId) ?? 0;
     this.discussionTurnsByAgent.set(agentId, agentTurn + 1);
 
-    const transcript = await this.agentHistory();
+    const view = await this.viewOf(agentId);
+    const transcript = view.messages;
     const result = await this.llm.call({
       category: "agent",
       purpose: "discussion",
@@ -582,7 +592,7 @@ export class ExperimentRunner {
             discussionTurnLimit: this.discussion.turnLimit,
             proposalAttempt: this.proposalAttempt,
             maxProposalAttempts: this.config.decision.maxProposalAttempts,
-          }, readinessRecheck ? readinessRecheckNote(transcript, agentId, declaredAt) : undefined),
+          }, readinessRecheck ? readinessRecheckNote(transcript, agentId, view.localIndex(declaredAt)) : undefined),
         },
       ],
       response: { name: "agent_turn", schema: TurnResponseSchema, jsonSchema: TURN_JSON_SCHEMA },
@@ -607,11 +617,13 @@ export class ExperimentRunner {
       agentId
     );
 
-    let atIndex = transcript.at(-1)?.index ?? 0;
+    // Readiness is tied to positions in the whole transcript (global indexes), whatever this agent could see.
+    let atIndex = view.lastGlobalIndex;
     if (!pass) {
-      const message = await this.publish({ kind: "agent", agentId }, response.message.trim());
+      const audience = audienceOf(this.layout, agentId);
+      const message = await this.publish({ kind: "agent", agentId }, response.message.trim(), {}, audience);
       atIndex = message.index;
-      this.logReadinessChanges(this.readiness.onSubstantiveMessage(agentId, message.index), "invalidated", message.index);
+      this.logReadinessChanges(this.readiness.onSubstantiveMessage(agentId, message.index, audience), "invalidated", message.index);
     }
     const change = this.readiness.declare(agentId, response.readyToCommit, atIndex);
     if (change) this.logReadinessChanges([change], "declared", atIndex);
@@ -634,7 +646,7 @@ export class ExperimentRunner {
       this.enforceHardLimits(1);
 
       const turn = this.startTurn(proposer.id, "proposal");
-      const transcript = await this.agentHistory();
+      const transcript = (await this.viewOf(proposer.id)).messages;
       const result = await this.llm.call({
         category: "agent",
         purpose: "proposal",
@@ -672,7 +684,7 @@ export class ExperimentRunner {
       }
       if (envelope.proposal === null) {
         this.log.append(EventType.PROPOSAL_DECLINED, { attempt: this.proposalAttempt, rationale: envelope.rationale }, proposer.id);
-        if (envelope.rationale.trim()) await this.publish({ kind: "agent", agentId: proposer.id }, envelope.rationale.trim());
+        if (envelope.rationale.trim()) await this.publish({ kind: "agent", agentId: proposer.id }, envelope.rationale.trim(), {}, audienceOf(this.layout, proposer.id));
         this.completeTurn(proposer.id, turn, { kind: "proposal", result: "declined" });
         return "declined";
       }
@@ -703,17 +715,21 @@ export class ExperimentRunner {
       this.log.append(EventType.PROPOSAL_FROZEN, { ...frozen }, proposer.id);
       this.frozenProposals.push(frozen);
       this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen" });
-      await this.publish(
-        { kind: "system" },
-        this.strings.proposalSubmitted({
-          attempt: frozen.attempt,
-          proposerName: proposer.name,
-          body: JSON.stringify(frozen.body),
-          rationale: frozen.rationale,
-        }),
-        // Machine-readable: which protocol notice this is, so projections (viewer) can recognize it.
-        { notice: { kind: "proposal_submitted", proposalId: frozen.id } }
-      );
+      const voting = this.consensus.id !== "none";
+      const submitted = (rationale: string) =>
+        this.strings.proposalSubmitted({ attempt: frozen.attempt, proposerName: proposer.name, body: JSON.stringify(frozen.body), rationale, ...(voting ? {} : { voting }) });
+      // Machine-readable: which protocol notice this is, so projections (viewer) can recognize it.
+      const notice = { kind: "proposal_submitted", proposalId: frozen.id };
+      const reached = audienceOf(this.layout, proposer.id);
+      if (!reached) {
+        await this.publish({ kind: "system" }, submitted(frozen.rationale), { notice });
+      } else {
+        // A topology: everyone must see what they vote on, but the free-text rationale travels along the graph only.
+        await this.publish({ kind: "system" }, submitted(frozen.rationale), { notice }, reached);
+        const others = this.config.agents.map((a) => a.id).filter((id) => !reached.includes(id));
+        // copy: the same notice once more, for the rest — projections show it once.
+        if (others.length) await this.publish({ kind: "system" }, submitted(""), { notice: { ...notice, copy: true } }, others);
+      }
       return frozen;
     }
 
@@ -733,7 +749,9 @@ export class ExperimentRunner {
     await this.checkpoint();
     this.enforceHardLimits(voters.length);
 
-    const transcript = await this.agentHistory();
+    // Each voter on its own view (the same snapshot for everyone under a complete topology).
+    const views = new Map<string, RoomMessage[]>();
+    for (const voter of voters) views.set(voter.id, (await this.viewOf(voter.id)).messages);
     const proposerName = this.agents.get(proposal.proposerId)!.name;
     const turns = voters.map((voter) => this.startTurn(voter.id, "vote"));
 
@@ -748,7 +766,11 @@ export class ExperimentRunner {
             { role: "system", content: renderSystemPrompt(this.config, voter) },
             {
               role: "user",
-              content: renderVotePrompt(this.config, voter, transcript, { proposerName, rationale: proposal.rationale, body: proposal.body }),
+              content: renderVotePrompt(this.config, voter, views.get(voter.id)!, {
+                proposerName,
+                rationale: hears(this.layout, voter.id, proposal.proposerId) ? proposal.rationale : null,
+                body: proposal.body,
+              }),
             },
           ],
           response: { name: "vote", schema: VoteResponseSchema, jsonSchema: VOTE_JSON_SCHEMA },
@@ -779,7 +801,22 @@ export class ExperimentRunner {
     this.lastConsensus = consensus;
     this.log.append(EventType.CONSENSUS_RESULT, { proposalId: proposal.id, proposalHash: proposal.hash, ...consensus, votes });
 
-    if (!consensus.reached) {
+    if (!consensus.reached && this.layout.neighbours) {
+      // A topology: the aggregate outcome goes to everyone, each free-text reason along the voter's edges only.
+      await this.publish(
+        { kind: "system" },
+        this.strings.proposalNotApproved({ attempt: proposal.attempt, approvals: consensus.approvals, eligible: consensus.eligible, rule: consensus.rule, required: consensus.required }),
+        { notice: { kind: "proposal_not_approved", proposalId: proposal.id } }
+      );
+      for (const v of votes.filter((v) => v.vote !== "APPROVE")) {
+        await this.publish(
+          { kind: "system" },
+          this.strings.voteLine({ agentName: this.agents.get(v.agentId)!.name, vote: v.vote, reason: v.reason }),
+          { notice: { kind: "vote_reason", proposalId: proposal.id, agentId: v.agentId } },
+          audienceOf(this.layout, v.agentId)
+        );
+      }
+    } else if (!consensus.reached) {
       const reasons = votes
         .filter((v) => v.vote !== "APPROVE")
         .map((v) => this.strings.voteLine({ agentName: this.agents.get(v.agentId)!.name, vote: v.vote, reason: v.reason }))
@@ -799,9 +836,9 @@ export class ExperimentRunner {
     return consensus;
   }
 
-  private runEvaluation(proposal: FrozenProposal): Termination {
+  private runEvaluation(proposal: FrozenProposal, voted = true): Termination {
     this.committedProposalId = proposal.id;
-    this.transition(Phase.COMMITTED, { proposalId: proposal.id, proposalHash: proposal.hash });
+    this.transition(Phase.COMMITTED, { proposalId: proposal.id, proposalHash: proposal.hash, ...(voted ? {} : { decidedBy: "proposer" }) });
     this.transition(Phase.EVALUATION, { evaluator: this.evaluator.id, evaluatorVersion: this.evaluator.version });
     const result = this.evaluator.evaluate(proposal.body, this.evaluatorParams);
     this.evaluation = result;
@@ -913,6 +950,42 @@ export class ExperimentRunner {
     return agentVisible(await this.transport.history()).map((m, i) => ({ ...m, index: i + 1 }));
   }
 
+  /**
+   * What one agent sees: the messages that reached it (communication.topology),
+   * numbered by position in its own view — the only numbers it ever reads.
+   * Under a complete topology this is the transcript itself. Protocol logic
+   * keeps using global indexes: lastGlobalIndex and localIndex convert.
+   */
+  private async viewOf(agentId: string): Promise<{ messages: RoomMessage[]; lastGlobalIndex: number; localIndex: (globalIndex: number | null) => number | null }> {
+    const all = await this.agentHistory();
+    const seen = this.layout.neighbours ? all.filter((m) => this.audiences.get(m.id)?.includes(agentId) ?? true) : all;
+    const globals = seen.map((m) => m.index);
+    return {
+      messages: this.layout.neighbours ? seen.map((m, i) => ({ ...m, index: i + 1 })) : seen,
+      lastGlobalIndex: globals.at(-1) ?? 0,
+      localIndex: (g) => (g === null ? null : globals.filter((x) => x <= g).length),
+    };
+  }
+
+  /** Recorded on experiment_started: the resolved speaking order and graph, and what the schedule allows to reach the proposer. */
+  private layoutRecord(): Record<string, unknown> {
+    const { layout, config } = this;
+    const proposerId = config.decision.proposerId;
+    const rounds = config.discussion?.fixedRounds;
+    return {
+      topology: layout.topology,
+      speakingOrder: layout.speakingOrder,
+      ring: layout.ring,
+      neighbours: layout.neighbours,
+      seed: layout.seed,
+      // Perfect relay under the fixed schedule of the first discussion segment — an upper bound, known before anyone speaks.
+      temporalReach:
+        rounds !== undefined && layout.speakingOrder
+          ? { targetId: proposerId, rounds, bySource: temporalReach(layout, config.agents.map((a) => a.id), proposerId, rounds) }
+          : null,
+    };
+  }
+
   /** Runs one lifecycle hook on every extension; an extension failure is logged and never changes the run. */
   private async notifyExtensions(hook: string, call: (ext: RunExtension) => Promise<void> | undefined): Promise<void> {
     for (const ext of this.extensions) await this.guarded(ext, hook, () => call(ext));
@@ -922,18 +995,24 @@ export class ExperimentRunner {
    * Returns the message with its experiment-transcript index (see
    * agentHistory); narration has none — `index` is null in its event.
    */
-  private async publish(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown> = {}): Promise<RoomMessage> {
+  private async publish(
+    sender: RoomMessage["sender"],
+    text: string,
+    extra: Record<string, unknown> = {},
+    /** The agents it reaches (a topology); null: everyone. */
+    audience: readonly string[] | null = null
+  ): Promise<RoomMessage> {
     // An extension that posts from beforePublish without filtering would recurse forever.
     if (this.publishDepth >= MAX_PUBLISH_DEPTH) throw new Error("publish nested too deeply (an extension posting from its own publish hook?)");
     this.publishDepth += 1;
     try {
-      return await this.publishOnce(sender, text, extra);
+      return await this.publishOnce(sender, text, extra, audience);
     } finally {
       this.publishDepth -= 1;
     }
   }
 
-  private async publishOnce(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown>): Promise<RoomMessage> {
+  private async publishOnce(sender: RoomMessage["sender"], text: string, extra: Record<string, unknown>, audience: readonly string[] | null): Promise<RoomMessage> {
     const message = Object.freeze({ sender: Object.freeze({ ...sender }), text });
     for (const ext of this.extensions) {
       if (ext.beforePublish) await this.guarded(ext, "beforePublish", () => ext.beforePublish!(message, this.extensionContext));
@@ -941,10 +1020,11 @@ export class ExperimentRunner {
     // The room keeps its own copy of the sender: no caller can change a message after it was posted.
     const posted = await this.transport.publish({ sender: { ...sender }, text });
     const index = sender.kind === "narrator" ? null : ++this.transcriptLength;
+    if (audience) this.audiences.set(posted.id, [...audience]);
     this.log.append(
       EventType.MESSAGE_POSTED,
-      // Caller metadata first: it can add fields, never overwrite the message's own.
-      { ...extra, index, messageId: posted.id, sender: posted.sender, text: posted.text },
+      // Caller metadata first: it can add fields, never overwrite the message's own. audience: only on a restricted message.
+      { ...extra, index, messageId: posted.id, sender: posted.sender, text: posted.text, ...(audience ? { audience: [...audience] } : {}) },
       sender.kind === "agent" ? sender.agentId : null
     );
     const result = index === null ? posted : { ...posted, index };

@@ -100,7 +100,7 @@ describe("Service Settlement facts", () => {
     const config = parseExperimentConfig(BUILTIN_SCENARIOS.find((s) => s.id === "service-settlement")!.config());
     expect(config.agents.map((a) => a.id)).toEqual(["operations", "contract", "verification", "compliance", "treasury", "settlement"]);
     expect(config).toMatchObject({
-      scheduler: { type: "round_robin", startAgentId: "operations" },
+      scheduler: { type: "round_robin" },
       discussion: { fixedRounds: 3 },
       decision: { proposerId: "operations", maxProposalAttempts: 1, proposalRequired: true },
       consensus: { rule: "unanimity" },

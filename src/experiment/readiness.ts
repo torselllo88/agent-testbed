@@ -48,11 +48,17 @@ export class ReadinessTracker {
     return current.state !== next.state ? { agentId, from: current.state, to: next.state } : null;
   }
 
-  /** A substantive message from `speakerId` appeared at `messageIndex`: every other ready agent that declared earlier goes stale. */
-  onSubstantiveMessage(speakerId: string, messageIndex: number): ReadinessChange[] {
+  /**
+   * A substantive message from `speakerId` appeared at `messageIndex`: every
+   * other ready agent that declared earlier goes stale — of those it reached
+   * (`audience`; omitted: everyone). An agent the message never reached has no
+   * new information.
+   */
+  onSubstantiveMessage(speakerId: string, messageIndex: number, audience?: readonly string[] | null): ReadinessChange[] {
     const changes: ReadinessChange[] = [];
     for (const [id, r] of this.byAgent) {
       if (id === speakerId || r.state !== "ready") continue;
+      if (audience && !audience.includes(id)) continue;
       if (r.declaredAtIndex !== null && r.declaredAtIndex < messageIndex) {
         this.byAgent.set(id, { state: "stale", declaredAtIndex: r.declaredAtIndex });
         changes.push({ agentId: id, from: "ready", to: "stale" });

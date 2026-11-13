@@ -12,6 +12,8 @@ import { registerSpaceStationStubs } from "./spaceStation/stubScripts.js";
 import { serviceSettlementConfig } from "./serviceSettlement/config.js";
 import { serviceSettlementEvaluator } from "./serviceSettlement/evaluator.js";
 import { registerSettlementStubs } from "./serviceSettlement/stubScripts.js";
+import { settlementFamily } from "./serviceSettlement/family.js";
+import type { TaskFamily } from "../batch/taskFamily.js";
 
 export { DEMO, demoFacts, type DemoContent, type DemoSection } from "./demo.js";
 
@@ -86,6 +88,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     config: () => serviceSettlementConfig(),
   },
 ];
+
+/** Task families by evaluator id: what a batch's `$instance` variable can draw on. */
+export const TASK_FAMILIES: ReadonlyMap<string, TaskFamily> = new Map([[settlementFamily.evaluatorId, settlementFamily]]);
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {
   return new EvaluatorRegistry().register(spaceStationEvaluator).register(kestrelCascadeEvaluator).register(serviceSettlementEvaluator);

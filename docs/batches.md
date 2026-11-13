@@ -38,6 +38,42 @@ npm run batch -- examples/space-station-batch.json --csv runs.csv
   virtual `$agents`, whose value is the list of agent ids to keep (to vary the
   number of agents). The conversation language is an ordinary variable:
   `{ "path": "conversation.language", "values": ["en", "ru"] }`.
+- **Task instances: `$instance`.** A scenario with a task family (today:
+  Service Settlement) has instances — parameter sets from which both the facts
+  agents get and the evaluator's ground truth are built. Values are instance
+  ids (`"dev-01"`) or inline instances
+  `{ "id": "dev-02", "params": { …the evaluator's parameters… }, "seed": 5 }`.
+  The instance is applied **first** — task, roles, objectives, private facts
+  and evaluator parameters replaced; models, protocol and topology kept — and
+  every other variable layers on top. An instance's `seed` becomes
+  `randomization.seed`: all conditions of one instance share speaking order
+  and ring, so **conditions are paired within an instance**
+  ([communication topology](configuration.md#communication-topology)). Keys
+  and the CSV show an instance by its id; the run's name gets ` · <id>`, and
+  `task_definition_hash` tells instances apart. Invalid parameters, unknown
+  ids and a base without a family are refused before anything runs.
+
+  ```jsonc
+  "variables": [
+    { "path": "$instance", "label": "instance", "values": ["dev-01", { "id": "dev-02", "seed": 5, "params": { … } }] },
+    { "path": "communication", "label": "graph", "values": [{ "topology": { "type": "complete" } }, { "topology": { "type": "ring" } }] }
+  ]
+  ```
+- **Calibration: `$solo`.** `"full"` or `"public"`: the proposer **alone**,
+  asked once — no discussion (`discussion.fixedRounds: 0`), no vote
+  (`consensus.rule: "none"`). With `"full"` its private information is
+  followed by every other agent's, each headed "What <name> (<role>) knows:";
+  with `"public"` it keeps only its own (plus the shared context everyone
+  has). Task, model and evaluator stay, so the answer is judged exactly as a
+  group's. It answers the calibration questions *can the task be solved with
+  all the information* and *does it depend on the private information*. Applied
+  **last** (it removes the other agents, the graph and the seed), so a batch
+  that also varies the topology makes identical configs and is refused — run
+  calibration as its own batch, e.g. `$instance` × `$solo`. A single agent
+  has its own system prompt ("You decide alone: there is no discussion and no
+  vote") and its own protocol fingerprint. Scenario texts that speak of "the
+  group" or "the vote" (objectives, private notes) are the scenario's to
+  phrase neutrally.
 - **Validation up front:** every condition is validated before anything runs.
   One broken condition rejects the whole batch, naming the condition. A path
   whose value the validated config does not carry (a typo such as
@@ -68,7 +104,7 @@ Batch runs never open a debrief.
 
 Per condition and overall:
 
-- success rate with a 95% Wilson interval, and consensus rate;
+- success rate with a 95% Wilson interval, and consensus rate (over runs with a vote; null under `consensus.rule: "none"`);
 - first-proposal correctness (`firstProposal`): how many first proposals
   passed every check, whatever the vote made of them, with its own Wilson
   interval;
@@ -102,6 +138,9 @@ provider instability is never hidden by the denominator.
   `calls_serving_unknown`, `min_gpu_fraction`), duration, communication
   (`addressed_share`, `interaction_density`, `interaction_reciprocity`,
   `participation_evenness`, `silent_agents`, `turns_to_first_proposal`),
+  who spoke when and who heard whom (`topology`, `randomization_seed`,
+  `speaking_order`, `ring_order` — ids joined by `>` —, `mean_reach`,
+  `reach_max_round`, `reach_unreachable`),
   intervention flag,
   `config_hash`, `evaluator_version`, `protocol_fingerprint`,
   `task_definition_hash`.

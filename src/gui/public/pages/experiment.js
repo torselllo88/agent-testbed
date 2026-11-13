@@ -96,14 +96,21 @@ export async function renderExperiment(experimentId) {
 
   // ------------------------------------------------------------------ room
 
+  /** Who a message reached under a communication topology (absent: everyone). */
+  function reached(p) {
+    if (!Array.isArray(p.audience)) return "";
+    const others = p.audience.filter((id) => p.sender.kind !== "agent" || id !== p.sender.agentId);
+    return `<span class="msg-index">→ ${escapeHtml(others.map(agentName).join(", ") || "no one")}</span>`;
+  }
+
   function roomItem(e) {
     const p = e.payload;
     const color = (id) => `agent-${(agentIndex.get(id) ?? 0) % 6}`;
     switch (e.type) {
       case "message_posted":
-        if (p.sender.kind === "system") return `<div class="msg system"><span class="msg-author">Moderator</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
+        if (p.sender.kind === "system") return `<div class="msg system"><span class="msg-author">Moderator</span>${reached(p)}<div class="msg-text">${escapeHtml(p.text)}</div></div>`;
         if (p.sender.kind === "narrator") return `<div class="msg narrator"><span class="msg-author">${escapeHtml(p.sender.name)}</span><span class="msg-index">narration · not shown to agents</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
-        return `<div class="msg ${color(p.sender.agentId)}"><span class="msg-author">${escapeHtml(agentName(p.sender.agentId))}</span><span class="msg-index">#${p.index}</span><div class="msg-text">${escapeHtml(p.text)}</div></div>`;
+        return `<div class="msg ${color(p.sender.agentId)}"><span class="msg-author">${escapeHtml(agentName(p.sender.agentId))}</span><span class="msg-index">#${p.index}</span>${reached(p)}<div class="msg-text">${escapeHtml(p.text)}</div></div>`;
       case "phase_changed":
         return `<div class="phase-divider">${escapeHtml(p.to)}${p.discussionEnd ? ` · ${escapeHtml(p.discussionEnd)}` : ""}</div>`;
       default:
@@ -288,7 +295,11 @@ export async function renderExperiment(experimentId) {
             : ""
         }
         <dl class="kv">
-          <dt>Consensus</dt><dd>${s.consensusReached ? badge("reached", "ok") : badge("not reached", "neutral")} ${s.votes.rounds.length} voting round(s)</dd>
+          <dt>Consensus</dt><dd>${
+            s.consensusRule === "none"
+              ? `${badge("no vote", "neutral")} <span class="muted small">the proposer's submission is the decision</span>`
+              : `${s.consensusReached ? badge("reached", "ok") : badge("not reached", "neutral")} ${s.votes.rounds.length} voting round(s)`
+          }</dd>
           <dt>Proposals</dt><dd>${s.proposals.attempts} attempt(s), ${s.proposals.formatRejections} format rejection(s), ${s.proposals.declined} declined</dd>
           ${
             s.proposals.first
@@ -307,6 +318,11 @@ export async function renderExperiment(experimentId) {
               : ""
           }${s.llmCalls.servingUnknown ? ` ${badge(`${s.llmCalls.servingUnknown} with unknown GPU placement`, "neutral")}` : ""}</dd>
           <dt>Duration</dt><dd>${formatDuration(s.durationMs.active)} active, ${formatDuration(s.durationMs.wall)} wall${s.durationMs.presentation ? `, ${formatDuration(s.durationMs.presentation)} presentation pacing` : ""}${s.durationMs.paused ? `, ${formatDuration(s.durationMs.paused)} paused` : ""}</dd>
+          ${s.topology && (s.topology.type !== "complete" || s.topology.seed !== null) ? `<dt>Communication</dt><dd>${escapeHtml(s.topology.type)}${s.topology.ring ? ` · ring: ${escapeHtml(s.topology.ring.map(agentName).join(" – "))}` : ""}${s.topology.speakingOrder ? ` <span class="muted small">· speaking order: ${escapeHtml(s.topology.speakingOrder.map(agentName).join(" → "))}${s.topology.seed !== null ? ` (seed ${s.topology.seed})` : ""}</span>` : ""}${
+            s.topology.temporalReach
+              ? ` <span class="muted small">· could reach the proposer by round ${s.topology.temporalReach.maxRound ?? "—"}${s.topology.temporalReach.unreachable ? `, ${s.topology.temporalReach.unreachable} source(s) not within ${s.topology.temporalReach.rounds} rounds` : ""}</span>`
+              : ""
+          }</dd>` : ""}
           <dt>Language</dt><dd>${escapeHtml(state.experiment.config.conversation?.language ?? "en")}</dd>
           <dt>Task definition</dt><dd class="muted small">${escapeHtml((state.experiment.taskDefinitionHash ?? "—").slice(0, 16))}</dd>
           <dt>Evaluator · protocol</dt><dd class="muted small">v${escapeHtml(s.evaluatorVersion ?? "—")} · ${escapeHtml(s.protocolFingerprint ?? "—")}</dd>

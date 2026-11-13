@@ -1,0 +1,27 @@
+{
+  "name": "Service Settlement calibration: the proposer alone, full vs public information, Ollama",
+  "base": { "builtin": "service-settlement" },
+  "variables": [
+    { "path": "$instance", "label": "instance", "values": ["dev-01"] },
+    { "path": "$solo", "label": "information", "values": ["full", "public"] },
+    {
+      "path": "agents.*.model",
+      "label": "model",
+      "values": [
+        {
+          "provider": "openai-compatible",
+          "endpoint": "lab-ollama",
+          "model": "qwen3.8:27b",
+          "structuredOutput": "native",
+          "temperature": 0,
+          "seed": 1,
+          "maxOutputTokens": 400,
+          "think": false,
+          "contextLength": 8192
+        }
+      ]
+    }
+  ],
+  "repetitions": 1,
+  "concurrency": 1
+}

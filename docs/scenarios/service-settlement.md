@@ -100,6 +100,22 @@ window), or a batch variable on `agents.*.model`:
 [examples/service-settlement-smoke.batch.json](../../examples/service-settlement-smoke.batch.json)
 runs it once on an Ollama endpoint. See [remote server](../remote-server.md).
 
+Calibration — Client Operations alone, with every function's facts or only
+its own:
+[examples/service-settlement-calibration.batch.json](../../examples/service-settlement-calibration.batch.json)
+(`$instance` × `$solo`, one call per run; see [batches](../batches.md#spec)).
+
+Complete vs ring, paired:
+[examples/service-settlement-paired.batch.json](../../examples/service-settlement-paired.batch.json)
+varies `communication` (complete, ring) × `randomization` (seeds 1–3): the
+two runs with one seed share the speaking order, and the ring run's
+arrangement is drawn from the same seed
+([communication topology](../configuration.md#communication-topology)), and
+there is no vote (`consensus.rule: "none"`): the first proposal is the
+decision, as the pilot measures it — 19 calls per run instead of 25. The
+scenario sets no start agent for that reason: without a seed, the rotation
+follows config order, Operations first.
+
 ## Stub agents
 
 - `service-settlement/cooperative` — every function shares its fact in round

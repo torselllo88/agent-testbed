@@ -1,0 +1,40 @@
+{
+  "name": "Service Settlement: complete vs ring, paired by seed, Ollama",
+  "base": { "builtin": "service-settlement" },
+  "variables": [
+    {
+      "path": "communication",
+      "label": "graph",
+      "values": [{ "topology": { "type": "complete" } }, { "topology": { "type": "ring" } }]
+    },
+    {
+      "path": "randomization",
+      "label": "seed",
+      "values": [{ "seed": 1 }, { "seed": 2 }, { "seed": 3 }]
+    },
+    {
+      "path": "consensus",
+      "label": "decision",
+      "values": [{ "rule": "none" }]
+    },
+    {
+      "path": "agents.*.model",
+      "label": "model",
+      "values": [
+        {
+          "provider": "openai-compatible",
+          "endpoint": "lab-ollama",
+          "model": "qwen3.8:27b",
+          "structuredOutput": "native",
+          "temperature": 0,
+          "seed": 1,
+          "maxOutputTokens": 400,
+          "think": false,
+          "contextLength": 8192
+        }
+      ]
+    }
+  ],
+  "repetitions": 1,
+  "concurrency": 1
+}

@@ -1,8 +1,13 @@
 # Design sketch: communication topology
 
-*Status: proposal for discussion. Implemented since: the protocol fingerprint
-per variant and first-proposal correctness (`proposal_evaluated`); the
-topology itself is not.*
+*Status: v1 implemented — static undirected graphs (complete, ring, edges),
+sequential round-robin turns, one decision, the two channels below, audience
+in the trace, per-agent views, a canonical default, topology metrics, temporal
+reach, and paired randomization of speaking order and ring. Usage:
+[configuration](../configuration.md#communication-topology). Not implemented:
+directed graphs, the topology-aware router, point-to-point messages, network
+knowledge as a variable, dynamic graphs, simultaneous rounds, local decisions.
+Level 2 (fact propagation) needs a scenario's fact list and a detector — next.*
 
 ## Goal
 

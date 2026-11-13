@@ -157,6 +157,8 @@ export const SchedulerConfigSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("round_robin"),
     startAgentId: z.string().optional(),
+    /** The rotation: every agent id once. Omitted: config order. The rotation starts at startAgentId when one is set. */
+    order: z.array(z.string()).optional(),
   }),
   z.object({
     type: z.literal("hybrid"),
@@ -169,8 +171,13 @@ export const SchedulerConfigSchema = z.discriminatedUnion("type", [
 ]);
 export type SchedulerConfig = z.infer<typeof SchedulerConfigSchema>;
 
+/**
+ * unanimity / majority: every agent votes on the frozen proposal. none: no
+ * vote — the proposer's first valid proposal is the decision (committed and
+ * judged at once); agents are told so.
+ */
 export const ConsensusConfigSchema = z.object({
-  rule: z.enum(["unanimity", "majority"]),
+  rule: z.enum(["unanimity", "majority", "none"]),
 });
 export type ConsensusConfig = z.infer<typeof ConsensusConfigSchema>;
 
@@ -204,10 +211,53 @@ export type DecisionConfig = z.infer<typeof DecisionConfigSchema>;
  */
 export const DiscussionConfigSchema = z
   .object({
-    fixedRounds: z.number().int().positive(),
+    /** 0: no discussion at all — the proposer is asked straight away (e.g. a single agent deciding alone). */
+    fixedRounds: z.number().int().min(0),
   })
   .strict();
 export type DiscussionConfig = z.infer<typeof DiscussionConfigSchema>;
+
+/**
+ * Who hears whom in discussion (undirected). complete: everyone (the default);
+ * ring: each agent's two neighbours in `order` (default: config order);
+ * edges: the listed pairs. Proposal and vote notices follow the rules in
+ * docs/configuration.md#communication-topology.
+ */
+export const TopologyConfigSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("complete") }).strict(),
+  z.object({ type: z.literal("ring"), order: z.array(z.string()).optional() }).strict(),
+  z.object({ type: z.literal("edges"), edges: z.array(z.tuple([z.string(), z.string()])).min(1) }).strict(),
+]);
+export type TopologyConfig = z.infer<typeof TopologyConfigSchema>;
+
+/**
+ * An explicit complete topology is the default it describes: normalized away,
+ * so it hashes like a config without a communication block (every existing
+ * configHash stays as it was).
+ */
+export const CommunicationConfigSchema = z
+  .object({ topology: TopologyConfigSchema })
+  .strict()
+  .optional()
+  .transform((v) => (v === undefined || v.topology.type === "complete" ? undefined : v));
+export type CommunicationConfig = NonNullable<z.infer<typeof CommunicationConfigSchema>>;
+
+/**
+ * Draws the round-robin speaking order and the ring's arrangement from one
+ * seed (src/experiment/topology.ts) — e.g. per task instance, so two
+ * communication conditions with the same seed are paired: the same speaking
+ * order, the same arrangement. The resolved orders are recorded with the run.
+ */
+export const RandomizationConfigSchema = z
+  .object({
+    seed: z.number().int().min(0),
+    /** Draw the speaking order (and so its first speaker). */
+    speakingOrder: z.boolean().default(true),
+    /** Draw the ring's arrangement (ring topology only). */
+    ring: z.boolean().default(true),
+  })
+  .strict();
+export type RandomizationConfig = z.infer<typeof RandomizationConfigSchema>;
 
 export const LimitsConfigSchema = z.object({
   /** Soft: reaching it moves DISCUSSION -> decision. Not a failure by itself. */
@@ -461,11 +511,14 @@ export const ExperimentConfigSchema = z
       /** Given to every agent. */
       sharedContext: z.string().default(""),
     }),
-    agents: z.array(AgentConfigSchema).min(2),
+    /** One agent only to decide alone: no discussion (fixedRounds 0) and no vote (consensus "none"). */
+    agents: z.array(AgentConfigSchema).min(1),
     scheduler: SchedulerConfigSchema,
     consensus: ConsensusConfigSchema,
     decision: DecisionConfigSchema,
     discussion: DiscussionConfigSchema.optional(),
+    communication: CommunicationConfigSchema,
+    randomization: RandomizationConfigSchema.optional(),
     limits: LimitsConfigSchema.default({}),
     agentVisibility: AgentVisibilityConfigSchema.default({}),
     conversation: ConversationConfigSchema.default({}),
@@ -487,23 +540,75 @@ export const ExperimentConfigSchema = z
     if (!ids.has(cfg.decision.proposerId)) {
       ctx.addIssue({ code: "custom", path: ["decision", "proposerId"], message: `unknown agent "${cfg.decision.proposerId}"` });
     }
+    if (cfg.agents.length === 1 && (cfg.discussion?.fixedRounds !== 0 || cfg.consensus.rule !== "none")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["agents"],
+        message: 'a single agent decides alone: it needs discussion.fixedRounds 0 (no one to discuss with) and consensus.rule "none" (no one to vote)',
+      });
+    }
     if (cfg.discussion) {
       if (cfg.scheduler.type !== "round_robin") {
         ctx.addIssue({ code: "custom", path: ["discussion", "fixedRounds"], message: "fixed rounds need the round_robin scheduler (a round is one turn of every agent, in order)" });
       }
       const discussionTurns = cfg.discussion.fixedRounds * cfg.agents.length;
-      // The first attempt at least: the discussion, one proposal turn and every agent's vote.
-      if (discussionTurns + 1 + cfg.agents.length > cfg.limits.globalTurnLimit) {
+      const voteTurns = cfg.consensus.rule === "none" ? 0 : cfg.agents.length;
+      // The first attempt at least: the discussion, one proposal turn and every agent's vote (if any).
+      if (discussionTurns + 1 + voteTurns > cfg.limits.globalTurnLimit) {
         ctx.addIssue({
           code: "custom",
           path: ["limits", "globalTurnLimit"],
-          message: `${cfg.discussion.fixedRounds} rounds of ${cfg.agents.length} agents are ${discussionTurns} discussion turns: the global turn limit (${cfg.limits.globalTurnLimit}) leaves no room for the proposal and the vote`,
+          message: `${cfg.discussion.fixedRounds} rounds of ${cfg.agents.length} agents are ${discussionTurns} discussion turns: the global turn limit (${cfg.limits.globalTurnLimit}) leaves no room for the proposal${voteTurns ? " and the vote" : ""}`,
         });
       }
     }
     const start = cfg.scheduler.startAgentId;
     if (start !== undefined && !ids.has(start)) {
       ctx.addIssue({ code: "custom", path: ["scheduler", "startAgentId"], message: `unknown agent "${start}"` });
+    }
+    const permutation = (list: string[], path: (string | number)[], what: string) => {
+      const problem = permutationProblem(list, [...ids]);
+      if (problem) ctx.addIssue({ code: "custom", path, message: `${what} must list every agent id exactly once: ${problem}` });
+    };
+    if (cfg.scheduler.type === "round_robin" && cfg.scheduler.order) permutation(cfg.scheduler.order, ["scheduler", "order"], "the speaking order");
+
+    const topology = cfg.communication?.topology;
+    if (topology) {
+      // A router that reads every message would coordinate across the graph; debriefs and human participants are not topology-aware yet.
+      if (cfg.scheduler.type !== "round_robin") {
+        ctx.addIssue({ code: "custom", path: ["communication", "topology"], message: "a communication topology needs the round_robin scheduler (content-blind turn order)" });
+      }
+      if (cfg.humanInteraction) {
+        ctx.addIssue({ code: "custom", path: ["communication", "topology"], message: "human interaction (spectators, debrief) does not support a communication topology yet" });
+      }
+      if (topology.type === "ring") {
+        if (cfg.agents.length < 3) ctx.addIssue({ code: "custom", path: ["communication", "topology"], message: "a ring needs at least 3 agents" });
+        if (topology.order) permutation(topology.order, ["communication", "topology", "order"], "the ring order");
+        if (topology.order && cfg.randomization?.ring) {
+          ctx.addIssue({ code: "custom", path: ["communication", "topology", "order"], message: "either an explicit ring order or randomization.ring, not both" });
+        }
+      }
+      if (topology.type === "edges") {
+        const seen = new Set<string>();
+        topology.edges.forEach(([a, b], i) => {
+          for (const id of [a, b]) if (!ids.has(id)) ctx.addIssue({ code: "custom", path: ["communication", "topology", "edges", i], message: `unknown agent "${id}"` });
+          if (a === b) ctx.addIssue({ code: "custom", path: ["communication", "topology", "edges", i], message: `an edge from "${a}" to itself` });
+          const key = [a, b].sort().join("\u0000");
+          if (seen.has(key)) ctx.addIssue({ code: "custom", path: ["communication", "topology", "edges", i], message: `duplicate edge ${a}–${b}` });
+          seen.add(key);
+        });
+      }
+    }
+    if (cfg.randomization) {
+      if (cfg.scheduler.type !== "round_robin") {
+        ctx.addIssue({ code: "custom", path: ["randomization"], message: "randomization draws a round-robin speaking order: it needs the round_robin scheduler" });
+      } else if (cfg.randomization.speakingOrder && (cfg.scheduler.order || cfg.scheduler.startAgentId !== undefined)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["randomization", "speakingOrder"],
+          message: "the speaking order is drawn from the seed: remove scheduler.order and scheduler.startAgentId, or set randomization.speakingOrder to false",
+        });
+      }
     }
     for (const id of Object.keys(cfg.humanInteraction?.aliases ?? {})) {
       if (!cfg.agents.some((a) => a.id === id)) ctx.addIssue({ code: "custom", path: ["humanInteraction", "aliases", id], message: `unknown agent "${id}"` });
@@ -514,6 +619,16 @@ export const ExperimentConfigSchema = z
     }
   });
 export type ExperimentConfig = z.infer<typeof ExperimentConfigSchema>;
+
+function permutationProblem(list: string[], ids: string[]): string | null {
+  const unknown = list.filter((id) => !ids.includes(id));
+  if (unknown.length) return `unknown ${unknown.map((id) => `"${id}"`).join(", ")}`;
+  const duplicates = list.filter((id, i) => list.indexOf(id) !== i);
+  if (duplicates.length) return `${[...new Set(duplicates)].map((id) => `"${id}"`).join(", ")} more than once`;
+  const missing = ids.filter((id) => !list.includes(id));
+  if (missing.length) return `missing ${missing.map((id) => `"${id}"`).join(", ")}`;
+  return null;
+}
 
 export class ConfigValidationError extends Error {
   constructor(public readonly issues: z.ZodIssue[]) {

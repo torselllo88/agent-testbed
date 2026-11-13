@@ -4,8 +4,9 @@
  * throws rather than silently continuing.
  *
  *   INITIALIZING -> DISCUSSION -> PROPOSAL -> VOTING -> COMMITTED -> EVALUATION -> FINISHED
- *                      ^             |          |
- *                      +-------------+----------+   (failed attempt, budget left)
+ *                      ^             |   |      |         ^
+ *                      +-------------+---|------+         |   (failed attempt, budget left)
+ *                                        +----------------+   (no vote: consensus rule "none")
  *
  * Any non-terminal phase may also go straight to FINISHED (hard limit, error, stop).
  */
@@ -24,7 +25,8 @@ const TRANSITIONS: Record<Phase, Phase[]> = {
   INITIALIZING: [Phase.DISCUSSION, Phase.FINISHED],
   DISCUSSION: [Phase.PROPOSAL, Phase.FINISHED],
   // Back to DISCUSSION when the proposer declines and attempts remain.
-  PROPOSAL: [Phase.VOTING, Phase.DISCUSSION, Phase.FINISHED],
+  // Straight to COMMITTED when there is no vote (consensus rule "none").
+  PROPOSAL: [Phase.VOTING, Phase.COMMITTED, Phase.DISCUSSION, Phase.FINISHED],
   VOTING: [Phase.COMMITTED, Phase.DISCUSSION, Phase.FINISHED],
   COMMITTED: [Phase.EVALUATION, Phase.FINISHED],
   EVALUATION: [Phase.FINISHED],

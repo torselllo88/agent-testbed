@@ -63,6 +63,8 @@ export interface ExperimentMetrics {
     final: Array<{ agentId: string; vote: string; reason: string }> | null;
   };
   consensusReached: boolean;
+  /** The decision rule (experiment_started.consensusRule): "none" = no vote, consensusReached says nothing. Null for older runs. */
+  consensusRule: string | null;
   evaluation: Record<string, unknown> | null;
   protocolIncidents: Record<string, number>;
   errors: number;
@@ -74,6 +76,37 @@ export interface ExperimentMetrics {
   protocolFingerprint: string | null;
   /** Who addressed whom, participation, responsiveness, time to decision (see communicationMetrics.ts). */
   communication: CommunicationMetrics;
+  /** Speaking order and communication graph (experiment_started.layout); null for runs recorded before they were. */
+  topology: TopologyMetrics | null;
+}
+
+export interface TopologyMetrics {
+  type: string;
+  /** The round-robin rotation, first speaker first (null: no fixed rotation). */
+  speakingOrder: string[] | null;
+  /** The ring's arrangement (ring only). */
+  ring: string[] | null;
+  /** The randomization seed the orders were drawn from (null: none drawn). */
+  seed: number | null;
+  /** Configured undirected edges over all possible pairs (complete: 1). */
+  density: number;
+  /** Mean number of OTHER agents an agent's message reached (complete: agents − 1); null without messages. */
+  meanReach: number | null;
+  /**
+   * Under the fixed schedule, assuming every agent passed everything on at
+   * each of its turns: from which discussion turn / round each other agent's
+   * information could have reached the proposer (null: not within the
+   * horizon). An upper bound fixed before anyone speaks; null without fixed rounds.
+   */
+  temporalReach: {
+    targetId: string;
+    rounds: number;
+    bySource: Record<string, { turn: number; round: number } | null>;
+    /** The latest round any source could arrive in (over those that could). */
+    maxRound: number | null;
+    /** Sources that could not arrive within the horizon. */
+    unreachable: number;
+  } | null;
 }
 
 export interface ProposalEvaluation {
@@ -88,6 +121,34 @@ export interface ProposalEvaluation {
 const inc = (map: Record<string, number>, key: string, by = 1) => {
   map[key] = (map[key] ?? 0) + by;
 };
+
+function topologyFrom(raw: unknown, agentCount: number): TopologyMetrics | null {
+  if (!raw || typeof raw !== "object") return null;
+  const layout = raw as {
+    topology?: string;
+    speakingOrder?: string[] | null;
+    ring?: string[] | null;
+    neighbours?: Record<string, string[]> | null;
+    seed?: number | null;
+    temporalReach?: { targetId: string; rounds: number; bySource: Record<string, { turn: number; round: number } | null> } | null;
+  };
+  const pairs = (agentCount * (agentCount - 1)) / 2;
+  const edges = layout.neighbours ? Object.values(layout.neighbours).reduce((s, n) => s + n.length, 0) / 2 : pairs;
+  const tr = layout.temporalReach;
+  const arrivals = tr ? Object.values(tr.bySource) : [];
+  const rounds = arrivals.filter((a): a is { turn: number; round: number } => a !== null).map((a) => a.round);
+  return {
+    type: layout.topology ?? "complete",
+    speakingOrder: layout.speakingOrder ?? null,
+    ring: layout.ring ?? null,
+    seed: layout.seed ?? null,
+    density: pairs ? edges / pairs : 1,
+    meanReach: null,
+    temporalReach: tr
+      ? { ...tr, maxRound: rounds.length ? Math.max(...rounds) : null, unreachable: arrivals.filter((a) => a === null).length }
+      : null,
+  };
+}
 
 /**
  * Derives every reported number from the event log alone (the log is the
@@ -111,6 +172,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     proposals: { attempts: 0, formatRejections: 0, declined: 0, frozen: 0, final: null, evaluated: [], first: null },
     votes: { rounds: [], final: null },
     consensusReached: false,
+    consensusRule: null,
     evaluation: null,
     protocolIncidents: {},
     errors: 0,
@@ -118,7 +180,10 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     evaluatorVersion: null,
     protocolFingerprint: null,
     communication: communicationMetrics(events),
+    topology: null,
   };
+  let agentCount = 0;
+  const reach: number[] = [];
 
   let startedTs: string | null = null;
   let finishedTs: string | null = null;
@@ -131,6 +196,9 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         startedTs = e.ts;
         m.evaluatorVersion = (p.evaluator as { version?: string } | undefined)?.version ?? null;
         m.protocolFingerprint = typeof p.protocolFingerprint === "string" ? p.protocolFingerprint : null;
+        agentCount = Array.isArray(p.agents) ? p.agents.length : 0;
+        m.consensusRule = typeof p.consensusRule === "string" ? p.consensusRule : null;
+        m.topology = topologyFrom(p.layout, agentCount);
         break;
       case EventType.EXPERIMENT_FINISHED:
         finishedTs = e.ts;
@@ -155,6 +223,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         if (sender.kind === "agent" && sender.agentId) {
           m.messages.public += 1;
           inc(m.messages.byAgent, sender.agentId);
+          reach.push(Array.isArray(p.audience) ? p.audience.length - 1 : agentCount - 1);
         } else if (sender.kind === "narrator") {
           m.messages.narrator += 1;
         } else {
@@ -274,6 +343,7 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
     }
   }
 
+  if (m.topology) m.topology.meanReach = reach.length ? reach.reduce((s, v) => s + v, 0) / reach.length : null;
   m.tokens.total = m.tokens.agent + m.tokens.orchestration;
   m.costUsd.total = m.costUsd.agent + m.costUsd.orchestration;
   if (startedTs && finishedTs) m.durationMs.wall = new Date(finishedTs).getTime() - new Date(startedTs).getTime();

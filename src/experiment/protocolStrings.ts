@@ -8,14 +8,15 @@
  */
 
 export interface ProtocolStrings {
-  proposalSubmitted(p: { attempt: number; proposerName: string; body: string; rationale: string }): string;
+  /** voting false: no vote follows (consensus rule "none") — the proposal is the decision. */
+  proposalSubmitted(p: { attempt: number; proposerName: string; body: string; rationale: string; voting?: boolean }): string;
   proposalNotApproved(p: { attempt: number; approvals: number; eligible: number; rule: string; required: number }): string;
   voteLine(p: { agentName: string; vote: "APPROVE" | "REJECT" | "INVALID"; reason: string }): string;
 }
 
 const en: ProtocolStrings = {
-  proposalSubmitted: ({ attempt, proposerName, body, rationale }) =>
-    `Final proposal #${attempt} submitted by ${proposerName}:\n${body}\nRationale: ${rationale || "(none)"}\nVoting is open.`,
+  proposalSubmitted: ({ attempt, proposerName, body, rationale, voting = true }) =>
+    `Final proposal #${attempt} submitted by ${proposerName}:\n${body}\nRationale: ${rationale || "(none)"}\n${voting ? "Voting is open." : "There is no vote: this is the decision."}`,
   proposalNotApproved: ({ attempt, approvals, eligible, rule, required }) =>
     `Proposal #${attempt} was not approved (${approvals} of ${eligible} approved; ${rule} requires ${required}).`,
   voteLine: ({ agentName, vote, reason }) => `- ${agentName}: ${vote}${reason ? ` — ${reason}` : ""}`,
@@ -25,8 +26,8 @@ const RU_RULES: Record<string, string> = { unanimity: "единогласие", 
 const RU_VOTES: Record<string, string> = { APPROVE: "за", REJECT: "против", INVALID: "голос не распознан" };
 
 const ru: ProtocolStrings = {
-  proposalSubmitted: ({ attempt, proposerName, body, rationale }) =>
-    `Итоговое предложение №${attempt} от ${proposerName}:\n${body}\nОбоснование: ${rationale || "(нет)"}\nГолосование открыто.`,
+  proposalSubmitted: ({ attempt, proposerName, body, rationale, voting = true }) =>
+    `Итоговое предложение №${attempt} от ${proposerName}:\n${body}\nОбоснование: ${rationale || "(нет)"}\n${voting ? "Голосование открыто." : "Голосования нет: это и есть решение."}`,
   proposalNotApproved: ({ attempt, approvals, eligible, rule, required }) =>
     `Предложение №${attempt} не принято: «за» — ${approvals} из ${eligible}, правило «${RU_RULES[rule] ?? rule}» требует ${required}.`,
   voteLine: ({ agentName, vote, reason }) => `- ${agentName}: ${RU_VOTES[vote] ?? vote}${reason ? ` — ${reason}` : ""}`,

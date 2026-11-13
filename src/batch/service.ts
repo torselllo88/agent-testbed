@@ -6,9 +6,9 @@ import type { ProviderRegistry } from "../llm/registry.js";
 import { BatchRepository, type BatchRecord, type ResolvedBatch } from "../persistence/batchRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { ScenarioRepository } from "../persistence/scenarioRepository.js";
-import { BUILTIN_SCENARIOS } from "../scenarios/index.js";
+import { BUILTIN_SCENARIOS, TASK_FAMILIES } from "../scenarios/index.js";
 import { aggregate, type ConditionAggregate } from "./aggregate.js";
-import { BatchSpecSchema, conditionConfig, droppedVariable, expandConditions, planRuns, variableLabel, type BatchSpec } from "./spec.js";
+import { BatchSpecSchema, conditionConfig, displayValue, droppedVariable, expandConditions, planRuns, variableLabel, type BatchSpec } from "./spec.js";
 
 export class BatchValidationError extends Error {
   constructor(public readonly problems: string[]) {
@@ -130,7 +130,7 @@ export class BatchService {
     const byHash = new Map<string, string>();
     for (const condition of conditions) {
       try {
-        const raw = conditionConfig(baseConfig, spec.variables, condition);
+        const raw = conditionConfig(baseConfig, spec.variables, condition, TASK_FAMILIES);
         const parsed = parseExperimentConfig(raw);
         const dropped = spec.variables.map((v) => droppedVariable(raw, parsed, v)).filter((p): p is string => p !== null);
         if (dropped.length) {
@@ -335,6 +335,14 @@ export class BatchService {
       "participation_evenness",
       "silent_agents",
       "turns_to_first_proposal",
+      // Who speaks when and who hears whom; pair conditions by the seed.
+      "topology",
+      "randomization_seed",
+      "speaking_order",
+      "ring_order",
+      "mean_reach",
+      "reach_max_round",
+      "reach_unreachable",
       "intervened",
       "config_hash",
       // configHash is the effective configuration; the evaluator version judging it is runtime metadata beside it.
@@ -352,12 +360,16 @@ export class BatchService {
           id,
           r.id,
           r.conditionKey,
-          ...labels.map((l) => (typeof values[l] === "string" ? values[l] : JSON.stringify(values[l]))),
+          ...batch.resolved.spec.variables.map((v) => {
+            const value = values[variableLabel(v)];
+            return v.path === "$instance" ? displayValue(v, value) : typeof value === "string" ? value : JSON.stringify(value);
+          }),
           r.repetition,
           r.outcome,
           m.termination?.category,
           r.status,
-          m.consensusReached,
+          // Empty without a vote (consensus rule "none"): nothing to agree on.
+          m.consensusRule === "none" ? undefined : m.consensusReached,
           m.evaluation?.classification,
           Array.isArray(m.evaluation?.violated) ? m.evaluation.violated.join(";") : undefined,
           m.proposals?.first?.outcome,
@@ -384,6 +396,13 @@ export class BatchService {
           m.communication?.participation?.evenness,
           m.communication?.participation?.silentAgents,
           m.communication?.timeline?.turnsToFirstProposal,
+          m.topology?.type,
+          m.topology?.seed,
+          m.topology?.speakingOrder?.join(">"),
+          m.topology?.ring?.join(">"),
+          m.topology?.meanReach,
+          m.topology?.temporalReach?.maxRound,
+          m.topology?.temporalReach?.unreachable,
           r.intervened,
           r.configHash,
           m.evaluatorVersion,

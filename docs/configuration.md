@@ -31,11 +31,13 @@ reference is [src/scenarios/spaceStation/config.ts](../src/scenarios/spaceStatio
   }],
   "scheduler": { "type": "hybrid", "startAgentId": "operations",
                  "classifier": { "provider": "openrouter", "model": "…" },  // or null
-                 "classifierWindow": 12 },                 // or { "type": "round_robin" }
-  "consensus": { "rule": "unanimity" },                    // or "majority"
+                 "classifierWindow": 12 },                 // or { "type": "round_robin", "order": [ids…]? }
+  "consensus": { "rule": "unanimity" },                    // or "majority", or "none" (no vote)
   "decision": { "proposerId": "operations", "maxProposalAttempts": 2, "maxProposalFormatRetries": 1,
                 "proposalRequired": false },             // true: the proposer may not decline
   "discussion": { "fixedRounds": 3 },                      // optional: fixed-length discussion (round_robin only)
+  "communication": { "topology": { "type": "ring" } },      // optional: who hears whom (round_robin only; see below)
+  "randomization": { "seed": 17 },                          // optional: draw speaking order and ring from a seed
   "limits": {
     "discussionTurnLimit": 24,        // soft: ends discussion, not the run
     "rediscussionTurnLimit": 8,       // soft: per return to discussion after a failed attempt
@@ -80,17 +82,34 @@ Notes:
   converge at different speeds still talk equally long. Needs the
   `round_robin` scheduler; agents are told the discussion has a fixed number
   of rounds (not how many). Omitted: the default — discussion ends when every
-  agent's readiness is current, or at the turn limit.
+  agent's readiness is current, or at the turn limit. `0`: no discussion —
+  the proposer is asked straight away.
+- **A single agent** decides alone: it needs `discussion.fixedRounds: 0` and
+  `consensus.rule: "none"`, and gets a system prompt of its own (no room, no
+  discussion, no vote). Made for calibration — see `$solo` in
+  [batches](batches.md#spec).
 - **`decision.proposalRequired: true`** takes declining away from the
   proposer: the prompt and the response schema offer no `null`, and a null
   proposal is answered like a format error (`proposal_rejected_format`, kind
   `declined_not_allowed`) with another try while `maxProposalFormatRetries`
   allow. `false` is the default and hashes like an omitted field.
+- **`consensus.rule: "none"`** — no vote: the proposer's first valid proposal
+  is the decision, committed and judged at once (`phase_changed` to
+  COMMITTED with `decidedBy: "proposer"`). Agents are told there is no vote,
+  so it is its own protocol variant. It saves one call per agent per attempt;
+  `consensusReached` says nothing then (the batch CSV leaves
+  `consensus_reached` empty, and `consensusRate` counts only runs with a
+  vote). `maxProposalAttempts` matters only when the proposer may decline.
 - **Every frozen proposal is judged** by the evaluator once the outcome is
   decided — committed or not (`proposal_evaluated`; `metrics.proposals.first`
   is first-proposal correctness). Only the committed proposal decides the
   outcome. Both protocol options above change agent-facing texts, so they have
   their own [protocol fingerprint](reproducibility.md#hashes).
+- **`scheduler.order`** (round-robin) is the rotation: every agent id once.
+  Omitted: config order. The rotation starts at `startAgentId` when one is
+  set, else at its first entry.
+- **`communication.topology`** and **`randomization`**: see
+  [Communication topology](#communication-topology) below.
 - **`structuredOutput: "native"`** asks the provider to enforce the response
   JSON schema. Use `"prompt"` for model routes that reject `response_format`.
   The schema is always included in the prompt, and every response is parsed and
@@ -108,6 +127,62 @@ Notes:
   both the requested and the effective routing, plus the backend that actually
   served it (`providerMeta.upstreamProvider`, a display name rather than a
   slug). In a batch, vary it like any field: `agents.*.model.routing`.
+
+### Communication topology
+
+Who hears whom in discussion. Undirected: *a* hears *b* exactly when *b* hears
+*a*.
+
+```jsonc
+"communication": { "topology": { "type": "complete" } }                 // everyone (the default)
+"communication": { "topology": { "type": "ring" } }                     // two neighbours, in config order
+"communication": { "topology": { "type": "ring", "order": ["a", "c", "b", "d"] } }
+"communication": { "topology": { "type": "edges", "edges": [["a", "b"], ["b", "c"]] } }
+```
+
+- **Delivery.** A discussion message reaches its sender and the sender's
+  neighbours. Each agent reads **its own view** — the messages that reached
+  it, numbered by position in that view — and is told its neighbours and the
+  rule ("Your neighbours: …; everything you post reaches only them, and you see
+  only what they post, plus the moderator's notices"). Not the rest of the
+  graph, and nothing about passing information on: relaying is allowed, never
+  asked for. The roster of all participants stays in the prompt.
+- **What bypasses the graph** — only what coordination needs: the proposal
+  body (everyone votes on it), the request to vote and the aggregate vote
+  outcome ("2 of 6 approved"). Free text follows the graph: the proposer's
+  rationale reaches the proposer's neighbours (a voter outside sees "not shown
+  to you"), each vote reason the voter's neighbours. So a rejected proposal
+  pierces the topology only through its body — first-proposal correctness is
+  the measure of the topology itself.
+- **Readiness** goes stale only through messages that reached the agent.
+- **Needs** the `round_robin` scheduler (a router reading every message would
+  coordinate across the graph) and no `humanInteraction` (not topology-aware
+  yet). A ring needs at least 3 agents.
+- **Hashing.** An explicit `complete` is the default and hashes like an omitted
+  `communication` block; every complete-graph prompt stays as it was. Any
+  other topology is its own [protocol variant](reproducibility.md#hashes).
+  The topology is part of `configHash`, not of `taskDefinitionHash`: two
+  conditions that differ only in it attempt the same task.
+
+**`randomization: { "seed": n }`** draws the round-robin speaking order (and
+so its first speaker) and the ring's arrangement from one seed — separately,
+so two conditions with the same seed get **the same speaking order whatever
+their topology** (and a ring condition the same arrangement). Use one seed per
+task instance to pair communication conditions. `"speakingOrder": false` or
+`"ring": false` keeps that one as configured. With a drawn speaking order,
+`scheduler.order` and `startAgentId` must be absent (the seed decides), and
+the ring's `order` with a drawn ring. The procedure is fixed (sha256 →
+mulberry32 → Fisher–Yates; pinned by a test) and the resolved orders are
+recorded on `experiment_started` (`layout`) and in the batch CSV.
+
+**Temporal reach.** With fixed rounds, every run records — before anyone
+speaks — from which turn and round each agent's information *could* reach the
+proposer if every agent passed on everything it had heard at each of its turns
+(`layout.temporalReach`; `metrics.topology.temporalReach` with `maxRound`
+and `unreachable`). A path counts only if each relay speaks after it heard:
+the speaking order matters, not only the graph. It is an upper bound on what
+agents achieve and says nothing about what they did — use it to check that a
+horizon of K rounds can carry every fact to the proposer at all.
 
 **Per-run overrides.** A run may override, without editing or versioning the
 saved scenario:

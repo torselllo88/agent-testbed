@@ -109,7 +109,7 @@ export function demoFacts(config: ExperimentConfig, live: boolean): string[] {
   const short = (id: string) => id.split("/").at(-1)!;
   facts.push(live ? `${short(DEMO.liveModels.agents.model)} agents · ${short(DEMO.liveModels.orchestration.model)} routers` : "scripted stand-in agents");
   facts.push(config.scheduler.type === "hybrid" && config.scheduler.classifier ? "turn order decided by a router" : "round-robin turns");
-  facts.push(config.consensus.rule === "unanimity" ? "unanimous vote" : "majority vote");
+  facts.push(config.consensus.rule === "unanimity" ? "unanimous vote" : config.consensus.rule === "majority" ? "majority vote" : "the proposer decides, no vote");
   const checks = config.presentation.missionFailurePriority.length;
   if (checks) facts.push(`${checks} evaluator checks`);
   const languages = Object.keys(config.presentation.strings);

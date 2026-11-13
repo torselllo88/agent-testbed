@@ -639,7 +639,9 @@ class RunProjector {
     }
 
     // Protocol notices: people get a readable body plus structured data; the exact text agents read stays inside.
-    const notice = p.notice as { kind?: string; proposalId?: string } | undefined;
+    const notice = p.notice as { kind?: string; proposalId?: string; copy?: boolean } | undefined;
+    // The same notice once more for agents the first one did not reach (a communication topology): shown once.
+    if (notice?.copy) return;
     if (notice?.kind === "proposal_submitted" && notice.proposalId && this.proposals.has(notice.proposalId)) {
       const proposal = this.proposals.get(notice.proposalId)!;
       const proposer = agentDisplayName(config as ExperimentConfig, proposal.proposerId);

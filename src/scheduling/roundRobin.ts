@@ -1,13 +1,20 @@
-import { startAgentId, type RoutingDecision, type Scheduler, type SchedulingContext } from "./types.js";
+import { resolveLayout, rotation } from "../experiment/topology.js";
+import type { RoutingDecision, Scheduler, SchedulingContext } from "./types.js";
 
-/** Fixed rotation in config order, starting from startAgentId; agents may respond or PASS. Ignores explicit targets. */
+/**
+ * Fixed rotation — the speaking order: config order from startAgentId, an
+ * explicit scheduler.order, or one drawn from randomization.seed (see
+ * experiment/topology.ts). Agents may respond or PASS. Ignores explicit targets.
+ */
 export class RoundRobinScheduler implements Scheduler {
   readonly type = "round_robin";
 
   async next(ctx: SchedulingContext): Promise<RoutingDecision> {
-    const order = ctx.config.agents.map((a) => a.id);
+    // A config whose own scheduler is another one (e.g. a direct call in tests) still rotates from its start agent.
+    const order = resolveLayout(ctx.config).speakingOrder ?? rotation(ctx.config);
     if (!ctx.lastTurn) {
-      return { agentId: startAgentId(ctx.config), source: "start", reason: "configured start agent" };
+      const drawn = ctx.config.randomization?.speakingOrder === true;
+      return { agentId: order[0]!, source: "start", reason: drawn ? "first in the drawn speaking order" : "configured start agent" };
     }
     const lastIndex = order.indexOf(ctx.lastTurn.agentId);
     const agentId = order[(lastIndex + 1) % order.length]!;

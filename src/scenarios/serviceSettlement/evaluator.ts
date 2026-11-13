@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ConstraintCheck, EvaluationResult, ScenarioEvaluator } from "../../evaluation/types.js";
+import { settlementFacts } from "./facts.js";
 
 /**
  * Service Settlement — deterministic evaluator.
@@ -189,4 +190,5 @@ export const serviceSettlementEvaluator: ScenarioEvaluator<SettlementProposal, S
   proposalSchema: SettlementProposalSchema,
   paramsSchema: SettlementParamsSchema,
   evaluate: evaluateSettlement,
+  facts: (params) => settlementFacts(params),
 };

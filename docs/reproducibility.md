@@ -135,8 +135,9 @@ reached on average; and `temporalReach` (see
 [configuration](configuration.md#communication-topology)).
 
 They say who talked to whom, not *what* reached whom: which facts were
-shared is a scenario-specific (or semantic) question. Runs recorded before
-these metrics existed have none (`—` in the UI).
+shared is a scenario-specific (or semantic) question — answered by
+[exposure detection](exposure.md), an analysis pass over finished runs. Runs
+recorded before these metrics existed have none (`—` in the UI).
 
 **Credentials never enter the trace.** Configured keys are scrubbed from every
 payload before it is written, as defense in depth; keys are never part of

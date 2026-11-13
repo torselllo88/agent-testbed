@@ -84,7 +84,9 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     name: "Service Settlement",
     summary: "Research task — six functions decide a contractor's milestone payment; hidden-profile facts, fixed rounds, outcome classes",
     // v1: initial — instance dev-01, 3 fixed rounds, required proposal, one attempt.
-    version: 1,
+    // v2: no scheduler.startAgentId (the rotation still starts with Operations, first in config order),
+    //     so a batch can draw the speaking order from a seed (randomization, $instance).
+    version: 2,
     config: () => serviceSettlementConfig(),
   },
 ];

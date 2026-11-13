@@ -171,6 +171,7 @@ isolation is enforced at runtime and by tests. See
 | People in the room: spectators and debrief | [docs/people-in-the-room.md](docs/people-in-the-room.md) |
 | Web UI | [docs/web-ui.md](docs/web-ui.md) |
 | Running on a remote server (shared GPU node, no root, UI over SSH) | [docs/remote-server.md](docs/remote-server.md) |
+| Exposure detection: which facts reached whom (LLM labels, validation against manual labels) | [docs/exposure.md](docs/exposure.md) |
 | Architecture | [docs/architecture.md](docs/architecture.md) |
 | Extending: scenarios, schedulers, decision rules, providers | [docs/extending.md](docs/extending.md) |
 | Operator HTTP API | [docs/http-api.md](docs/http-api.md) |

@@ -90,7 +90,15 @@ After the run the view shows the outcome, the final proposal (id and hash), the
 votes, every evaluator check, per-agent usage, routing statistics and the full
 chronological event trace with expandable payloads. A **Communication** card
 summarizes who addressed whom, responses, participation and time to decision
-([metrics](reproducibility.md#metrics)). Buttons: **Rerun same
+([metrics](reproducibility.md#metrics)). Research-run details in the summary:
+**First proposal** (its outcome and class, committed or not, failed checks);
+the outcome class next to the outcome; **Consensus** says "no vote" when the
+proposer's submission is the decision; **LLM calls** warns about prompts that
+may exceed a self-hosted model's context window, calls with thinking, and
+calls served while the model was partly on the CPU; **Communication** shows a
+non-complete topology (ring arrangement), the speaking order and its seed, and
+by which round every agent's information could reach the proposer. Under a
+topology each room message shows whom it reached (→ names). Buttons: **Rerun same
 config**, **Export JSON**. Under *People in the room*: spectator messages,
 debrief sessions with their usage, and operator open/close.
 
@@ -116,5 +124,10 @@ a note: people talk in that room.
 
 A form to define variables × repetitions with a preview of the resulting
 conditions, and a results page with per-condition aggregates plus CSV and JSON
-export. Batch runs are hidden from the Experiments list by default; a toggle
+export. The path field suggests the research variables too: `communication`,
+`randomization`, `discussion.fixedRounds`, `$instance` and `$solo`
+([batches](batches.md#spec)). The results page warns when runs had calls
+served partly on the CPU or prompts that may not have fit the context window.
+Batch specs as files (e.g. `examples/*.batch.json`) run from the CLI:
+`npm run batch -- <spec>`; they appear here like any batch. Batch runs are hidden from the Experiments list by default; a toggle
 shows them. See [batches](batches.md).

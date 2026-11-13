@@ -21,6 +21,21 @@ export interface EvaluationResult {
 }
 
 /**
+ * One task-relevant proposition of an instance, TRUE for that instance — what
+ * the exposure detector (src/analysis/exposure.ts) looks for in messages.
+ */
+export interface TaskFact {
+  /** Stable within the instance, e.g. "compliance.destination.ACC-7720". */
+  id: string;
+  /** fact: someone's private fact; derived: a conclusion combining facts; solution: the complete decision (solution relay). */
+  kind: "fact" | "derived" | "solution";
+  /** The agent whose private information it is (kind "fact"); null otherwise. */
+  source: string | null;
+  /** The true proposition, in plain words. */
+  statement: string;
+}
+
+/**
  * Scenario-specific, deterministic judge of a committed proposal. It is
  * independent of the agents and is never consulted during the run: the
  * runtime only uses `proposalSchema` (structure, not correctness) before
@@ -37,4 +52,10 @@ export interface ScenarioEvaluator<P = unknown, Params = unknown> {
   readonly proposalSchema: z.ZodType<P, z.ZodTypeDef, unknown>;
   readonly paramsSchema: z.ZodType<Params, z.ZodTypeDef, unknown>;
   evaluate(proposal: P, params: Params): EvaluationResult;
+  /**
+   * Optional: the closed list of task-relevant propositions of an instance,
+   * for the exposure detector. Built from the same params as the facts and
+   * the ground truth. Pure; never used during a run.
+   */
+  facts?(params: Params): TaskFact[];
 }

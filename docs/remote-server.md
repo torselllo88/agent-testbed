@@ -159,6 +159,18 @@ On the run's page, or in the CSV:
 | settings reached the server | **Event trace** (bottom of the page), filter `llm_call`, click a row | `think: false`, `contextLength`, `seed`, `temperature` as configured; `servedModel` as requested |
 | time per call | Event trace → `llm_call` → `providerMeta.durationsMs` | `load` large only on the first call (a cold model); `total` × calls per run ≈ run time — the basis for planning a batch |
 
+## Which facts reached whom
+
+After a batch, label its messages with the same Ollama endpoint and export
+(details: [exposure detection](exposure.md)):
+
+```bash
+nohup npm run detect -- label --batch <id> \
+  --model '{"provider":"openai-compatible","endpoint":"lab-ollama","model":"qwen3.8:27b","structuredOutput":"native","temperature":0,"seed":1,"maxOutputTokens":1500,"think":false,"contextLength":8192}' \
+  > ~/testbed/logs/detect.log 2>&1 &
+npm run detect -- export --batch <id> --runs ~/testbed/results/exposure-runs.csv --facts ~/testbed/results/exposure-facts.csv
+```
+
 ## Keeping results
 
 Batch CSV and JSON go wherever `--csv` / `--out` point. The database itself:

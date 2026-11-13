@@ -7,7 +7,8 @@ reach, and paired randomization of speaking order and ring. Usage:
 [configuration](../configuration.md#communication-topology). Not implemented:
 directed graphs, the topology-aware router, point-to-point messages, network
 knowledge as a variable, dynamic graphs, simultaneous rounds, local decisions.
-Level 2 (fact propagation) needs a scenario's fact list and a detector — next.*
+Level 2 (fact propagation): [exposure detection](../exposure.md) — a scenario's fact list, an LLM detector
+and every agent's exposure per fact at the decision horizon.*
 
 ## Goal
 

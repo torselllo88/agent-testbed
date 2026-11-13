@@ -13,6 +13,7 @@
     "gui": "tsx src/server/main.ts",
     "experiment": "tsx src/cli/run.ts",
     "batch": "tsx src/cli/batch.ts",
+    "detect": "tsx src/cli/detect.ts",
     "room:mock": "tsx src/cli/roomMock.ts",
     "test": "vitest run",
     "test:watch": "vitest",

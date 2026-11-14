@@ -3,6 +3,9 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { ExposureDetectionError } from "../analysis/exposure.js";
+import { ExposureConflictError, ExposureService } from "../analysis/exposureService.js";
+import { exposureFactsCsv, exposureRunsCsv } from "../analysis/exposureReport.js";
 import { BatchValidationError, type BatchService } from "../batch/service.js";
 import { SpecLibrary } from "../batch/specLibrary.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
@@ -23,6 +26,7 @@ import { isSelfHostedProvider, type ProviderRegistry } from "../llm/registry.js"
 import type { Db } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
+import { ExposureRepository } from "../persistence/exposureRepository.js";
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
 import { BUILTIN_SCENARIOS, DEMO, demoFacts } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
@@ -49,6 +53,8 @@ export interface AppDeps {
   externalApi?: http.RequestListener;
   /** Batch specs offered in the batch form (default: specs/ and examples/ under the working directory). */
   specLibrary?: SpecLibrary;
+  /** Exposure labeling jobs, summaries and manual labeling (created from db/providers/evaluators when omitted). */
+  exposure?: ExposureService;
 }
 
 interface RouteContext {
@@ -75,6 +81,14 @@ const CreateScenarioBody = z.union([z.object({ builtin: z.string() }), ConfigBod
 const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional(), overrides: RunOverridesSchema.optional() });
 const RunScenarioBody = z.object({ overrides: RunOverridesSchema.optional() });
 const BatchBody = z.object({ spec: z.unknown() });
+const LabelBody = z.object({ batchId: z.string().optional(), experimentId: z.string().optional(), model: z.unknown(), force: z.boolean().optional() });
+const SampleBody = z.object({ n: z.number().int().min(1).max(1000), seed: z.number().int().min(0), name: z.string().max(200).optional() });
+const AnnotationBody = z.object({
+  annotator: z.string().trim().min(1).max(100),
+  experimentId: z.string().min(1),
+  messageId: z.string().min(1),
+  labels: z.record(z.string()),
+});
 /** A person's text message in the room — chat only; it can never carry an operator command. */
 const HumanMessageBody = z.object({
   senderId: z.string().trim().min(1).max(100),
@@ -450,6 +464,96 @@ const ROUTES: Route[] = [
     },
   },
 
+  // ------------------------------------------------------------ exposure (docs/exposure.md)
+  {
+    method: "GET",
+    pattern: /^\/api\/exposure$/,
+    handle: ({ res, deps }) => sendJson(res, 200, { job: deps.exposure!.status(), busy: { runningExperiments: deps.service.runningIds().length } }),
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/exposure\/label$/,
+    handle: async ({ req, res, deps }) => {
+      const input = await body(req, LabelBody);
+      const scope = input.experimentId ? { experimentId: input.experimentId } : input.batchId ? { batchId: input.batchId } : {};
+      sendJson(res, 202, { job: deps.exposure!.start(scope, input.model, input.force ?? false) });
+    },
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/exposure\/cancel$/,
+    handle: ({ res, deps }) => sendJson(res, 200, { cancelled: deps.exposure!.cancel() }),
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/experiments/${ID}/exposure$`),
+    handle: ({ res, params, deps, experiments }) => {
+      const id = decodeRouteParam(params[0]!);
+      experiments.getOrThrow(id);
+      sendJson(res, 200, deps.exposure!.runExposure(id));
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/batches/${ID}/exposure$`),
+    handle: ({ res, params, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      deps.batches.view(id); // 404 for an unknown batch
+      sendJson(res, 200, { ...deps.exposure!.batchExposure(id), samples: deps.exposure!.samples(id) });
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/batches/${ID}/exposure/export$`),
+    handle: ({ res, params, url, deps, experiments }) => {
+      const id = decodeRouteParam(params[0]!);
+      deps.batches.view(id);
+      const exposures = new ExposureRepository(deps.db);
+      const entries = experiments.list({ batchId: id, limit: 100000 }).map((run) => ({ run, detection: exposures.latest(run.id) }));
+      const kind = url.searchParams.get("kind") === "facts" ? "facts" : "runs";
+      res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="exposure-${kind}-${id}.csv"` });
+      res.end(kind === "facts" ? exposureFactsCsv(entries) : exposureRunsCsv(entries));
+    },
+  },
+  {
+    method: "POST",
+    pattern: new RegExp(`^/api/batches/${ID}/exposure/samples$`),
+    handle: async ({ req, res, params, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      deps.batches.view(id);
+      const input = await body(req, SampleBody);
+      sendJson(res, 201, { sample: deps.exposure!.createSample(id, input.n, input.seed, input.name) });
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/exposure/samples/${ID}$`),
+    handle: ({ res, params, url, deps }) =>
+      sendJson(res, 200, deps.exposure!.sampleForAnnotator(decodeRouteParam(params[0]!), (url.searchParams.get("annotator") ?? "").trim())),
+  },
+  {
+    method: "PUT",
+    pattern: new RegExp(`^/api/exposure/samples/${ID}/annotations$`),
+    handle: async ({ req, res, params, deps }) => {
+      deps.exposure!.saveAnnotation(decodeRouteParam(params[0]!), await body(req, AnnotationBody));
+      sendJson(res, 200, { ok: true });
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/exposure/samples/${ID}/agreement$`),
+    handle: ({ res, params, deps }) => sendJson(res, 200, deps.exposure!.agreement(decodeRouteParam(params[0]!))),
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/exposure/samples/${ID}/annotations\\.csv$`),
+    handle: ({ res, params, deps }) => {
+      const id = decodeRouteParam(params[0]!);
+      res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="annotations-${id}.csv"` });
+      res.end(deps.exposure!.annotationsCsv(id));
+    },
+  },
+
   // ------------------------------------------------------------ batches
   {
     method: "GET",
@@ -562,6 +666,8 @@ function errorStatusAndMessage(err: unknown): { status: number; body: Record<str
   if (err instanceof ConfigNotRunnableError) return { status: 400, body: { error: err.message, problems: err.problems } };
   if (err instanceof BatchValidationError) return { status: 400, body: { error: err.message, problems: err.problems } };
   if (err instanceof InvalidCommandError || err instanceof ReadOnlyScenarioError) return { status: 409, body: { error: err.message } };
+  if (err instanceof ExposureConflictError || err instanceof ExposureDetectionError) return { status: 409, body: { error: err.message } };
+  if (err instanceof z.ZodError) return { status: 400, body: { error: err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ") } };
   if (err instanceof Error && /^(Scenario|Experiment|Batch) not found:/.test(err.message)) return { status: 404, body: { error: err.message } };
   return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } };
 }
@@ -598,7 +704,8 @@ export function hostAllowed(hostHeader: string | undefined, extraHosts: readonly
   return LOOPBACK_HOSTS.has(host) || extraHosts.some((h) => h.toLowerCase() === host);
 }
 
-export function createApp(deps: AppDeps): http.Server {
+export function createApp(appDeps: AppDeps): http.Server {
+  const deps: AppDeps = appDeps.exposure ? appDeps : { ...appDeps, exposure: new ExposureService(appDeps) };
   const repos = {
     scenarios: new ScenarioRepository(deps.db),
     experiments: new ExperimentRepository(deps.db),

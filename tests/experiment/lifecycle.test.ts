@@ -129,7 +129,8 @@ describe("discussion termination", () => {
     });
     useModel(config, "test/slow");
     const metrics = await h.runner(config).run();
-    expect(metrics.termination).toMatchObject({ outcome: "TIMEOUT", category: "budget" });
+    // Wall-clock: infrastructure, excluded from rates — never a failure of the agents.
+    expect(metrics.termination).toMatchObject({ outcome: "TIMEOUT", category: "infrastructure", status: "ABORTED", detail: { limit: "timeLimitSeconds" } });
   });
 });
 

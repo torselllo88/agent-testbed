@@ -636,3 +636,16 @@ body.watch-mode .app { max-width: none; padding: 0; }
 .watch-stop { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
 .watch-stop:hover { border-color: var(--bad, #b3261e); color: var(--bad, #b3261e); }
 .watch-stop[hidden] { display: none; }
+
+/* ---------- manual labeling (exposure) ---------- */
+.an-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.an-chip { min-width: 34px; padding: 2px 6px; font-size: 12px; }
+.an-chip.done { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bg); }
+.an-chip.current { outline: 2px solid var(--accent); }
+.an-message { white-space: pre-wrap; margin: 8px 0 12px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--neutral-bg); border-radius: 4px; }
+.an-table td { vertical-align: top; }
+.an-choice { white-space: nowrap; }
+.an-option { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-size: 13px; cursor: pointer; }
+.an-option.an-correct:has(input:checked) { color: var(--ok); font-weight: 600; }
+.an-option.an-incorrect:has(input:checked) { color: var(--bad); font-weight: 600; }
+.an-option.an-absent:has(input:checked) { color: var(--neutral); font-weight: 600; }

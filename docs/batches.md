@@ -104,7 +104,13 @@ into `specs/`. The UI never writes files on the server. An optional
   is 2000 runs per batch, checked before any condition is built.
 - **`order: "interleaved"`** (the default) runs repetition 1 of every condition,
   then repetition 2, and so on, so provider drift over time spreads evenly
-  across conditions.
+  across conditions. **Within a repetition, conditions run in variable order:
+  the first variable varies slowest.** For a paired design, list the pairing
+  variable (`$instance`, `randomization`) **before** the condition variable
+  (`communication`): then the two runs of an instance are adjacent in time,
+  and a drift of the shared GPU cannot fall on one condition only. The reverse
+  order would run every complete-graph run before every ring run. The preview
+  shows the run order.
 - **`stubLatencyMs`** defaults to 0. Batches never inherit the web demo's
   `STUB_LATENCY_MS`.
 - **`headless`** is `true` by default: nobody watches batch runs live, so
@@ -125,9 +131,13 @@ Batch runs never open a debrief.
 Per condition and overall:
 
 - success rate with a 95% Wilson interval, and consensus rate (over runs with a vote; null under `consensus.rule: "none"`);
-- first-proposal correctness (`firstProposal`): how many first proposals
-  passed every check, whatever the vote made of them, with its own Wilson
-  interval;
+- first-proposal correctness (`firstProposal`): over every evaluable run,
+  how many first proposals passed every check, whatever the vote made of them,
+  with its own Wilson interval. A run that never froze a proposal — the
+  proposer's answers failed the schema, it declined, a budget outcome — counts
+  as an incorrect first proposal (`noProposal`; the CSV says
+  `first_proposal_outcome = NO_PROPOSAL`), so this rate and the success rate
+  share one denominator;
 - outcome and category counts, and the scenario's outcome classes
   (`classifications`, e.g. `{ correct: 31, unsafe: 6, overcautious: 3 }`)
   where the evaluator reports them;

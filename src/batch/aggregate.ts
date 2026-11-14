@@ -30,11 +30,14 @@ export interface ConditionAggregate {
   /** Over evaluable runs that had a vote; null when none had (consensus rule "none"). */
   consensusRate: number | null;
   /**
-   * First-proposal correctness: among evaluable runs whose first proposal was
-   * frozen (and judged — runs recorded before this metric are left out), how
-   * many first proposals passed every check, whatever the vote made of them.
+   * First-proposal correctness over ALL evaluable runs: how many first
+   * proposals passed every check, whatever the vote made of them. A run that
+   * never froze a proposal (schema failures, a decline, a budget outcome) is an
+   * incorrect first proposal — same denominator as successRate, so the two
+   * rates never diverge through exclusions (`noProposal` says how many).
+   * Runs recorded before this metric existed are left out (`n` < evaluable).
    */
-  firstProposal: { n: number; success: number; rate: number | null; ci95: [number, number] | null };
+  firstProposal: { n: number; success: number; noProposal: number; rate: number | null; ci95: [number, number] | null };
   /** The scenario's outcome classes of committed outcomes (evaluators that report one), e.g. { correct: 7, unsafe: 2 }. */
   classifications: Record<string, number>;
   /** Calls whose prompt probably did not fit the context window, over all runs — should be 0. */
@@ -109,8 +112,10 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     }
   }
 
-  const firsts = evaluableMetrics.map((m) => m.proposals?.first).filter((f) => f != null);
-  const firstSuccess = firsts.filter((f) => f.outcome === "SUCCESS").length;
+  // Runs that record the metric at all (proposals.evaluated exists): with or without a frozen first proposal.
+  const withMetric = evaluableMetrics.filter((m) => Array.isArray(m.proposals?.evaluated));
+  const firstSuccess = withMetric.filter((m) => m.proposals.first?.outcome === "SUCCESS").length;
+  const noProposal = withMetric.filter((m) => !m.proposals.first).length;
   const classifications: Record<string, number> = {};
   for (const m of metrics) {
     const c = (m.evaluation as { classification?: unknown } | null)?.classification;
@@ -128,7 +133,7 @@ export function aggregate(key: string, runs: ExperimentRecord[]): ConditionAggre
     successRate: evaluable.length ? success / evaluable.length : null,
     successRateCI95: wilson(success, evaluable.length),
     consensusRate: rate(evaluableMetrics.filter((m) => m.consensusRule !== "none"), (m) => m.consensusReached),
-    firstProposal: { n: firsts.length, success: firstSuccess, rate: firsts.length ? firstSuccess / firsts.length : null, ci95: wilson(firstSuccess, firsts.length) },
+    firstProposal: { n: withMetric.length, success: firstSuccess, noProposal, rate: withMetric.length ? firstSuccess / withMetric.length : null, ci95: wilson(firstSuccess, withMetric.length) },
     classifications,
     contextOverflowSuspected: metrics.reduce((s, m) => s + (m.llmCalls?.contextOverflowSuspected ?? 0), 0),
     runsWithPartialGpuOffload: metrics.filter((m) => (m.llmCalls?.partialGpuOffload ?? 0) > 0).length,

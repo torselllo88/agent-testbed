@@ -311,9 +311,21 @@ export function computeMetrics(events: ExperimentEvent[], opts: { intervened?: b
         }
         break;
       }
-      case EventType.EVALUATION_RESULT:
+      case EventType.EVALUATION_RESULT: {
         m.evaluation = p;
+        // Without a vote (consensus rule "none") the committed proposal is only known here.
+        const committed = frozenById.get(String(p.proposalId));
+        if (!m.proposals.final && committed) {
+          m.proposals.final = {
+            id: String(committed.id),
+            proposerId: String(committed.proposerId),
+            body: committed.body,
+            rationale: String(committed.rationale ?? ""),
+            hash: String(committed.hash),
+          };
+        }
         break;
+      }
       case EventType.PROPOSAL_EVALUATED:
         m.proposals.evaluated.push({
           proposalId: String(p.proposalId),

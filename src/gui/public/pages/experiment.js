@@ -13,6 +13,7 @@ import {
   phaseBadge,
   showError,
 } from "../shared.js";
+import { mountRunExposure } from "../exposureUi.js";
 
 const POLL_MS = 1000;
 
@@ -339,12 +340,12 @@ export async function renderExperiment(experimentId) {
               ? `<p class="muted small">${escapeHtml(s.proposals.final.id)} · by ${escapeHtml(agentName(s.proposals.final.proposerId))} · hash ${escapeHtml(s.proposals.final.hash.slice(0, 16))}…</p>
                  ${jsonBlock(s.proposals.final.body)}
                  <p>${escapeHtml(s.proposals.final.rationale)}</p>`
-              : `<p class="muted">No proposal was voted on.</p>`
+              : `<p class="muted">${s.consensusRule === "none" ? "No proposal was committed." : "No proposal was voted on."}</p>`
           }
         </div>
         <div class="card">
           <h2>Votes</h2>
-          ${votes ? `<table><thead><tr><th>Agent</th><th>Vote</th><th>Reason</th></tr></thead><tbody>${votes}</tbody></table>` : `<p class="muted">No votes.</p>`}
+          ${votes ? `<table><thead><tr><th>Agent</th><th>Vote</th><th>Reason</th></tr></thead><tbody>${votes}</tbody></table>` : `<p class="muted">${s.consensusRule === "none" ? "No vote: the proposer's submission is the decision." : "No votes."}</p>`}
         </div>
       </div>
       ${communication}
@@ -526,6 +527,7 @@ export async function renderExperiment(experimentId) {
       <div class="card"><h2>Runtime state</h2><div id="state-panel"></div></div>
     </div>
     <div id="results"></div>
+    <div id="exposure"></div>
     <div id="interaction"></div>
     <div id="trace"></div>`;
 
@@ -535,7 +537,16 @@ export async function renderExperiment(experimentId) {
     renderRoom();
   });
 
+  // Exposure (docs/exposure.md): once the run has finished, mounted once — it polls on its own while a labeling job runs.
+  let exposureMounted = false;
+  function mountExposureOnce() {
+    if (exposureMounted || state.running) return;
+    exposureMounted = true;
+    mountRunExposure(document.getElementById("exposure"), experimentId, agentName);
+  }
+
   function renderAll() {
+    mountExposureOnce();
     renderHeader();
     renderControls();
     renderRoom();

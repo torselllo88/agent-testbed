@@ -156,6 +156,7 @@ export class LlmCaller {
         requestedModel: spec.modelRef.model,
         temperature: spec.modelRef.temperature ?? null,
         seed: spec.modelRef.seed ?? null,
+        maxOutputTokens: spec.modelRef.maxOutputTokens ?? null,
         // Serving options of a self-hosted endpoint, as sent (null: the server's default).
         think: spec.modelRef.think ?? null,
         contextLength: spec.modelRef.contextLength ?? null,

@@ -38,6 +38,8 @@ describe("no vote", () => {
     expect(ofType(events, "phase_changed").find((e) => e.payload.to === "COMMITTED")!.payload).toMatchObject({ decidedBy: "proposer" });
     expect(metrics.turns).toMatchObject({ total: 19, byKind: { discussion: 18, proposal: 1 } });
     expect(metrics).toMatchObject({ consensusRule: "none", consensusReached: false, proposals: { first: { outcome: "SUCCESS", committed: true } } });
+    // The committed proposal is the final one, though nobody voted on it.
+    expect(metrics.proposals.final).toMatchObject({ proposerId: "operations", body: { decision: "execute", destination: "ACC-3148" } });
 
     const proposalCall = ofType(events, "llm_call").find((e) => e.payload.purpose === "proposal")!;
     const [system, user] = proposalCall.payload.messages as Array<{ content: string }>;

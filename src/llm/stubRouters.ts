@@ -23,6 +23,28 @@ export function nextInOrderRouter(request: CompletionRequest): string {
   return JSON.stringify({ nextAgentId: candidates[0] ?? "", reason: "first candidate" });
 }
 
+/**
+ * A crude, deterministic stand-in for the exposure detector — for trying the
+ * labeling pipeline without a model, never for measuring: a proposition counts
+ * as "correct" in a message that contains every id and number it names
+ * (ACC-7720, RAIL-Y, 12,000, …), else "absent". It never says "incorrect".
+ */
+export function keywordExposureDetector(request: CompletionRequest): string {
+  const ctx = request.context ?? {};
+  const text = String(ctx.messageText ?? "");
+  const facts = (ctx.facts as Array<{ id: string; statement: string }> | undefined) ?? [];
+  const tokens = (statement: string) => statement.match(/\b(?:[A-Z][A-Z0-9]*-[A-Z0-9]+|\d{1,3}(?:,\d{3})+)\b/g) ?? [];
+  const labels = Object.fromEntries(
+    facts.map((f) => {
+      const needed = tokens(f.statement);
+      const hit = needed.length > 0 && needed.every((t) => text.includes(t));
+      return [f.id, hit ? { label: "correct", evidence: needed.join(", ") } : { label: "absent", evidence: null }];
+    })
+  );
+  return JSON.stringify({ labels });
+}
+
 export function registerGenericStubs(stub: StubProvider): void {
   stub.register("router/next-in-order", nextInOrderRouter);
+  stub.register("detector/keywords", keywordExposureDetector);
 }

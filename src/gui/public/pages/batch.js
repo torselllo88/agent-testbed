@@ -1,4 +1,5 @@
 import { api, app, escapeHtml, formatCost, formatDuration, formatNumber, jsonBlock, outcomeBadge, showError } from "../shared.js";
+import { mountBatchExposure } from "../exposureUi.js";
 import { batchStatusBadge } from "./batches.js";
 
 const POLL_MS = 1500;
@@ -56,7 +57,12 @@ export async function renderBatch(batchId) {
       )
       .join("");
 
-    app.innerHTML = `
+    // The exposure section keeps its own state (model choice, open panels): only the rest is redrawn while the batch runs.
+    if (!document.getElementById("batch-main")) {
+      app.innerHTML = `<div id="batch-main"></div><div id="batch-exposure"></div>`;
+      mountBatchExposure(document.getElementById("batch-exposure"), batchId);
+    }
+    document.getElementById("batch-main").innerHTML = `
       <div class="breadcrumb"><a href="#/batches">Batches</a> / ${escapeHtml(batch.name)}</div>
       <div class="page-header">
         <h1>${escapeHtml(batch.name)} ${batchStatusBadge(batch.status)}</h1>
@@ -99,7 +105,7 @@ export async function renderBatch(batchId) {
       </details>
       <details class="card"><summary><h2>Spec</h2></summary>${jsonBlock(spec)}</details>`;
 
-    app.querySelectorAll("tr.link-row").forEach((row) => row.addEventListener("click", () => (location.hash = row.dataset.href)));
+    document.getElementById("batch-main").querySelectorAll("tr.link-row").forEach((row) => row.addEventListener("click", () => (location.hash = row.dataset.href)));
     document.getElementById("btn-cancel")?.addEventListener("click", async () => {
       if (!confirm("Cancel this batch? Running experiments are stopped; pending ones never start.")) return;
       try {
@@ -116,9 +122,10 @@ export async function renderBatch(batchId) {
     try {
       const data = await load();
       if (location.hash !== route) return;
-      const openDetails = [...app.querySelectorAll("details")].map((d) => d.open);
+      const main = () => document.getElementById("batch-main");
+      const openDetails = [...(main()?.querySelectorAll("details") ?? [])].map((d) => d.open);
       const running = render(data);
-      app.querySelectorAll("details").forEach((d, i) => (d.open = openDetails[i] ?? false));
+      main().querySelectorAll("details").forEach((d, i) => (d.open = openDetails[i] ?? false));
       if (running) setTimeout(tick, POLL_MS);
     } catch (err) {
       app.innerHTML = "";

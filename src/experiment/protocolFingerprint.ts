@@ -169,6 +169,16 @@ export function protocolAssets(variant: ProtocolVariant = DEFAULT_VARIANT): Reco
       ...(variant.proposalRequired
         ? { feedback: { proposalRequired: PROTOCOL_FEEDBACK.proposalRequired() }, proposalEnvelope: proposalJsonSchema(FIXTURE_PROPOSAL_SCHEMA, true) }
         : {}),
+      ...(variant.network
+        ? {
+            noticesNotDelivered: Object.fromEntries(
+              [...AUTHORED_PROTOCOL_LANGUAGES, "sr-Latn"].map((language) => [
+                language,
+                protocolStrings(language).proposalSubmitted({ attempt: 1, proposerName: "P", body: "{}", rationale: null }),
+              ])
+            ),
+          }
+        : {}),
       ...(variant.noVote
         ? {
             notices: Object.fromEntries(

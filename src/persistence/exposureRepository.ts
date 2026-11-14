@@ -1,4 +1,4 @@
-import type { Db } from "./db.js";
+import { withTransaction, type Db } from "./db.js";
 
 export interface ExposureDetectionRecord {
   id: string;
@@ -51,5 +51,82 @@ export class ExposureRepository {
 
   list(experimentId: string): ExposureDetectionRecord[] {
     return (this.db.prepare(`SELECT * FROM exposure_detections WHERE experiment_id = ? ORDER BY created_at, rowid`).all(experimentId) as unknown as Row[]).map(fromRow);
+  }
+}
+
+export interface ExposureSampleRecord {
+  id: string;
+  batchId: string | null;
+  name: string;
+  seed: number;
+  createdAt: string;
+  items: Array<{ experimentId: string; messageId: string }>;
+}
+
+export interface ExposureAnnotation {
+  annotator: string;
+  experimentId: string;
+  messageId: string;
+  factId: string;
+  label: string;
+  updatedAt: string;
+}
+
+interface SampleRow {
+  id: string;
+  batch_id: string | null;
+  name: string;
+  seed: number;
+  created_at: string;
+  items_json: string;
+}
+
+const sampleFromRow = (r: SampleRow): ExposureSampleRecord => ({
+  id: r.id,
+  batchId: r.batch_id,
+  name: r.name,
+  seed: Number(r.seed),
+  createdAt: r.created_at,
+  items: JSON.parse(r.items_json) as ExposureSampleRecord["items"],
+});
+
+/** Manual labeling: samples of messages and the labels people gave them. */
+export class AnnotationRepository {
+  constructor(private readonly db: Db) {}
+
+  createSample(sample: ExposureSampleRecord): void {
+    this.db
+      .prepare(`INSERT INTO exposure_samples (id, batch_id, name, seed, created_at, items_json) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(sample.id, sample.batchId, sample.name, sample.seed, sample.createdAt, JSON.stringify(sample.items));
+  }
+
+  sample(id: string): ExposureSampleRecord | null {
+    const row = this.db.prepare(`SELECT * FROM exposure_samples WHERE id = ?`).get(id) as SampleRow | undefined;
+    return row ? sampleFromRow(row) : null;
+  }
+
+  samples(batchId: string): ExposureSampleRecord[] {
+    return (this.db.prepare(`SELECT * FROM exposure_samples WHERE batch_id = ? ORDER BY created_at`).all(batchId) as unknown as SampleRow[]).map(sampleFromRow);
+  }
+
+  /** Replaces one annotator's labels for one message (every proposition given). */
+  saveLabels(sampleId: string, annotator: string, experimentId: string, messageId: string, labels: Record<string, string>): void {
+    const now = new Date().toISOString();
+    const upsert = this.db.prepare(
+      `INSERT INTO exposure_annotations (sample_id, annotator, experiment_id, message_id, fact_id, label, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (sample_id, annotator, experiment_id, message_id, fact_id) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at`
+    );
+    withTransaction(this.db, () => {
+      for (const [factId, label] of Object.entries(labels)) upsert.run(sampleId, annotator, experimentId, messageId, factId, label, now);
+    });
+  }
+
+  annotations(sampleId: string, annotator?: string): ExposureAnnotation[] {
+    const rows = (
+      annotator === undefined
+        ? this.db.prepare(`SELECT * FROM exposure_annotations WHERE sample_id = ? ORDER BY annotator, experiment_id, message_id, fact_id`).all(sampleId)
+        : this.db.prepare(`SELECT * FROM exposure_annotations WHERE sample_id = ? AND annotator = ? ORDER BY experiment_id, message_id, fact_id`).all(sampleId, annotator)
+    ) as Array<{ annotator: string; experiment_id: string; message_id: string; fact_id: string; label: string; updated_at: string }>;
+    return rows.map((r) => ({ annotator: r.annotator, experimentId: r.experiment_id, messageId: r.message_id, factId: r.fact_id, label: r.label, updatedAt: r.updated_at }));
   }
 }

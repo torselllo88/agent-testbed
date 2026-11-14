@@ -14,9 +14,9 @@
  */
 import fs from "node:fs";
 import { parseArgs } from "node:util";
-import { DETECTOR_VERSION, detectRun, factsHash, factsOf } from "../analysis/exposure.js";
+import { labelRuns } from "../analysis/exposure.js";
 import { agreementFromCsv, exposureFactsCsv, exposureRunsCsv, labelingSampleCsv, type RunWithExposure } from "../analysis/exposureReport.js";
-import { canonicalJson, ModelRefSchema } from "../experiment/config.js";
+import { ModelRefSchema } from "../experiment/config.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
 import { openDb } from "../persistence/db.js";
@@ -77,34 +77,22 @@ switch (positionals[0]) {
       abort.abort();
     });
     const runs = selectedRuns().filter((r) => r.finishedAt);
-    let labeled = 0;
-    let skipped = 0;
-    for (const [i, run] of runs.entries()) {
-      if (abort.signal.aborted) break;
-      let hash: string;
-      try {
-        hash = factsHash(factsOf(evaluators, run.config));
-      } catch (err) {
-        console.error(`[${i + 1}/${runs.length}] ${run.id}: ${err instanceof Error ? err.message : String(err)}`);
-        skipped += 1;
-        continue;
-      }
-      const done = exposures
-        .list(run.id)
-        .some((d) => d.detectorVersion === DETECTOR_VERSION && d.factsHash === hash && canonicalJson(d.model) === canonicalJson(model));
-      if (done && !values.force) {
-        skipped += 1;
-        continue;
-      }
-      const record = await detectRun({ db, providers, evaluators }, run.id, model, {
-        signal: abort.signal,
-        onMessage: (m, total) => process.stderr.write(`\r[${i + 1}/${runs.length}] ${run.id}: message ${m}/${total}   `),
-      });
-      const s = (record.result as { summary: { proposerFacts: { total: number; correct: number }; unlabeledMessages: number } }).summary;
-      process.stderr.write(`\r[${i + 1}/${runs.length}] ${run.id}: proposer correctly exposed to ${s.proposerFacts.correct}/${s.proposerFacts.total} facts${s.unlabeledMessages ? `, ${s.unlabeledMessages} message(s) not labeled` : ""}\n`);
-      labeled += 1;
-    }
-    console.error(`${labeled} run(s) labeled, ${skipped} skipped (already labeled with this detector, model and fact list — --force relabels — or no fact list).`);
+    let current = "";
+    const result = await labelRuns({ db, providers, evaluators }, runs.map((r) => r.id), model, {
+      force: values.force,
+      signal: abort.signal,
+      onRunStart: (i, total, runId) => (current = `[${i + 1}/${total}] ${runId}`),
+      onMessage: (m, total) => process.stderr.write(`\r${current}: message ${m}/${total}   `),
+      onRun: (_i, _total, runId, outcome, detail) => {
+        if (outcome === "skipped") return;
+        if (outcome === "failed") return void process.stderr.write(`\r${current}: ${detail}\n`);
+        const s = (exposures.latest(runId)!.result as { summary: { proposerFacts: { total: number; correct: number }; unlabeledMessages: number } }).summary;
+        process.stderr.write(`\r${current}: proposer correctly exposed to ${s.proposerFacts.correct}/${s.proposerFacts.total} facts${s.unlabeledMessages ? `, ${s.unlabeledMessages} message(s) not labeled` : ""}\n`);
+      },
+    });
+    console.error(
+      `${result.labeled} run(s) labeled, ${result.skipped} skipped (already labeled with this detector, model and fact list — --force relabels), ${result.failed.length} could not be labeled${result.cancelled ? " — stopped" : ""}.`
+    );
     break;
   }
   case "export": {

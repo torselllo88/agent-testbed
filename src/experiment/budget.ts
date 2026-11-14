@@ -149,9 +149,10 @@ export class BudgetTracker {
   checkTimeLimit(): Termination | null {
     const remaining = this.remainingMs();
     if (remaining === null || remaining > 0) return null;
-    return termination("TIMEOUT", `Time limit of ${this.limits.timeLimitSeconds}s reached`, {
+    return termination("TIMEOUT", `Time limit of ${this.limits.timeLimitSeconds}s of active wall-clock time reached (provider latency and queueing count; the run is excluded from rates, not counted as a failure)`, {
       limit: "timeLimitSeconds",
       value: this.limits.timeLimitSeconds,
+      activeElapsedMs: this.activeElapsedMs(),
     });
   }
 

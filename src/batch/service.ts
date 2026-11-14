@@ -372,7 +372,8 @@ export class BatchService {
           m.consensusRule === "none" ? undefined : m.consensusReached,
           m.evaluation?.classification,
           Array.isArray(m.evaluation?.violated) ? m.evaluation.violated.join(";") : undefined,
-          m.proposals?.first?.outcome,
+          // No frozen first proposal in an evaluable run: NO_PROPOSAL — an incorrect first proposal, not a missing value.
+          m.proposals?.first?.outcome ?? (r.status && r.status !== "ABORTED" && Array.isArray(m.proposals?.evaluated) ? "NO_PROPOSAL" : undefined),
           m.proposals?.first?.classification,
           m.proposals?.first ? m.proposals.first.violated.join(";") : undefined,
           m.turns?.total,

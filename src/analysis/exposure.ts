@@ -89,6 +89,8 @@ export interface ExposureSummary {
   /** Messages labeled / not labeled (detector failures) — unlabeled ones count as saying nothing. */
   labeledMessages: number;
   unlabeledMessages: number;
+  /** Every message inside the horizon was labeled: only then is the proposer's exposure a measurement, not a lower bound. */
+  complete: boolean;
   /** The proposer's exposure at the decision horizon, per proposition. */
   proposer: Record<string, FactExposure>;
   /** Over the other agents' private facts (kind "fact", not the proposer's own). */
@@ -181,6 +183,69 @@ export class ExposureDetectionError extends Error {
   }
 }
 
+export class ExposureCancelledError extends Error {
+  constructor() {
+    super("labeling was cancelled");
+    this.name = "ExposureCancelledError";
+  }
+}
+
+export interface LabelRunsResult {
+  labeled: number;
+  /** Already labeled with this detector version, model and fact list (and force was off). */
+  skipped: number;
+  /** Runs that could not be labeled at all (no fact list, not finished, …). */
+  failed: Array<{ runId: string; error: string }>;
+  cancelled: boolean;
+}
+
+/**
+ * Labels many runs, one after another — the CLI's "label" and the web UI's
+ * labeling job. Skips finished passes with the same detector version, model
+ * and fact list unless forced, so it can always be resumed by running it
+ * again (e.g. after a restart).
+ */
+export async function labelRuns(
+  deps: { db: Db; providers: ProviderRegistry; evaluators: EvaluatorRegistry },
+  runIds: string[],
+  rawModel: unknown,
+  options: DetectOptions & { force?: boolean; onRunStart?: (index: number, total: number, runId: string) => void; onRun?: (index: number, total: number, runId: string, outcome: "labeled" | "skipped" | "failed", detail?: string) => void } = {}
+): Promise<LabelRunsResult> {
+  const model = ModelRefSchema.parse(rawModel);
+  const repo = new ExposureRepository(deps.db);
+  const result: LabelRunsResult = { labeled: 0, skipped: 0, failed: [], cancelled: false };
+  for (const [i, runId] of runIds.entries()) {
+    if (options.signal?.aborted) {
+      result.cancelled = true;
+      break;
+    }
+    options.onRunStart?.(i, runIds.length, runId);
+    try {
+      const started = new EventRepository(deps.db).list(runId).find((e) => e.type === EventType.EXPERIMENT_STARTED);
+      if (!started) throw new ExposureDetectionError(`run ${runId} has no trace`);
+      const hash = factsHash(factsOf(deps.evaluators, started.payload.config as ExperimentConfig));
+      const done = repo.list(runId).some((d) => d.detectorVersion === DETECTOR_VERSION && d.factsHash === hash && canonicalJson(d.model) === canonicalJson(model));
+      if (done && !options.force) {
+        result.skipped += 1;
+        options.onRun?.(i, runIds.length, runId, "skipped");
+        continue;
+      }
+      await detectRun(deps, runId, model, options);
+      result.labeled += 1;
+      options.onRun?.(i, runIds.length, runId, "labeled");
+    } catch (err) {
+      if (err instanceof ExposureCancelledError) {
+        result.cancelled = true;
+        break;
+      }
+      const error = err instanceof Error ? err.message : String(err);
+      result.failed.push({ runId, error });
+      options.onRun?.(i, runIds.length, runId, "failed", error);
+    }
+  }
+  return result;
+}
+
 /** Labels every agent message of a finished run and stores the pass. */
 export async function detectRun(
   deps: { db: Db; providers: ProviderRegistry; evaluators: EvaluatorRegistry },
@@ -201,6 +266,8 @@ export async function detectRun(
   const posted = agentMessages(events);
   const messages: LabeledMessage[] = [];
   for (const [i, m] of posted.entries()) {
+    // Cancelled: nothing is stored — a partial pass would look like a run where little reached anyone.
+    if (options.signal?.aborted) throw new ExposureCancelledError();
     const agent = agents.get(m.senderId);
     const call = await labelMessage(provider, model, facts, { senderName: agent?.name ?? m.senderId, senderRole: agent?.role ?? "", text: m.text }, options);
     messages.push({ ...m, labels: call.labels, call: call.call });
@@ -285,9 +352,13 @@ async function labelMessage(
           contextLength: model.contextLength,
           responseFormat: model.structuredOutput === "native" ? { name: "exposure_labels", schema: labelsJsonSchema(facts) } : undefined,
           signal: options.signal,
-          context: { purpose: "exposure_detection", factIds: facts.map((f) => f.id), messageText: message.text },
+          context: { purpose: "exposure_detection", factIds: facts.map((f) => f.id), facts: facts.map((f) => ({ id: f.id, statement: f.statement })), messageText: message.text },
         });
         last = { rawText: result.text, usage: result.usage, servedModel: result.servedModel };
+        // An answer cut at maxOutputTokens is not a label set — the longest, fact-densest messages would otherwise count as saying nothing.
+        if (result.finishReason === "length") {
+          return { labels: null, call: { ok: false, error: `the answer was cut at maxOutputTokens (${model.maxOutputTokens ?? "server default"}): raise it`, attempts, ...last, durationMs: Date.now() - started } };
+        }
         text = result.text;
         break;
       } catch (err) {
@@ -339,6 +410,7 @@ export function summarizeExposure(config: ExperimentConfig, facts: TaskFact[], m
     proposerId,
     labeledMessages: messages.filter((m) => m.labels).length,
     unlabeledMessages: messages.filter((m) => !m.labels).length,
+    complete: inHorizon.every((m) => m.labels),
     proposer,
     proposerFacts: count("fact"),
     proposerDerived: count("derived"),

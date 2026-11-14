@@ -71,8 +71,8 @@ are different research results.
 | task | `SUCCESS`, `MISSION_FAILURE` | SUCCESS / FAILURE |
 | coordination | `CONSENSUS_FAILURE`, `NO_PROPOSAL` | FAILURE |
 | protocol | `PROPOSAL_PARSE_FAILED`, `PROPOSAL_INVALID` | FAILURE |
-| budget | `TOKEN_BUDGET_EXCEEDED`, `COST_LIMIT_EXCEEDED`, `TIMEOUT`, `TURN_LIMIT_EXCEEDED` | FAILURE |
-| infrastructure | `PROVIDER_ERROR`, `ERROR`, `INTERRUPTED` | ABORTED |
+| budget | `TOKEN_BUDGET_EXCEEDED`, `COST_LIMIT_EXCEEDED`, `TURN_LIMIT_EXCEEDED` | FAILURE |
+| infrastructure | `PROVIDER_ERROR`, `ERROR`, `INTERRUPTED`, `TIMEOUT` | ABORTED |
 | operator | `STOPPED_BY_OPERATOR` | ABORTED |
 
 Recoverable problems do not end the run. Unparseable turns, invalid votes,
@@ -83,8 +83,11 @@ router failures and schema-rejected proposals are recorded as
 
 Soft limits (`discussionTurnLimit`, `rediscussionTurnLimit`) end a discussion
 round, not the run. Hard limits (`globalTurnLimit`, `agentTokenLimit`,
-`totalTokenCap`, `totalCostCapUsd`, `timeLimitSeconds`) end the run with a
-budget outcome; see [configuration](configuration.md).
+`totalTokenCap`, `totalCostCapUsd`) end the run with a budget outcome.
+`timeLimitSeconds` is wall-clock time — provider latency and queueing, which
+the agents do not control — so `TIMEOUT` is an infrastructure outcome
+(ABORTED, excluded from batch rates, like a provider error), not a failure;
+the outcome detail records the active time. See [configuration](configuration.md).
 
 Token and cost limits are checked at step boundaries; an in-flight call is
 never cut short for tokens. A limit can therefore be overshot by one step, and

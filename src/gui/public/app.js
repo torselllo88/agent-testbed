@@ -1,3 +1,4 @@
+import { renderAnnotate } from "./pages/annotate.js";
 import { renderBatch } from "./pages/batch.js";
 import { renderBatches } from "./pages/batches.js";
 import { renderDemo } from "./pages/demo.js";
@@ -22,6 +23,7 @@ const ROUTES = [
   { pattern: /^#\/experiments$/, routeKey: "experiments", render: renderExperiments },
   { pattern: /^#\/batches\/([^/]+)$/, routeKey: "batches", render: (m) => renderBatch(decodeURIComponent(m[1])) },
   { pattern: /^#\/batches$/, routeKey: "batches", render: renderBatches },
+  { pattern: /^#\/annotate\/([^/]+)$/, routeKey: "batches", render: (m) => renderAnnotate(decodeURIComponent(m[1])) },
   { pattern: /^#\/demo$/, routeKey: "demo", render: renderDemo },
 ];
 

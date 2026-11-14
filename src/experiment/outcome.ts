@@ -17,9 +17,11 @@ export const OUTCOMES = {
   // Budget: a hard limit ended the run.
   TOKEN_BUDGET_EXCEEDED: { category: "budget", status: "FAILURE" },
   COST_LIMIT_EXCEEDED: { category: "budget", status: "FAILURE" },
-  TIMEOUT: { category: "budget", status: "FAILURE" },
   TURN_LIMIT_EXCEEDED: { category: "budget", status: "FAILURE" },
-  // Infrastructure: the run could not be carried out as configured.
+  // Infrastructure: the run could not be carried out as configured. TIMEOUT is wall-clock time
+  // (provider latency, queueing), which the agents do not control: with fixed rounds it would
+  // hit the condition with the longer prompts first, so it is excluded from rates, never counted as failure.
+  TIMEOUT: { category: "infrastructure", status: "ABORTED" },
   PROVIDER_ERROR: { category: "infrastructure", status: "ABORTED" },
   ERROR: { category: "infrastructure", status: "ABORTED" },
   INTERRUPTED: { category: "infrastructure", status: "ABORTED" },

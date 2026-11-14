@@ -80,13 +80,14 @@ export function settlementFacts(p: SettlementParams): TaskFact[] {
     null,
     truth.secondApprovalRequired ? `This payment (${units(p.amount)}) needs a second treasury approval.` : `This payment (${units(p.amount)}) needs no second approval.`
   );
-  const route = truth.routes[0];
+  // Every valid route: the evaluator accepts any of them, so the solution proposition must too.
+  const routes = truth.routes.map((r) => `${r.destination} over ${r.rail}`);
   add(
     "solution",
     "solution",
     null,
-    truth.payable && route
-      ? `The complete instruction: pay ${units(p.amount)} to ${route.destination} over ${route.rail} in ${p.singleSettlement ? "one transfer" : "the transfers needed"}, referencing ${p.acceptance.recordId}, ${truth.secondApprovalRequired ? "with" : "without"} a second approval.`
+    truth.payable && routes.length
+      ? `The complete instruction: pay ${units(p.amount)} to ${routes.length === 1 ? routes[0] : `either ${routes.join(" or ")}`} in ${p.singleSettlement ? "one transfer" : "the transfers needed"}, referencing ${p.acceptance.recordId}, ${truth.secondApprovalRequired ? "with" : "without"} a second approval.`
       : "The complete decision: reject the payment request."
   );
   return facts;

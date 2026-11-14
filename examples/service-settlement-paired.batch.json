@@ -1,16 +1,46 @@
 {
   "name": "Service Settlement: complete vs ring, paired by seed, Ollama",
-  "description": "Complete vs ring on dev-01, seeds 1-3: the two runs with one seed share the speaking order. No vote: the first proposal is the decision.",
-  "base": { "builtin": "service-settlement" },
+  "description": "Complete vs ring on dev-01, seeds 1-3: the two runs with one seed share the speaking order. No vote: the first proposal is the decision. The seed variable comes first, so each instance's complete and ring runs are adjacent in time.",
+  "base": {
+    "builtin": "service-settlement"
+  },
   "variables": [
-    { "path": "communication", "label": "graph", "values": [{ "topology": { "type": "complete" } }, { "topology": { "type": "ring" } }] },
-    { "path": "randomization", "label": "seed", "values": [{ "seed": 1 }, { "seed": 2 }, { "seed": 3 }] },
-    { "path": "consensus", "label": "decision", "values": [{ "rule": "none" }] },
+    {
+      "path": "randomization",
+      "label": "seed",
+      "values": [
+        { "seed": 1 },
+        { "seed": 2 },
+        { "seed": 3 }
+      ]
+    },
+    {
+      "path": "communication",
+      "label": "graph",
+      "values": [
+        { "topology": { "type": "complete" } },
+        { "topology": { "type": "ring" } }
+      ]
+    },
+    {
+      "path": "consensus",
+      "label": "decision",
+      "values": [
+        { "rule": "none" }
+      ]
+    },
     {
       "path": "$models",
       "label": "model",
       "values": [
-        { "provider": "openai-compatible", "endpoint": "lab-ollama", "model": "qwen3.8:27b", "structuredOutput": "native", "think": false, "contextLength": 8192 }
+        {
+          "provider": "openai-compatible",
+          "endpoint": "lab-ollama",
+          "model": "qwen3.8:27b",
+          "structuredOutput": "native",
+          "think": false,
+          "contextLength": 8192
+        }
       ]
     }
   ],

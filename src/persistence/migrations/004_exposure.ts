@@ -17,4 +17,25 @@ CREATE TABLE IF NOT EXISTS exposure_detections (
   result_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_exposure_detections_experiment ON exposure_detections(experiment_id, created_at);
+
+-- Manual labeling (validation of the detector): a fixed sample of messages, labeled by people.
+CREATE TABLE IF NOT EXISTS exposure_samples (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT,
+  name TEXT NOT NULL,
+  seed INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  -- [{ experimentId, messageId }] in labeling order
+  items_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS exposure_annotations (
+  sample_id TEXT NOT NULL REFERENCES exposure_samples(id) ON DELETE CASCADE,
+  annotator TEXT NOT NULL,
+  experiment_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  fact_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (sample_id, annotator, experiment_id, message_id, fact_id)
+);
 `;

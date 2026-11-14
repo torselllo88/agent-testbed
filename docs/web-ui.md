@@ -136,3 +136,10 @@ served partly on the CPU or prompts that may not have fit the context window.
 The same files run from the CLI (`npm run batch -- <spec>`); those batches
 appear here like any other. Batch runs are hidden from the Experiments list by default; a toggle
 shows them. See [batches](batches.md).
+
+**Exposure** (the batch page, and a finished run's page): label the messages
+with a detector model as a job (progress, cancel), see what reached the
+proposer per condition and per proposition, download the exposure CSVs, and
+validate the detector: create a seeded sample, label it in the browser
+(`#/annotate/<sample>`, blind, per person) and compare people with each other
+and with the detector. See [exposure detection](exposure.md#in-the-web-ui).

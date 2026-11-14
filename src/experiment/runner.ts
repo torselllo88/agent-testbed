@@ -716,7 +716,7 @@ export class ExperimentRunner {
       this.frozenProposals.push(frozen);
       this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen" });
       const voting = this.consensus.id !== "none";
-      const submitted = (rationale: string) =>
+      const submitted = (rationale: string | null) =>
         this.strings.proposalSubmitted({ attempt: frozen.attempt, proposerName: proposer.name, body: JSON.stringify(frozen.body), rationale, ...(voting ? {} : { voting }) });
       // Machine-readable: which protocol notice this is, so projections (viewer) can recognize it.
       const notice = { kind: "proposal_submitted", proposalId: frozen.id };
@@ -728,7 +728,7 @@ export class ExperimentRunner {
         await this.publish({ kind: "system" }, submitted(frozen.rationale), { notice }, reached);
         const others = this.config.agents.map((a) => a.id).filter((id) => !reached.includes(id));
         // copy: the same notice once more, for the rest — projections show it once.
-        if (others.length) await this.publish({ kind: "system" }, submitted(""), { notice: { ...notice, copy: true } }, others);
+        if (others.length) await this.publish({ kind: "system" }, submitted(null), { notice: { ...notice, copy: true } }, others);
       }
       return frozen;
     }

@@ -29,7 +29,10 @@ detector version. Results live next to the runs in the database
    One call per message; the labels come back as JSON with every proposition
    (native structured output where the model has it), with the shortest quote
    as evidence. A message the detector could not answer is kept as
-   *unlabeled* and counts as saying nothing (reported).
+   *unlabeled* and counts as saying nothing — so the pass is marked **incomplete**
+   (`exposure_complete = false`; the batch summary leaves such runs out of its
+   means): relabel with a larger output cap. An answer cut at `maxOutputTokens`
+   is a failed call, never a label set.
 3. **Labels × audiences → exposure.** From the trace's audiences (who received
    each message) up to the **decision horizon** — the first proposal request —
    every agent's exposure per proposition:
@@ -51,6 +54,40 @@ detector version. Results live next to the runs in the database
 Not done by the detector: whether a derived proposition was *valid* for its
 sender (did it have the premises?). The labels say what was asserted; the
 trace says what the sender had seen — that check belongs to the analysis.
+
+## In the web UI
+
+**Batch page → Exposure.**
+- **Label this batch's messages:** choose the detector's model (provider, model,
+  thinking, context window; temperature 0, seed 1, 1500 output tokens), then
+  **Start labeling**. It is a job on the server, one at a time, with progress
+  (run, message) and **Cancel**. A run cut off by a cancel or a restart keeps
+  no partial pass; starting again skips every run already labeled with that
+  model (tick *relabel* to redo them). If experiments are running, it asks
+  first: both queue at the same model server.
+- **The summary per condition:** labeled runs; the share of the other agents'
+  private facts that reached the proposer correctly (mean per run); runs with
+  a distorted or conflicting fact; derived propositions reached; solution
+  relay; messages the detector could not label; and **by source** — of the
+  facts each agent held, how many reached the proposer correctly. Both CSVs
+  (runs, facts) download from there.
+- **Manual labeling:** **Create sample** draws a fixed, seeded set of messages
+  from the batch's runs (no detector pass needed). **Label** opens it in the
+  browser: one message at a time, every proposition *absent / correct /
+  incorrect*, under your name — several people label the same sample
+  independently, and nobody sees the detector's or anyone else's labels.
+  "Rest → absent" fills what is still empty. **Agreement**: every pair of
+  people, and the detector against each person (agreement, Cohen's κ,
+  precision and recall per label). **CSV**: every manual label.
+
+**Run page → Exposure** (once the run has finished): the latest pass —
+every proposition with what reached the proposer and the first correct
+mention (turn, sender), every message with what it asserted and the quoted
+evidence — and **Label this run's messages** / **Label again**.
+
+`stub · detector/keywords` is a crude stand-in that counts a proposition as
+asserted when a message contains every id and number it names: for trying the
+pipeline without a model, never for measuring.
 
 ## Commands
 
@@ -79,7 +116,7 @@ proposition — set `maxOutputTokens` accordingly (1500 for ~25 propositions).
 
 ## Validation
 
-`agree` compares the filled-in sample with the detector's labels (the latest
+In the browser (above) or with files: `agree` compares the filled-in sample with the detector's labels (the latest
 pass of each run): agreement, **Cohen's kappa** over the three labels, a
 confusion matrix (`confusion[human][detector]`), precision and recall per
 label, the same by kind (fact / derived / solution), and every disagreement
@@ -96,6 +133,7 @@ propositions is ~800 labels — mostly `absent`, so look at the `correct` and
 | runs | `batch_id`, `experiment_id`, `condition_key`, `task_definition_hash`, `topology`, `outcome`, `first_proposal_outcome`, `first_proposal_class`, `detector_version`, `facts_hash`, `labeled_messages`, `unlabeled_messages`, `facts_*` (other agents' private facts: total, correct, distorted, conflicting, absent), `derived_*`, `solution_relay` |
 | facts | `batch_id`, `experiment_id`, `condition_key`, `task_definition_hash`, `fact_id`, `kind`, `source`, `proposer_class`, `first_correct_turn`, `first_correct_from` |
 | sample | `experiment_id`, `message_id`, `sender`, `message`, `fact_id`, `kind`, `statement`, `human_label`, `notes` |
+| manual labels (web UI) | `sample_id`, `annotator`, `experiment_id`, `message_id`, `fact_id`, `label`, `updated_at` |
 
 Join with the batch CSV on `experiment_id`.
 

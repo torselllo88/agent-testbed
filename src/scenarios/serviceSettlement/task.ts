@@ -86,8 +86,7 @@ Shared known facts:
 - Amount requested: ${units(p.amount)}.
 - Destination stated on the invoice: account ${p.requestedDestination}.
 - Payments to this class of supplier are normally sent over ${p.defaultRail}.
-- The contractor reports milestone ${p.milestone} as complete.
-- The project budget has funds for this payment.`,
+- The contractor reports milestone ${p.milestone} as complete.${p.availableFunds >= p.amount ? "\n- The project budget has funds for this payment." : ""}`,
     },
     roles: {
       operations: {

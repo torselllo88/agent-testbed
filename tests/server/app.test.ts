@@ -63,6 +63,15 @@ describe("HTTP basics", () => {
     expect(body.builtinScenarios.every((b: { version: number }) => b.version >= 1)).toBe(true);
   });
 
+  it("lists the batch specs in specs/ and examples/, and serves only those", async () => {
+    const { status, body } = await call("GET", "/api/batch-specs");
+    expect(status).toBe(200);
+    expect(body.specs.map((s: { id: string }) => s.id)).toContain("examples/service-settlement-paired.batch.json");
+    const one = await call("GET", `/api/batch-specs?id=${encodeURIComponent("examples/service-settlement-paired.batch.json")}`);
+    expect(one.body.spec).toMatchObject({ name: expect.stringMatching(/complete vs ring/), base: { builtin: "service-settlement" } });
+    expect((await call("GET", `/api/batch-specs?id=${encodeURIComponent("../package.json")}`)).status).toBe(404);
+  });
+
   it("serves the OpenRouter model list for the editor", async () => {
     const { status, body } = await call("GET", "/api/providers/openrouter/models");
     expect(status).toBe(200);

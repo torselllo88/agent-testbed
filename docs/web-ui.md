@@ -124,10 +124,15 @@ a note: people talk in that room.
 
 A form to define variables × repetitions with a preview of the resulting
 conditions, and a results page with per-condition aggregates plus CSV and JSON
-export. The path field suggests the research variables too: `communication`,
-`randomization`, `discussion.fixedRounds`, `$instance` and `$solo`
+export. **Start from a spec file** loads a `*.batch.json` from `specs/` or
+`examples/` into the form; **Import a spec as JSON** takes a pasted one;
+**Download spec JSON** saves the form as a file ([spec files](batches.md#spec-files)).
+**Models for all agents** adds a model choice (provider, model, thinking,
+context window) to the `$models` variable. The path field suggests the
+research variables too: `communication`, `randomization`, `consensus`,
+`discussion.fixedRounds`, `$instance`, `$models` and `$solo`
 ([batches](batches.md#spec)). The results page warns when runs had calls
 served partly on the CPU or prompts that may not have fit the context window.
-Batch specs as files (e.g. `examples/*.batch.json`) run from the CLI:
-`npm run batch -- <spec>`; they appear here like any batch. Batch runs are hidden from the Experiments list by default; a toggle
+The same files run from the CLI (`npm run batch -- <spec>`); those batches
+appear here like any other. Batch runs are hidden from the Experiments list by default; a toggle
 shows them. See [batches](batches.md).

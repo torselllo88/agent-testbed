@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canonicalJson, type ExperimentConfig } from "../experiment/config.js";
+import { canonicalJson, ModelChoiceSchema, withModelChoice, type ExperimentConfig, type ModelRef } from "../experiment/config.js";
 import { instantiate, type TaskFamily } from "./taskFamily.js";
 
 /**
@@ -12,6 +12,9 @@ import { instantiate, type TaskFamily } from "./taskFamily.js";
  *   "agents.*.model.model"       — `*` applies to every element of an array
  *   "scheduler"                  — whole objects are fine as values too
  *   "$agents"                    — virtual: value is the list of agent ids to keep (varies the number of agents)
+ *   "$models"                    — virtual: one model for every agent, as the run dialog's Models chooses it —
+ *                                  { provider, endpoint?, model, structuredOutput?, think?, contextLength? };
+ *                                  temperature, seed and output cap stay the scenario's
  *   "$instance"                  — virtual: a task instance of the base config's family — an instance id, or
  *                                  { "id", "params", "seed"? } — applied first, so every other variable
  *                                  layers on top (see batch/taskFamily.ts)
@@ -39,6 +42,8 @@ export const BatchSpecSchema = z.preprocess(
       : raw,
   z.object({
   name: z.string().min(1),
+  /** What the batch is for — shown where specs are listed (examples/, specs/). */
+  description: z.string().optional(),
   base: z.union([
     z.object({ scenarioId: z.string().min(1) }),
     z.object({ builtin: z.string().min(1) }),
@@ -93,6 +98,11 @@ function formatValue(value: unknown): string {
 /** How a variable's value appears in condition keys and the CSV: an inline instance by its id, not its whole parameter set. */
 export function displayValue(variable: BatchVariable, value: unknown): string {
   if (variable.path === "$instance" && value && typeof value === "object" && typeof (value as { id?: unknown }).id === "string") return (value as { id: string }).id;
+  if (variable.path === "$models" && value && typeof value === "object") {
+    const c = value as { provider?: string; endpoint?: string; model?: string; structuredOutput?: string; think?: boolean; contextLength?: number };
+    const extras = [c.structuredOutput, c.think === undefined ? null : `think ${c.think ? "on" : "off"}`, c.contextLength ? `ctx ${c.contextLength}` : null].filter(Boolean);
+    return `${c.endpoint ?? c.provider}/${c.model}${extras.length ? ` (${extras.join(", ")})` : ""}`;
+  }
   return formatValue(value);
 }
 
@@ -124,6 +134,16 @@ export function applyVariable(config: Record<string, unknown>, path: string, val
   if (!safePath(path)) throw new Error(`Unsafe variable path "${path}"`);
   if (path === "$instance") throw new Error("$instance is applied by conditionConfig, before every other variable");
   if (path === "$solo") throw new Error("$solo is applied by conditionConfig, after every other variable");
+  if (path.startsWith("$") && !["$models", "$agents"].includes(path)) {
+    throw new Error(`unknown virtual path "${path}" (known: $instance, $models, $agents, $solo)`);
+  }
+  if (path === "$models") {
+    const parsed = ModelChoiceSchema.safeParse(value);
+    if (!parsed.success) throw new Error(`$models: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")}`);
+    const agents = config.agents as Array<{ model: ModelRef }>;
+    config.agents = agents.map((a) => ({ ...a, model: withModelChoice(a.model, parsed.data) }));
+    return;
+  }
   if (path === "$agents") {
     if (!Array.isArray(value)) throw new Error(`$agents value must be an array of agent ids`);
     const agents = config.agents as Array<{ id: string }>;
@@ -166,7 +186,7 @@ function setAtPath(target: unknown, keys: string[], value: unknown, fullPath: st
  * (defaults inside a whole-object value) do not count.
  */
 export function droppedVariable(raw: unknown, parsed: ExperimentConfig, variable: BatchVariable): string | null {
-  if (variable.path === "$agents" || variable.path === "$instance" || variable.path === "$solo") return null;
+  if (variable.path.startsWith("$")) return null;
   const keys = variable.path.split(".");
   const applied = valuesAtPath(raw, keys);
   const landed = valuesAtPath(parsed, keys);

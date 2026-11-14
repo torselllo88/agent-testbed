@@ -108,9 +108,11 @@ nohup npm run batch -- examples/service-settlement-smoke.batch.json \
 tail -f ~/socio/testbed/logs/smoke.log
 ```
 
-The spec names the endpoint and the model with every serving option
-(`think`, `contextLength`, `temperature`, `seed`, `maxOutputTokens`); edit the
-model name there. A process that dies mid-run is closed as `INTERRUPTED` the
+The spec names the endpoint and the model with its serving options
+(`$models`: `think`, `contextLength`; temperature, seed and the output cap
+come from the scenario); edit the model name there. The same file loads into
+the web UI's batch form (**Batches → New batch → Start from a spec file**):
+the UI lists every `*.batch.json` in `specs/` and `examples/`. A process that dies mid-run is closed as `INTERRUPTED` the
 next time the testbed starts — nothing stays half-open.
 
 ## Operate it from your browser (web UI over SSH)

@@ -96,7 +96,7 @@ The lure — ACC-7720 over RAIL-X — fails `destination_approved` and
 
 Agents default to stub models. For a real model, set every agent's model —
 the run dialog's **Models** (with a self-hosted endpoint: Thinking, Context
-window), or a batch variable on `agents.*.model`:
+window), or the batch variable `$models` (the batch form's Models panel):
 [examples/service-settlement-smoke.batch.json](../../examples/service-settlement-smoke.batch.json)
 runs it once on an Ollama endpoint. See [remote server](../remote-server.md).
 

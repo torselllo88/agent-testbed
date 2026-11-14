@@ -81,4 +81,40 @@ await step("batches list shows the completed batch", async () => {
   if (!(await text("tbody")).includes("12 / 12")) throw new Error("progress not shown");
 });
 
+await step("spec file: an example loads into the form (base, variables, description)", async () => {
+  const listed = await js(`[...document.querySelectorAll("#b-spec option")].map((o) => o.value)`);
+  if (!listed.includes("examples/service-settlement-calibration.batch.json")) throw new Error(`examples not listed: ${listed.join(", ")}`);
+  await selectValue("#b-spec", "examples/service-settlement-calibration.batch.json");
+  if (!(await text("#b-spec-hint")).includes("Client Operations alone")) throw new Error("description not shown");
+  await click("#b-spec-load");
+  await waitFor(`document.querySelector("#b-preview-out .success-banner")?.textContent.includes("Loaded")`, "loaded");
+  if (!(await js(`document.querySelector("#b-name").value`)).includes("calibration")) throw new Error("name not filled");
+  if ((await js(`document.querySelector("#b-base").value`)) !== "builtin:service-settlement") throw new Error("base not selected");
+  const paths = await js(`[...document.querySelectorAll(".var-row .v-path")].map((i) => i.value).join(",")`);
+  if (paths !== "$instance,$solo,$models") throw new Error(`variables: ${paths}`);
+});
+
+await step("$models: the Models panel adds a value; with a stub model the spec previews", async () => {
+  await type(".var-row:nth-child(3) .v-values", "[]");
+  await selectValue("#b-model-provider", "stub");
+  await type("#b-model-model", "service-settlement/cooperative");
+  await click("#b-model-add");
+  const values = JSON.parse(await js(`document.querySelector(".var-row:nth-child(3) .v-values").value`));
+  if (values.length !== 1 || values[0].provider !== "stub" || values[0].model !== "service-settlement/cooperative") throw new Error(`$models: ${JSON.stringify(values)}`);
+  await click("#b-preview");
+  await waitFor(`document.querySelector("#b-preview-out .success-banner")?.textContent.includes("2 runs")`, "preview 2 runs");
+  const keys = await text("#b-preview-out ul");
+  if (!keys.includes("information=full") || !keys.includes("model=stub/service-settlement/cooperative")) throw new Error(`keys: ${keys}`);
+  await js(`document.querySelector("#b-models").open = true`);
+  await shot("batch-form-spec");
+});
+
+await step("import: pasted JSON fills the form", async () => {
+  await type("#b-import", JSON.stringify({ name: "Pasted spec", base: { builtin: "space-station" }, repetitions: 2, variables: [{ path: "consensus.rule", values: ["unanimity", "majority"] }] }));
+  await click("#b-import-apply");
+  if ((await js(`document.querySelector("#b-name").value`)) !== "Pasted spec") throw new Error("name not imported");
+  if ((await js(`document.querySelector("#b-reps").value`)) !== "2") throw new Error("repetitions not imported");
+  if ((await js(`document.querySelectorAll(".var-row").length`)) !== 1) throw new Error("variables not replaced");
+});
+
 await finish();

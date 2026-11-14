@@ -27,6 +27,18 @@ A runnable example: [examples/space-station-batch.json](../examples/space-statio
 npm run batch -- examples/space-station-batch.json --csv runs.csv
 ```
 
+## Spec files
+
+Specs live as files, `*.batch.json`: `specs/` for the group's own (pilot,
+calibration, real runs — commit them), `examples/` for those that come with
+the testbed. The CLI runs a file (`npm run batch -- specs/x.batch.json`); the
+web UI lists both folders under **Batches → New batch → Start from a spec
+file**, loads one into the form (name, description, base, variables,
+repetitions, …) to adjust and start, takes a pasted spec (**Import a spec as
+JSON**), and saves the form as a file (**Download spec JSON**) — to commit
+into `specs/`. The UI never writes files on the server. An optional
+`"description"` says what a batch is for.
+
 ## Spec
 
 - **`base`:** `{ "scenarioId" }` (a saved scenario; its version is recorded),
@@ -59,6 +71,14 @@ npm run batch -- examples/space-station-batch.json --csv runs.csv
     { "path": "communication", "label": "graph", "values": [{ "topology": { "type": "complete" } }, { "topology": { "type": "ring" } }] }
   ]
   ```
+- **One model for every agent: `$models`.** Each value is a model choice
+  as in the run dialog's Models — `{ "provider", "endpoint"?, "model",
+  "structuredOutput"?, "think"?, "contextLength"? }` — applied to every agent.
+  Temperature, seed and output cap stay the scenario's (unlike
+  `agents.*.model`, which replaces the whole model reference). Several values
+  compare models. Keys show it short:
+  `model=lab-ollama/qwen3.8:27b (native, think off, ctx 8192)`. An unknown
+  `$…` path is an error.
 - **Calibration: `$solo`.** `"full"` or `"public"`: the proposer **alone**,
   asked once — no discussion (`discussion.fixedRounds: 0`), no vote
   (`consensus.rule: "none"`). With `"full"` its private information is

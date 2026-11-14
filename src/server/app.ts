@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { BatchValidationError, type BatchService } from "../batch/service.js";
+import { SpecLibrary } from "../batch/specLibrary.js";
 import { CONSENSUS_RULES } from "../consensus/index.js";
 import { getTestbedVersion } from "../config/version.js";
 import type { EvaluatorRegistry } from "../evaluation/registry.js";
@@ -46,6 +47,8 @@ export interface AppDeps {
   operatorToken?: string;
   /** The External Room API mounted under /api/external/* on this listener (EXTERNAL_API_LISTENER=main). */
   externalApi?: http.RequestListener;
+  /** Batch specs offered in the batch form (default: specs/ and examples/ under the working directory). */
+  specLibrary?: SpecLibrary;
 }
 
 interface RouteContext {
@@ -448,6 +451,18 @@ const ROUTES: Route[] = [
   },
 
   // ------------------------------------------------------------ batches
+  {
+    method: "GET",
+    pattern: /^\/api\/batch-specs$/,
+    handle: ({ res, url, deps }) => {
+      const library = deps.specLibrary ?? new SpecLibrary();
+      const id = url.searchParams.get("id");
+      if (id === null) return sendJson(res, 200, { specs: library.list() });
+      const spec = library.read(id);
+      if (spec === null) throw new HttpError(404, `No loadable batch spec "${id}"`);
+      sendJson(res, 200, { id, spec });
+    },
+  },
   {
     method: "POST",
     pattern: /^\/api\/batches\/preview$/,

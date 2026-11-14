@@ -1,22 +1,13 @@
 {
   "name": "Service Settlement smoke: complete graph, one run, Ollama",
+  "description": "One run end to end on a self-hosted Ollama model: does everything work (settings reach the server, answers parse, prompts fit the window)?",
   "base": { "builtin": "service-settlement" },
   "variables": [
     {
-      "path": "agents.*.model",
+      "path": "$models",
       "label": "model",
       "values": [
-        {
-          "provider": "openai-compatible",
-          "endpoint": "lab-ollama",
-          "model": "qwen3.8:27b",
-          "structuredOutput": "native",
-          "temperature": 0,
-          "seed": 1,
-          "maxOutputTokens": 400,
-          "think": false,
-          "contextLength": 8192
-        }
+        { "provider": "openai-compatible", "endpoint": "lab-ollama", "model": "qwen3.8:27b", "structuredOutput": "native", "think": false, "contextLength": 8192 }
       ]
     }
   ],

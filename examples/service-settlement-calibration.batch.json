@@ -1,24 +1,15 @@
 {
   "name": "Service Settlement calibration: the proposer alone, full vs public information, Ollama",
+  "description": "Client Operations alone, asked once: with every function's facts (full) or only its own (public). Can the task be solved, and does it need the private facts?",
   "base": { "builtin": "service-settlement" },
   "variables": [
     { "path": "$instance", "label": "instance", "values": ["dev-01"] },
     { "path": "$solo", "label": "information", "values": ["full", "public"] },
     {
-      "path": "agents.*.model",
+      "path": "$models",
       "label": "model",
       "values": [
-        {
-          "provider": "openai-compatible",
-          "endpoint": "lab-ollama",
-          "model": "qwen3.8:27b",
-          "structuredOutput": "native",
-          "temperature": 0,
-          "seed": 1,
-          "maxOutputTokens": 400,
-          "think": false,
-          "contextLength": 8192
-        }
+        { "provider": "openai-compatible", "endpoint": "lab-ollama", "model": "qwen3.8:27b", "structuredOutput": "native", "think": false, "contextLength": 8192 }
       ]
     }
   ],

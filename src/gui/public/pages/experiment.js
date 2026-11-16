@@ -314,6 +314,8 @@ export async function renderExperiment(experimentId) {
           <dt>LLM calls</dt><dd>${s.llmCalls.total} (${s.llmCalls.failed} failed, ${s.llmCalls.parseFailures} unparseable)${
             s.llmCalls.contextOverflowSuspected ? ` ${badge(`${s.llmCalls.contextOverflowSuspected} prompt(s) may exceed the context window`, "bad")}` : ""
           }${s.llmCalls.withThinking ? ` ${badge(`${s.llmCalls.withThinking} with thinking`, "neutral")}` : ""}${
+            s.llmCalls.cutAtOutputCap ? ` ${badge(`${s.llmCalls.cutAtOutputCap} cut at the output limit`, "bad")}` : ""
+          }${
             s.llmCalls.partialGpuOffload
               ? ` ${badge(`${s.llmCalls.partialGpuOffload} partly on CPU (min ${Math.round((s.llmCalls.minGpuFraction ?? 0) * 100)}% on GPU)`, "bad")}`
               : ""

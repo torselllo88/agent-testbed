@@ -10,7 +10,7 @@ import { ExperimentRepository, type ExperimentRecord } from "../persistence/expe
 import { AnnotationRepository, ExposureRepository, type ExposureSampleRecord } from "../persistence/exposureRepository.js";
 import { toCsv } from "./csv.js";
 import { EXPOSURE_LABELS, factsOf, labelRuns, type ExposureClass, type ExposureLabel, type ExposureResult } from "./exposure.js";
-import { agreement, type AgreementReport } from "./exposureReport.js";
+import { agreement, byConditionOf, detectorInstrument, stratifiedDraw, type AgreementReport } from "./exposureReport.js";
 
 /**
  * Exposure detection for the web UI: one labeling job at a time (the model
@@ -40,6 +40,10 @@ export interface LabelJob {
   labeled: number;
   skipped: number;
   failed: Array<{ runId: string; error: string }>;
+  /** Label even while experiments run (otherwise the job waits for them before every request). */
+  whileBusy: boolean;
+  /** Experiments the job is waiting for right now (0: not waiting). */
+  waitingFor: number;
   /** The run being labeled now, and how far. */
   current: { runId: string; message: number; messages: number } | null;
   startedAt: string;
@@ -64,6 +68,8 @@ export interface ConditionExposure {
   unlabeledMessages: number;
   /** Labeled runs with an unlabeled message inside the horizon: their exposure is a lower bound, left out of the means. */
   incomplete: number;
+  /** Labels the detector claimed with a quote not in the message (counted as absent), over labeled runs — compare between conditions. */
+  unverifiedLabels: number;
   /** Private facts that reached the proposer correctly, by the agent who held them (summed over labeled runs). */
   bySource: Record<string, Tally>;
 }
@@ -87,7 +93,11 @@ export class ExposureService {
   private readonly annotations: AnnotationRepository;
   private readonly experiments: ExperimentRepository;
 
-  constructor(private readonly deps: { db: Db; providers: ProviderRegistry; evaluators: EvaluatorRegistry }) {
+  /** How often a waiting job looks whether the experiments have finished. */
+  private readonly pollMs: number;
+
+  constructor(private readonly deps: { db: Db; providers: ProviderRegistry; evaluators: EvaluatorRegistry; pollMs?: number }) {
+    this.pollMs = deps.pollMs ?? 5000;
     this.detections = new ExposureRepository(deps.db);
     this.annotations = new AnnotationRepository(deps.db);
     this.experiments = new ExperimentRepository(deps.db);
@@ -99,7 +109,20 @@ export class ExposureService {
     return this.job ? structuredClone(this.job) : null;
   }
 
-  start(scope: { batchId?: string; experimentId?: string }, rawModel: unknown, force = false): LabelJob {
+  /** Experiments being run right now by any live process sharing this database (this server, a CLI batch). */
+  runningExperiments(): number {
+    return this.experiments.countRunning();
+  }
+
+  /**
+   * The job yields to experiments: before every request to the model it waits
+   * while any experiment runs (in any process on this database — a batch
+   * started after the job too), unless whileBusy. The detector's requests would
+   * queue at the same model server, and a detector model other than the
+   * agents' makes the server swap models mid-run — reloads, CPU offload, slower
+   * and numerically different runs, and more timeouts for the longer prompts.
+   */
+  start(scope: { batchId?: string; experimentId?: string }, rawModel: unknown, force = false, whileBusy = false): LabelJob {
     if (this.job?.status === "running") throw new ExposureConflictError("A labeling job is already running — wait for it or cancel it");
     const model = ModelRefSchema.parse(rawModel);
     try {
@@ -114,6 +137,8 @@ export class ExposureService {
       scope,
       model: model as unknown as Record<string, unknown>,
       force,
+      whileBusy,
+      waitingFor: 0,
       status: "running",
       runsTotal: runs.length,
       runsDone: 0,
@@ -127,9 +152,18 @@ export class ExposureService {
     };
     this.job = job;
     const abort = (this.abort = new AbortController());
+    const gate = async () => {
+      if (whileBusy) return;
+      for (let busy = this.runningExperiments(); busy > 0 && !abort.signal.aborted; busy = this.runningExperiments()) {
+        job.waitingFor = busy;
+        await new Promise((r) => setTimeout(r, this.pollMs));
+      }
+      job.waitingFor = 0;
+    };
     this.done = labelRuns(this.deps, runs.map((r) => r.id), model, {
       force,
       signal: abort.signal,
+      gate,
       onRunStart: (_i, _n, runId) => {
         job.current = { runId, message: 0, messages: 0 };
       },
@@ -176,7 +210,8 @@ export class ExposureService {
       if (!run) throw new ExposureConflictError(`Unknown experiment "${scope.experimentId}"`);
       return [run];
     }
-    if (scope.batchId) return this.experiments.list({ batchId: scope.batchId, limit: 100000 }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    // The runs the outcome rates count: aborted ones (timeouts, provider errors) are excluded there, so here too.
+    if (scope.batchId) return this.experiments.list({ batchId: scope.batchId, limit: 100000 }).filter((r) => r.status !== "ABORTED").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     throw new ExposureConflictError("Say which batch or experiment to label");
   }
 
@@ -192,9 +227,13 @@ export class ExposureService {
   }
 
   /** Per condition: what reached the proposer, over the runs' latest passes. */
-  batchExposure(batchId: string): { runs: number; labeled: number; models: string[]; conditions: ConditionExposure[]; overall: ConditionExposure } {
-    const runs = this.experiments.list({ batchId, limit: 100000 }).filter((r) => r.finishedAt);
-    const entries = runs.map((run) => ({ run, result: (this.detections.latest(run.id)?.result as ExposureResult | undefined) ?? null, model: this.detections.latest(run.id)?.model ?? null }));
+  batchExposure(batchId: string): { runs: number; labeled: number; models: string[]; instruments: string[]; conditions: ConditionExposure[]; overall: ConditionExposure } {
+    // The same runs as the outcome rates: finished and not aborted.
+    const runs = this.experiments.list({ batchId, limit: 100000 }).filter((r) => r.finishedAt && r.status !== "ABORTED");
+    const entries = runs.map((run) => {
+      const latest = this.detections.latest(run.id);
+      return { run, result: (latest?.result as ExposureResult | undefined) ?? null, model: latest?.model ?? null, instrument: latest ? detectorInstrument(latest) : null };
+    });
     const summarize = (key: string, group: typeof entries): ConditionExposure => {
       const labeled = group.filter((e) => e.result);
       // Means over complete passes only: a run with an unlabeled message would pull "what reached" down for no reason.
@@ -224,15 +263,19 @@ export class ExposureService {
         solutionRelay: relays.length ? relays.filter((e) => ["correct", "conflicting"].includes(e.result!.summary.solutionRelay as string)).length / relays.length : null,
         unlabeledMessages: labeled.reduce((s, e) => s + e.result!.summary.unlabeledMessages, 0),
         incomplete: labeled.length - complete.length,
+        unverifiedLabels: labeled.reduce((s, e) => s + (e.result!.summary.unverifiedLabels ?? 0), 0),
         bySource,
       };
     };
     const keys = [...new Set(entries.map((e) => e.run.conditionKey ?? ""))].sort();
     const models = [...new Set(entries.filter((e) => e.model).map((e) => `${String(e.model!.endpoint ?? e.model!.provider)}/${String(e.model!.model)}`))];
+    // More than one detector version or model across the runs: the comparison mixes instruments.
+    const instruments = [...new Set(entries.map((e) => e.instrument).filter((i): i is string => i !== null))].sort();
     return {
       runs: runs.length,
       labeled: entries.filter((e) => e.result).length,
       models,
+      instruments,
       conditions: keys.map((k) => summarize(k, entries.filter((e) => (e.run.conditionKey ?? "") === k))),
       overall: summarize("all conditions", entries),
     };
@@ -247,8 +290,8 @@ export class ExposureService {
    */
   createSample(batchId: string, n: number, seed: number, name?: string): ExposureSampleRecord {
     const events = new EventRepository(this.deps.db);
-    const pool: Array<{ experimentId: string; messageId: string; key: string }> = [];
-    for (const run of this.experiments.list({ batchId, limit: 100000 }).filter((r) => r.finishedAt)) {
+    const pool: Array<{ experimentId: string; messageId: string; key: string; condition: string }> = [];
+    for (const run of this.experiments.list({ batchId, limit: 100000 }).filter((r) => r.finishedAt && r.status !== "ABORTED")) {
       try {
         factsOf(this.deps.evaluators, run.config);
       } catch {
@@ -257,14 +300,11 @@ export class ExposureService {
       for (const e of events.list(run.id)) {
         if (e.type !== EventType.MESSAGE_POSTED || (e.payload.sender as { kind: string }).kind !== "agent") continue;
         const messageId = String(e.payload.messageId);
-        pool.push({ experimentId: run.id, messageId, key: createHash("sha256").update(`${seed}:${run.id}:${messageId}`).digest("hex") });
+        pool.push({ experimentId: run.id, messageId, condition: run.conditionKey ?? "", key: createHash("sha256").update(`${seed}:${run.id}:${messageId}`).digest("hex") });
       }
     }
     if (pool.length === 0) throw new ExposureConflictError("No agent messages to sample: no finished run of this batch has a scenario with a fact list");
-    const items = pool
-      .sort((a, b) => a.key.localeCompare(b.key))
-      .slice(0, n)
-      .map(({ experimentId, messageId }) => ({ experimentId, messageId }));
+    const items = stratifiedDraw(pool, n).map(({ experimentId, messageId }) => ({ experimentId, messageId }));
     const sample: ExposureSampleRecord = { id: randomUUID(), batchId, name: name?.trim() || `Sample ${new Date().toISOString().slice(0, 16).replace("T", " ")}`, seed, createdAt: new Date().toISOString(), items };
     this.annotations.createSample(sample);
     return sample;
@@ -290,7 +330,7 @@ export class ExposureService {
   }
 
   /**
-   * What an annotator sees: each message with its sender and the instance's
+   * What an annotator sees: each message — not who wrote it, as the detector does not — and the instance's
    * propositions, and the annotator's own labels so far — never the
    * detector's (blind labeling).
    */
@@ -319,13 +359,11 @@ export class ExposureService {
       items: sample.items.map((item, index) => {
         const run = runOf(item.experimentId);
         const message = run.texts.get(item.messageId);
-        const agent = run.config.agents.find((a) => a.id === message?.senderId);
         const labels = Object.fromEntries(mine.filter((a) => a.experimentId === item.experimentId && a.messageId === item.messageId).map((a) => [a.factId, a.label]));
         return {
           index,
           experimentId: item.experimentId,
           messageId: item.messageId,
-          sender: { id: message?.senderId ?? null, name: agent?.name ?? message?.senderId ?? "?", role: agent?.role ?? "" },
           text: message?.text ?? "(message not found)",
           facts: factsOf(this.deps.evaluators, run.config).map((f) => ({ id: f.id, kind: f.kind, statement: f.statement })),
           labels,
@@ -355,8 +393,10 @@ export class ExposureService {
    */
   agreement(sampleId: string): {
     annotators: string[];
-    pairs: Array<{ a: string; b: string } & Omit<AgreementReport, "unmatched" | "byKind" | "disagreements">>;
-    detector: Array<{ annotator: string; unmatched: number } & Omit<AgreementReport, "unmatched" | "byKind" | "disagreements">>;
+    pairs: Array<{ a: string; b: string } & Omit<AgreementReport, "unmatched" | "byKind" | "byCondition" | "disagreements">>;
+    detector: Array<
+      { annotator: string; unmatched: number; byCondition: AgreementReport["byCondition"] } & Omit<AgreementReport, "unmatched" | "byKind" | "byCondition" | "disagreements">
+    >;
   } {
     this.requireSample(sampleId);
     const all = this.annotations.annotations(sampleId);
@@ -376,10 +416,16 @@ export class ExposureService {
       const result = this.detections.latest(runId)?.result as ExposureResult | undefined;
       for (const m of result?.messages ?? []) for (const [factId, l] of Object.entries(m.labels ?? {})) detectorLabel.set(key({ experimentId: runId, messageId: m.messageId, factId }), l.label);
     }
+    // Per condition too: the detector's errors must not differ between the conditions it compares.
+    const conditionOf = new Map([...new Set(all.map((a) => a.experimentId))].map((id) => [id, this.experiments.get(id)?.conditionKey ?? ""]));
     const detector = annotators.map((name) => {
       const mine = [...byAnnotator.get(name)!];
       const matched = mine.filter(([k]) => detectorLabel.has(k));
-      return { annotator: name, unmatched: mine.length - matched.length, ...agreement(matched.map(([k, human]) => ({ human, detector: detectorLabel.get(k)! }))) };
+      const byCondition = byConditionOf(
+        matched.map(([k, human]) => ({ human, detector: detectorLabel.get(k)!, runId: k.split("\u0000")[0]! })),
+        (p) => conditionOf.get(p.runId) ?? null
+      );
+      return { annotator: name, unmatched: mine.length - matched.length, byCondition, ...agreement(matched.map(([k, human]) => ({ human, detector: detectorLabel.get(k)! }))) };
     });
     return { annotators, pairs, detector };
   }

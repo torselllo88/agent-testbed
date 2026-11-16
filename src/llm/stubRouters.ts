@@ -38,10 +38,17 @@ export function keywordExposureDetector(request: CompletionRequest): string {
     facts.map((f) => {
       const needed = tokens(f.statement);
       const hit = needed.length > 0 && needed.every((t) => text.includes(t));
-      return [f.id, hit ? { label: "correct", evidence: needed.join(", ") } : { label: "absent", evidence: null }];
+      return [f.id, hit ? { label: "correct", evidence: quoteAround(text, needed[0]!) } : { label: "absent", evidence: null }];
     })
   );
   return JSON.stringify({ labels });
+}
+
+/** Two adjacent words of the message around the first one containing `token` — a real quote, as the detector must give. */
+function quoteAround(text: string, token: string): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  const i = Math.max(0, words.findIndex((w) => w.includes(token)));
+  return (i + 1 < words.length ? words.slice(i, i + 2) : words.slice(Math.max(0, i - 1), i + 1)).join(" ");
 }
 
 export function registerGenericStubs(stub: StubProvider): void {

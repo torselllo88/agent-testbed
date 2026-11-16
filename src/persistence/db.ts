@@ -145,6 +145,11 @@ function pidExists(pid: number): boolean {
   }
 }
 
+/** This process's owner id if it has one yet (never starts a heartbeat). */
+export function currentOwnerId(db: Db): string | undefined {
+  return ownerIds.get(db);
+}
+
 /**
  * Whether ANOTHER process that may still be alive owns a row. null / unknown
  * owners count as gone. This process's own rows are handled by the caller's

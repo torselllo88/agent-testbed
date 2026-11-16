@@ -171,8 +171,10 @@ ${agent.persona.trim()}`
       config.consensus.rule === "none"
         ? "- When the discussion ends, one participant is asked to submit the group's final decision. There is no vote: that submission is the decision."
         : "- When the discussion ends, one participant is asked to submit a formal proposal, and then every participant votes on exactly that proposal.",
-      // In a network, "already established" differs from agent to agent: the line would discourage passing information on.
-      network === null ? "- Be concise. Do not repeat information that has already been established." : "- Be concise.",
+      // "Do not repeat what is established" discourages passing information on, and in a network "established"
+      // differs from agent to agent. Fixed-round (research) designs drop it for every topology, so conditions
+      // differ only in delivery; the default protocol keeps it (its fingerprint is pinned).
+      network === null && !fixed ? "- Be concise. Do not repeat information that has already been established." : "- Be concise.",
     ]
       .join("\n")
       .split("\n")

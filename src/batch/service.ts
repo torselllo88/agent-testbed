@@ -29,6 +29,19 @@ export interface BatchView {
   progress: BatchProgress;
   aggregates: ConditionAggregate[];
   overall: ConditionAggregate;
+  /** Runs grouped by pair_key: groups where some runs were excluded (aborted) and others not — broken pairs. */
+  pairs: { groups: number; broken: number };
+}
+
+/**
+ * The pair a run belongs to: the same task definition, randomization seed and
+ * repetition — what conditions of a paired design share. Drop or keep a pair
+ * as a whole when runs are excluded. $solo runs have their own task definition
+ * (one agent): link them to group runs by the instance variable.
+ */
+export function pairKey(r: { taskDefinitionHash: string | null; config: { randomization?: { seed: number } }; repetition: number | null }): string | undefined {
+  if (!r.taskDefinitionHash) return undefined;
+  return `${r.taskDefinitionHash.slice(0, 12)}:${r.config.randomization?.seed ?? "-"}:${r.repetition ?? 1}`;
 }
 
 /** Hard cap on runs per batch — a typo in `repetitions` or a large variable grid should not queue thousands of paid runs. */
@@ -261,11 +274,18 @@ export class BatchService {
     const finished = runs.filter((r) => r.finishedAt).length;
     const running = runs.length - finished;
     const aggregates = batch.resolved.conditions.map((c) => aggregate(c.key, runs.filter((r) => r.conditionKey === c.key)));
+    const groups = new Map<string, Array<{ aborted: boolean }>>();
+    for (const r of runs.filter((r) => r.finishedAt)) {
+      const key = pairKey(r);
+      if (key) (groups.get(key) ?? groups.set(key, []).get(key)!).push({ aborted: r.status === "ABORTED" });
+    }
+    const broken = [...groups.values()].filter((g) => g.some((r) => r.aborted) && g.some((r) => !r.aborted)).length;
     return {
       batch,
       progress: { total: batch.resolved.totalRuns, finished, running, pending: Math.max(0, batch.resolved.totalRuns - runs.length) },
       aggregates,
       overall: aggregate("all conditions", runs),
+      pairs: { groups: groups.size, broken },
     };
   }
 
@@ -324,6 +344,7 @@ export class BatchService {
       "calls_unknown_cost",
       "context_overflow_suspected",
       "calls_with_thinking",
+      "calls_cut_at_output_cap",
       // Ollama: where the model was loaded (GET /api/ps after each call). Partly in CPU memory = not comparable.
       "calls_partial_gpu_offload",
       "calls_serving_unknown",
@@ -336,6 +357,8 @@ export class BatchService {
       "silent_agents",
       "turns_to_first_proposal",
       // Who speaks when and who hears whom; pair conditions by the seed.
+      // Runs of one pair share the task and the seed: drop or keep a pair as a whole when runs are excluded.
+      "pair_key",
       "topology",
       "randomization_seed",
       "speaking_order",
@@ -387,6 +410,7 @@ export class BatchService {
           m.costUsd?.callsWithUnknownCost,
           m.llmCalls?.contextOverflowSuspected,
           m.llmCalls?.withThinking,
+          m.llmCalls?.cutAtOutputCap,
           m.llmCalls?.partialGpuOffload,
           m.llmCalls?.servingUnknown,
           m.llmCalls?.minGpuFraction,
@@ -397,6 +421,7 @@ export class BatchService {
           m.communication?.participation?.evenness,
           m.communication?.participation?.silentAgents,
           m.communication?.timeline?.turnsToFirstProposal,
+          pairKey(r),
           m.topology?.type,
           m.topology?.seed,
           m.topology?.speakingOrder?.join(">"),

@@ -32,6 +32,7 @@ const { positionals, values } = parseArgs({
     experiment: { type: "string" },
     model: { type: "string" },
     force: { type: "boolean", default: false },
+    "while-busy": { type: "boolean", default: false },
     runs: { type: "string" },
     facts: { type: "string" },
     n: { type: "string", default: "40" },
@@ -76,11 +77,22 @@ switch (positionals[0]) {
       console.error("\nStopping after the current call…");
       abort.abort();
     });
-    const runs = selectedRuns().filter((r) => r.finishedAt);
+    // The runs the outcome rates count (aborted ones are excluded there), unless one run is named.
+    const runs = selectedRuns().filter((r) => r.finishedAt && (values.experiment || r.status !== "ABORTED"));
     let current = "";
     const result = await labelRuns({ db, providers, evaluators }, runs.map((r) => r.id), model, {
       force: values.force,
       signal: abort.signal,
+      // Yield to experiments on this database (a batch started later too), unless --while-busy.
+      gate: async () => {
+        if (values["while-busy"]) return;
+        let told = false;
+        for (let busy = experiments.countRunning(); busy > 0 && !abort.signal.aborted; busy = experiments.countRunning()) {
+          if (!told) process.stderr.write(`\n${busy} experiment(s) running on this database: waiting for them (--while-busy labels anyway)…\n`);
+          told = true;
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      },
       onRunStart: (i, total, runId) => (current = `[${i + 1}/${total}] ${runId}`),
       onMessage: (m, total) => process.stderr.write(`\r${current}: message ${m}/${total}   `),
       onRun: (_i, _total, runId, outcome, detail) => {
@@ -105,19 +117,23 @@ switch (positionals[0]) {
   }
   case "sample": {
     if (!values.batch || !values.out) usage();
-    const csv = labelingSampleCsv(withExposure(selectedRuns()), Number(values.n), Number(values.seed));
+    // The runs the outcome rates count: not aborted.
+    const csv = labelingSampleCsv(withExposure(selectedRuns().filter((r) => r.status !== "ABORTED")), Number(values.n), Number(values.seed));
     fs.writeFileSync(values.out!, csv);
     console.error(`Wrote ${csv.trim().split("\n").length - 1} row(s) to ${values.out}: fill in human_label (absent / correct / incorrect), then run "agree".`);
     break;
   }
   case "agree": {
     if (!values.labels) usage();
-    const report = agreementFromCsv(fs.readFileSync(values.labels!, "utf8"), (id) => exposures.latest(id));
+    const report = agreementFromCsv(fs.readFileSync(values.labels!, "utf8"), (id) => exposures.latest(id), (id) => experiments.get(id)?.conditionKey ?? null);
     if (values.out) fs.writeFileSync(values.out, JSON.stringify(report, null, 2));
     const pct = (x: number | null) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
     console.log(`${report.n} label(s) compared (${report.unmatched} without a detector label): agreement ${pct(report.observed)}, Cohen's kappa ${report.kappa === null ? "—" : report.kappa.toFixed(3)}`);
     for (const [label, s] of Object.entries(report.perLabel)) console.log(`  ${label.padEnd(10)} precision ${pct(s.precision)}  recall ${pct(s.recall)}  (${s.support} by hand)`);
     for (const [kind, s] of Object.entries(report.byKind)) console.log(`  kind ${kind.padEnd(9)} n ${s.n}, agreement ${pct(s.observed)}, kappa ${s.kappa === null ? "—" : s.kappa.toFixed(3)}`);
+    for (const [condition, s] of Object.entries(report.byCondition)) {
+      console.log(`  condition ${condition}: n ${s.n}, kappa ${s.kappa === null ? "—" : s.kappa.toFixed(3)}, correct: precision ${pct(s.perLabel.correct.precision)} recall ${pct(s.perLabel.correct.recall)}, incorrect: precision ${pct(s.perLabel.incorrect.precision)} recall ${pct(s.perLabel.incorrect.recall)}`);
+    }
     break;
   }
   default:

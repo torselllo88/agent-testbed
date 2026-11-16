@@ -82,7 +82,10 @@ Notes:
   converge at different speeds still talk equally long. Needs the
   `round_robin` scheduler; agents are told the discussion has a fixed number
   of rounds (not how many). Omitted: the default — discussion ends when every
-  agent's readiness is current, or at the turn limit. `0`: no discussion —
+  agent's readiness is current, or at the turn limit. With fixed rounds the
+  protocol says only "Be concise." under every topology (the default protocol
+  adds "Do not repeat information that has already been established", which
+  would discourage passing information on — and differ between conditions). `0`: no discussion —
   the proposer is asked straight away.
 - **A single agent** decides alone: it needs `discussion.fixedRounds: 0` and
   `consensus.rule: "none"`, and gets a system prompt of its own (no room, no
@@ -269,8 +272,18 @@ OPENAI_COMPATIBLE_LAB_OLLAMA_MAX_CONCURRENT=1                  # = the server's 
   probably did not fit is flagged (`providerMeta.contextOverflowSuspected`,
   counted in `metrics.llmCalls.contextOverflowSuspected` and the batch CSV —
   a heuristic: the prompt is longer than the window even at 4 characters per
-  token, or the reported prompt all but fills it). A larger window needs more
+  token, or the reported prompt all but fills it). Without `contextLength`,
+  the check uses the window the model is actually served with (from
+  `/api/ps`), so Ollama's default is checked too; `providerMeta.contextWindowChecked`
+  says which window was used and where it came from (`requested` / `served` —
+  a served window is read after the call, so a reload by another request in
+  between would show; set `contextLength` for research runs). A larger window needs more
   GPU memory: check it fits next to the model before a long batch.
+- An answer cut at the output-token limit (finish reason `length`) is
+  counted (`metrics.llmCalls.cutAtOutputCap`, CSV `calls_cut_at_output_cap`):
+  a cut discussion turn is a pass, a cut proposal a format error.
+- The model's digest is recorded with its placement
+  (`providerMeta.serving.digest`): which weights answered, beyond the tag.
 - `structuredOutput: "native"` sends the schema as Ollama's `format`.
 - **Thinking** the model did anyway is kept apart from the answer
   (`providerMeta.thinking`) and counted (`metrics.llmCalls.withThinking`);

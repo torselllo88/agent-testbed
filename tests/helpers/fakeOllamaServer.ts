@@ -73,6 +73,7 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
             size_vram: Math.round(size * placement.gpuFraction),
             context_length: placement.contextLength ?? loaded.options?.num_ctx ?? 4096,
             expires_at: "2000-01-01T00:30:00Z",
+            digest: "sha256-fake-digest",
           },
         ],
       });

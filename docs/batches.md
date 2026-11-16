@@ -152,10 +152,24 @@ Per condition and overall:
   first proposal (runs recorded before these metrics existed are left out).
 
 Success and consensus rates are computed over **evaluable** runs only.
-**Excluded** runs (`PROVIDER_ERROR`, `ERROR`, `INTERRUPTED`,
+**Excluded** runs (`PROVIDER_ERROR`, `TIMEOUT`, `ERROR`, `INTERRUPTED`,
 `STOPPED_BY_OPERATOR`) are always reported next to them, broken down by
 outcome. Provider errors get their own warning in the UI and the CLI, so
 provider instability is never hidden by the denominator.
+
+**Paired designs: compare on complete pairs.** Timeouts and provider errors
+depend on prompt length, which a communication condition changes — they
+fall on one condition more than the other and break pairs selectively. Every
+run has a `pair_key` (task definition × randomization seed × repetition):
+drop or keep a pair as a whole. The batch page counts broken pairs — some of
+their runs excluded, others not — and warns about any. `$solo` runs have a
+task definition of their own (one agent): link them to group runs by the
+instance variable.
+Likewise check `calls_cut_at_output_cap` and `context_overflow_suspected`
+(should be 0): a cut discussion turn counts as a pass, a cut proposal as a
+format error — length artifacts, not agent behaviour. And never make a token
+or cost cap an outcome when comparing topologies: token counts include the
+prompts, which are longer in a complete graph.
 
 ## Export
 
@@ -164,10 +178,11 @@ provider instability is never hidden by the denominator.
   `violated`, `;`-separated), the same for the first proposal
   (`first_proposal_outcome`, `first_proposal_class`,
   `first_proposal_violated`), turns, messages, tokens, cost, serving warnings
-  (`context_overflow_suspected`, `calls_with_thinking`, `calls_partial_gpu_offload`,
+  (`context_overflow_suspected`, `calls_with_thinking`, `calls_cut_at_output_cap`, `calls_partial_gpu_offload`,
   `calls_serving_unknown`, `min_gpu_fraction`), duration, communication
   (`addressed_share`, `interaction_density`, `interaction_reciprocity`,
   `participation_evenness`, `silent_agents`, `turns_to_first_proposal`),
+  the pair a run belongs to (`pair_key`: task definition × seed × repetition),
   who spoke when and who heard whom (`topology`, `randomization_seed`,
   `speaking_order`, `ring_order` — ids joined by `>` —, `mean_reach`,
   `reach_max_round`, `reach_unreachable`),

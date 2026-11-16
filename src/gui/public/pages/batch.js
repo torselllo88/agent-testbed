@@ -93,6 +93,15 @@ export async function renderBatch(batchId) {
             ? `<div class="warning-banner">${overall.contextOverflowSuspected} call(s) had a prompt that may not have fit the context window — the start of the prompt may have been cut off. See the CSV column context_overflow_suspected.</div>`
             : ""
         }
+${
+          view.pairs?.broken
+            ? `<div class="warning-banner">${view.pairs.broken} of ${view.pairs.groups} pair(s) are broken: some of their runs were excluded (timeout, provider error, …) and others not. Exclusions depend on prompt length, so they fall on one condition more than the other: compare on complete pairs only (CSV column pair_key).</div>`
+            : ""
+        }${
+          overall.callsCutAtOutputCap
+            ? `<div class="warning-banner">${overall.callsCutAtOutputCap} call(s) were cut at the output-token limit — a cut discussion turn counts as a pass, a cut proposal as a format error. That is a length artifact, not agent behaviour: see the CSV column calls_cut_at_output_cap, and raise maxOutputTokens.</div>`
+            : ""
+        }
         <p class="muted small">Success and consensus rates are computed over evaluable runs only; excluded runs (provider errors, internal errors, interruptions, operator stops) are listed in their own column. Brackets: 95% Wilson interval. Tokens: median total (agent + orchestration).</p>
         <table>
           <thead><tr><th>Condition</th><th>Runs</th><th>Excluded</th><th>Success</th><th>Consensus</th><th>Outcomes</th><th>Tokens (median)</th><th>Turns (median)</th><th>Duration (median)</th><th>Cost</th></tr></thead>

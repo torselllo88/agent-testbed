@@ -101,7 +101,7 @@ export async function renderAnnotate(sampleId) {
       </div>
       <div class="card">
         <h2>Message ${index + 1} of ${data.items.length}</h2>
-        <p class="muted small">From <strong>${escapeHtml(item.sender.name)}</strong>${item.sender.role ? ` — ${escapeHtml(item.sender.role)}` : ""}</p>
+        <p class="muted small">Who wrote it is not shown — the detector does not see it either.</p>
         <blockquote class="an-message">${escapeHtml(item.text)}</blockquote>
         <details class="advanced"><summary>How to label</summary>
           <p class="small">Every proposition below is <strong>true</strong> for this task. Judge only what this message <em>asserts</em>, not what is true.</p>

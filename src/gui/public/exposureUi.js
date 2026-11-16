@@ -65,6 +65,9 @@ function jobLine(job, forScope) {
   const done = job.runsDone / Math.max(1, job.runsTotal);
   const model = `${job.model.endpoint ?? job.model.provider}/${job.model.model}`;
   if (job.status === "running") {
+    if (job.waitingFor) {
+      return `<div class="warning-banner">${mine ? "Labeling" : "Another labeling job"} is waiting for ${job.waitingFor} running experiment(s) to finish — it never shares the model server with them. ${job.runsDone} of ${job.runsTotal} run(s) done.</div>`;
+    }
     return `<div class="${mine ? "success-banner" : "warning-banner"}">${mine ? "Labeling" : "Another labeling job is running"} — ${job.runsDone} of ${job.runsTotal} run(s)${
       job.current?.messages ? ` · message ${job.current.message} of ${job.current.messages}` : ""
     } · ${escapeHtml(model)}
@@ -76,9 +79,8 @@ function jobLine(job, forScope) {
 }
 
 /** Starts a job (asking first when experiments are running), then calls onChange while it runs and once it ends. */
+/** The job waits while experiments run (on the server: before every request), so it never shares the model server with them. */
 async function startJob(scope, model, force, onChange) {
-  const { busy } = await api("/api/exposure");
-  if (busy.runningExperiments && !confirm(`${busy.runningExperiments} experiment(s) are running on this server. Labeling queues at the same model server and slows them down. Start anyway?`)) return;
   await api("/api/exposure/label", { method: "POST", body: JSON.stringify({ ...scope, model, force }) });
   onChange();
 }
@@ -129,12 +131,17 @@ export function mountBatchExposure(el, batchId) {
         <td>${c.runsWithDistorted}</td><td>${c.runsWithConflicting}</td>
         <td>${pct(c.derivedCorrect)}</td><td>${pct(c.solutionRelay)}</td>
         <td>${c.incomplete ? `<span class="badge bad">${c.incomplete} run(s) incomplete</span> ` : ""}${c.unlabeledMessages || "0"}</td>
+        <td>${c.unverifiedLabels ?? 0}</td>
         ${sources.map((s) => `<td>${c.bySource[s] ? `${c.bySource[s].correct}/${c.bySource[s].total}` : "—"}</td>`).join("")}
       </tr>`;
     $("exp-summary").innerHTML = view.labeled
-      ? `<p class="muted small">${view.labeled} of ${view.runs} finished run(s) labeled${view.models.length ? ` · ${escapeHtml(view.models.join(", "))}` : ""}. Private facts: the other agents' own facts that reached the proposer correctly (mean per run). Distorted / conflicting: runs where some fact reached it only wrongly / both ways. By source: facts that reached it correctly, of all, per agent who held them. A run with a message the detector could not label is <em>incomplete</em> and left out of these means — relabel it with a larger output cap.</p>
+      ? `${
+          view.instruments.length > 1
+            ? `<div class="warning-banner">The runs were labeled with different instruments (${escapeHtml(view.instruments.join("; "))}): relabel with one before comparing conditions.</div>`
+            : ""
+        }<p class="muted small">${view.labeled} of ${view.runs} evaluable run(s) labeled (finished, not aborted — the runs the outcome rates count)${view.models.length ? ` · ${escapeHtml(view.models.join(", "))}` : ""}. Private facts: the other agents' own facts that reached the proposer correctly (mean per run). Distorted / conflicting: runs where some fact reached it only wrongly / both ways. By source: facts that reached it correctly, of all, per agent who held them. A run with a message the detector could not label is <em>incomplete</em> and left out of these means — relabel it with a larger output cap. Unverified labels: claims whose quote is not in the message, counted as absent — if they differ much between conditions, check the detector before comparing.</p>
          <table>
-           <thead><tr><th>Condition</th><th>Labeled</th><th>Private facts reached</th><th>Distorted</th><th>Conflicting</th><th>Derived reached</th><th>Solution relay</th><th>Unlabeled msgs</th>${sources.map((s) => `<th>from ${escapeHtml(s)}</th>`).join("")}</tr></thead>
+           <thead><tr><th>Condition</th><th>Labeled</th><th>Private facts reached</th><th>Distorted</th><th>Conflicting</th><th>Derived reached</th><th>Solution relay</th><th>Unlabeled msgs</th><th>Unverified labels</th>${sources.map((s) => `<th>from ${escapeHtml(s)}</th>`).join("")}</tr></thead>
            <tbody>${conditions.map(row).join("")}</tbody>
          </table>
          <div class="actions">
@@ -232,7 +239,13 @@ export function agreementHtml(report) {
         ${report.pairs.map((p) => `<tr><td>${escapeHtml(p.a)} ↔ ${escapeHtml(p.b)}</td><td>${p.n}</td><td>${pct(p.observed)}</td><td>${k(p.kappa)}</td><td></td></tr>`).join("")}
         ${report.detector
           .map(
-            (d) => `<tr><td>detector ↔ ${escapeHtml(d.annotator)}</td><td>${d.n}${d.unmatched ? ` <span class="muted small">(${d.unmatched} without a detector label)</span>` : ""}</td><td>${pct(d.observed)}</td><td>${k(d.kappa)}</td><td class="small">${d.n ? perLabel(d.perLabel) : "—"}</td></tr>`
+            (d) => `<tr><td>detector ↔ ${escapeHtml(d.annotator)}</td><td>${d.n}${d.unmatched ? ` <span class="muted small">(${d.unmatched} without a detector label)</span>` : ""}</td><td>${pct(d.observed)}</td><td>${k(d.kappa)}</td><td class="small">${d.n ? perLabel(d.perLabel) : "—"}${
+              Object.keys(d.byCondition ?? {}).length > 1
+                ? `<br><span class="muted">by condition: ${Object.entries(d.byCondition)
+                    .map(([c, s]) => `<code>${escapeHtml(c)}</code> κ ${k(s.kappa)} (n ${s.n}); correct P ${pct(s.perLabel.correct.precision)} R ${pct(s.perLabel.correct.recall)}; incorrect P ${pct(s.perLabel.incorrect.precision)} R ${pct(s.perLabel.incorrect.recall)}`)
+                    .join(" · ")}</span>`
+                : ""
+            }</td></tr>`
           )
           .join("")}
       </tbody>
@@ -279,8 +292,12 @@ export function mountRunExposure(el, experimentId, agentName) {
           .map((m) => {
             const said = m.labels
               ? Object.entries(m.labels)
-                  .filter(([, l]) => l.label !== "absent")
-                  .map(([id, l]) => `${exposureBadge(l.label)} <span class="small">${escapeHtml(id)}</span>${l.evidence ? ` <span class="muted small">“${escapeHtml(l.evidence)}”</span>` : ""}`)
+                  .filter(([, l]) => l.label !== "absent" || l.unverified)
+                  .map(([id, l]) =>
+                    l.unverified
+                      ? `${badge(`unverified ${l.unverified}`, "neutral")} <span class="small">${escapeHtml(id)}</span> <span class="muted small">quote not in the message: “${escapeHtml(l.evidence ?? "")}” — counted as absent</span>`
+                      : `${exposureBadge(l.label)} <span class="small">${escapeHtml(id)}</span>${l.evidence ? ` <span class="muted small">“${escapeHtml(l.evidence)}”</span>` : ""}`
+                  )
                   .join("<br>")
               : `<span class="badge bad">not labeled</span> <span class="muted small">${escapeHtml(m.call.error ?? "")}</span>`;
             return `<tr><td class="small">#${m.index} ${escapeHtml(agentName(m.senderId))}${m.audience ? ` <span class="muted">→ ${escapeHtml(m.audience.filter((a) => a !== m.senderId).map(agentName).join(", "))}</span>` : ""}${m.beforeProposal ? "" : ` <span class="muted">(after the proposal request)</span>`}</td><td class="small">${escapeHtml(m.text)}</td><td>${said || `<span class="muted small">nothing</span>`}</td></tr>`;

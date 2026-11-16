@@ -43,7 +43,7 @@ import { ExposureRepository, type ExposureDetectionRecord } from "../persistence
  */
 
 /** Bump whenever the prompt, the label rules or the aggregation change. */
-export const DETECTOR_VERSION = "1";
+export const DETECTOR_VERSION = "2";
 
 export const EXPOSURE_LABELS = ["absent", "correct", "incorrect"] as const;
 export type ExposureLabel = (typeof EXPOSURE_LABELS)[number];
@@ -62,8 +62,12 @@ export interface LabeledMessage {
   /** Posted before the first proposal request — inside the decision horizon. */
   beforeProposal: boolean;
   text: string;
-  /** null: the detector gave no usable answer for this message. */
-  labels: Record<string, { label: ExposureLabel; evidence: string | null }> | null;
+  /**
+   * null: the detector gave no usable answer for this message. A "correct" or
+   * "incorrect" whose quoted evidence is not in the message is kept as
+   * "absent", with the claimed label in `unverified` (a guess, not a reading).
+   */
+  labels: Record<string, { label: ExposureLabel; evidence: string | null; unverified?: Exclude<ExposureLabel, "absent"> }> | null;
   call: DetectorCall;
 }
 
@@ -91,6 +95,8 @@ export interface ExposureSummary {
   unlabeledMessages: number;
   /** Every message inside the horizon was labeled: only then is the proposer's exposure a measurement, not a lower bound. */
   complete: boolean;
+  /** Labels the detector claimed with evidence that is not in the message — counted as absent. */
+  unverifiedLabels: number;
   /** The proposer's exposure at the decision horizon, per proposition. */
   proposer: Record<string, FactExposure>;
   /** Over the other agents' private facts (kind "fact", not the proposer's own). */
@@ -139,7 +145,12 @@ function labelsJsonSchema(facts: TaskFact[]): Record<string, unknown> {
   };
 }
 
-export function renderDetectorPrompt(facts: TaskFact[], message: { senderName: string; senderRole: string; text: string }): ChatMessage[] {
+/**
+ * The detector sees the propositions and the message — not who wrote it: a
+ * label must not depend on whether the holder of a fact or a relay says it
+ * (in a ring, facts reach the proposer through others far more often).
+ */
+export function renderDetectorPrompt(facts: TaskFact[], text: string): ChatMessage[] {
   return [
     {
       role: "system",
@@ -150,13 +161,13 @@ export function renderDetectorPrompt(facts: TaskFact[], message: { senderName: s
       role: "user",
       content: [
         `PROPOSITIONS:\n${facts.map((f) => `- [${f.id}] ${f.statement}`).join("\n")}`,
-        `MESSAGE from ${message.senderName} (${message.senderRole}):\n"""\n${message.text}\n"""`,
+        `MESSAGE from a participant:\n"""\n${text}\n"""`,
         [
           "Give EVERY proposition exactly one label:",
           '- "correct": the message asserts the proposition or something that clearly implies it. Paraphrases, summaries, the same fact in other words, and passing on what someone else said all count.',
           '- "incorrect": the message asserts something that contradicts the proposition — a different value, status, limit, or the opposite.',
           '- "absent": the message asserts nothing about it — including only asking about it, or naming the subject without stating the fact.',
-          '"evidence": the shortest quote from the message that supports a "correct" or "incorrect" label; null for "absent".',
+          '"evidence": an EXACT, contiguous quote from the message that supports a "correct" or "incorrect" label — copied word for word, at least two words, no "…"; null for "absent". A label whose quote is not in the message is not counted.',
         ].join("\n"),
         `Respond with ONLY a single JSON object matching this JSON Schema — no other text:\n${JSON.stringify(labelsJsonSchema(facts))}`,
       ].join("\n\n"),
@@ -174,6 +185,8 @@ export interface DetectOptions {
   retryDelayMs?: number;
   signal?: AbortSignal;
   onMessage?: (done: number, total: number) => void;
+  /** Awaited before every request to the model (e.g. to wait while experiments use the same server). */
+  gate?: () => Promise<void>;
 }
 
 export class ExposureDetectionError extends Error {
@@ -262,14 +275,12 @@ export async function detectRun(
   const facts = factsOf(deps.evaluators, config);
 
   const provider = deps.providers.get(modelProviderKey(model) as ProviderId);
-  const agents = new Map(config.agents.map((a) => [a.id, a]));
   const posted = agentMessages(events);
   const messages: LabeledMessage[] = [];
   for (const [i, m] of posted.entries()) {
     // Cancelled: nothing is stored — a partial pass would look like a run where little reached anyone.
     if (options.signal?.aborted) throw new ExposureCancelledError();
-    const agent = agents.get(m.senderId);
-    const call = await labelMessage(provider, model, facts, { senderName: agent?.name ?? m.senderId, senderRole: agent?.role ?? "", text: m.text }, options);
+    const call = await labelMessage(provider, model, facts, m.text, options);
     messages.push({ ...m, labels: call.labels, call: call.call });
     options.onMessage?.(i + 1, posted.length);
   }
@@ -325,12 +336,12 @@ async function labelMessage(
   provider: ReturnType<ProviderRegistry["get"]>,
   model: ModelRef,
   facts: TaskFact[],
-  message: { senderName: string; senderRole: string; text: string },
+  messageText: string,
   options: DetectOptions
 ): Promise<{ labels: LabeledMessage["labels"]; call: DetectorCall }> {
   const schema = labelsSchema(facts);
   const started = Date.now();
-  const prompt = renderDetectorPrompt(facts, message);
+  const prompt = renderDetectorPrompt(facts, messageText);
   const maxParse = options.maxParseRetries ?? 1;
   const maxProvider = options.maxProviderRetries ?? 2;
   let attempts = 0;
@@ -341,6 +352,8 @@ async function labelMessage(
     let text: string | null = null;
     for (let providerTry = 0; providerTry <= maxProvider; providerTry++) {
       attempts += 1;
+      await options.gate?.();
+      if (options.signal?.aborted) throw new ExposureCancelledError();
       try {
         const result = await provider.complete({
           model: model.model,
@@ -352,7 +365,7 @@ async function labelMessage(
           contextLength: model.contextLength,
           responseFormat: model.structuredOutput === "native" ? { name: "exposure_labels", schema: labelsJsonSchema(facts) } : undefined,
           signal: options.signal,
-          context: { purpose: "exposure_detection", factIds: facts.map((f) => f.id), facts: facts.map((f) => ({ id: f.id, statement: f.statement })), messageText: message.text },
+          context: { purpose: "exposure_detection", factIds: facts.map((f) => f.id), facts: facts.map((f) => ({ id: f.id, statement: f.statement })), messageText },
         });
         last = { rawText: result.text, usage: result.usage, servedModel: result.servedModel };
         // An answer cut at maxOutputTokens is not a label set — the longest, fact-densest messages would otherwise count as saying nothing.
@@ -371,7 +384,14 @@ async function labelMessage(
     const parsed = parseWithSchema(text ?? "", schema);
     if (parsed.ok) {
       const labels = Object.fromEntries(
-        Object.entries(parsed.value.labels).map(([id, v]) => [id, { label: v.label, evidence: v.label === "absent" ? null : (v.evidence ?? null) }])
+        Object.entries(parsed.value.labels).map(([id, v]) => {
+          if (v.label === "absent") return [id, { label: "absent" as const, evidence: null }];
+          // A claim needs its quote: an assertion the detector cannot point to in the text is a guess, and guesses
+          // add up with the number of messages that reach the proposer (more in a complete graph).
+          return evidenceInMessage(v.evidence, messageText)
+            ? [id, { label: v.label, evidence: v.evidence }]
+            : [id, { label: "absent" as const, evidence: v.evidence ?? null, unverified: v.label }];
+        })
       );
       return { labels, call: { ok: true, attempts, ...last, durationMs: Date.now() - started } };
     }
@@ -379,6 +399,32 @@ async function labelMessage(
     messages = [...prompt, { role: "assistant", content: text ?? "" }, { role: "user", content: `That answer could not be used (${parsed.error}). Respond again with ONLY the JSON object, labeling every proposition.` }];
   }
   return { labels: null, call: { ok: false, error, attempts, ...last, durationMs: Date.now() - started } };
+}
+
+/** Word tokens: letters and digits, with -.,/ inside ids and numbers (ACC-7720, 10,000, RAIL-X); formatting and punctuation dropped. */
+export function evidenceTokens(text: string): string[] {
+  const dashes = /[\u2010-\u2015\u2212]/g;
+  return text.toLowerCase().replace(dashes, "-").match(/[\p{L}\p{N}]+(?:[-.,/][\p{L}\p{N}]+)*/gu) ?? [];
+}
+
+/**
+ * Whether the detector's quote is really in the message: the quote's word
+ * tokens must appear as one CONTIGUOUS run among the message's tokens, at
+ * least two of them. Formatting does not matter (markdown, bullets, dash
+ * variants, quote marks, case, line breaks); words do. "10,000" does not match
+ * "100,000"; a quote stitched from pieces ("…") is not a quote. This catches
+ * invented evidence — whether the message asserts rather than asks is still
+ * the detector's call.
+ */
+export function evidenceInMessage(evidence: string | null | undefined, message: string): boolean {
+  if (!evidence || /\.\.\.|…/.test(evidence)) return false;
+  const quote = evidenceTokens(evidence);
+  if (quote.length < 2) return false;
+  const text = evidenceTokens(message);
+  for (let i = 0; i + quote.length <= text.length; i++) {
+    if (quote.every((t, j) => text[i + j] === t)) return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------------ aggregation
@@ -411,6 +457,7 @@ export function summarizeExposure(config: ExperimentConfig, facts: TaskFact[], m
     labeledMessages: messages.filter((m) => m.labels).length,
     unlabeledMessages: messages.filter((m) => !m.labels).length,
     complete: inHorizon.every((m) => m.labels),
+    unverifiedLabels: messages.reduce((s, m) => s + Object.values(m.labels ?? {}).filter((l) => l.unverified).length, 0),
     proposer,
     proposerFacts: count("fact"),
     proposerDerived: count("derived"),

@@ -44,7 +44,7 @@ await step("label the batch with the keyword stub; the summary compares the cond
   await waitFor(`document.querySelector("#exp-job")?.textContent.includes("Last labeling completed")`, "job completed", 30000);
   await waitFor(`document.querySelectorAll("#exp-summary tbody tr").length === 3`, "two conditions and the overall row");
   const summary = await text("#exp-summary");
-  if (!summary.includes("2 of 2 finished run(s) labeled")) throw new Error(`summary: ${summary.slice(0, 200)}`);
+  if (!summary.includes("2 of 2 evaluable run(s) labeled")) throw new Error(`summary: ${summary.slice(0, 200)}`);
   if (!summary.includes("from verification")) throw new Error("by-source columns missing");
   await shot("exposure-batch");
 });

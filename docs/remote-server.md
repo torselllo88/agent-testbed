@@ -155,6 +155,7 @@ On the run's page, or in the CSV:
 | it ran end to end | Outcome | a decision outcome (`SUCCESS` / `MISSION_FAILURE` / `CONSENSUS_FAILURE`), not `PROVIDER_ERROR`, `TIMEOUT` or `ERROR` (infrastructure: excluded from rates, so check their count per condition before comparing) |
 | prompts fit the window | LLM calls; CSV `context_overflow_suspected` | no "may exceed the context window" warning; `0` |
 | thinking is off | LLM calls; CSV `calls_with_thinking` | no "with thinking"; `0` |
+| answers not cut | LLM calls; CSV `calls_cut_at_output_cap` | no "cut at the output limit"; `0` — otherwise raise `maxOutputTokens` |
 | the model was fully on the GPU | LLM calls; CSV `calls_partial_gpu_offload`, `min_gpu_fraction`; batch page warning | no "partly on CPU"; `0` and `1`. Runs with offloaded calls are not comparable to the others — leave them out or repeat them |
 | placement was known | LLM calls; CSV `calls_serving_unknown` | `0`; otherwise see `providerMeta.servingUnknown` in the trace |
 | answers parse | LLM calls; Protocol incidents | no or very few unparseable responses |

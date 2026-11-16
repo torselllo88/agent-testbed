@@ -81,7 +81,7 @@ const CreateScenarioBody = z.union([z.object({ builtin: z.string() }), ConfigBod
 const StartExperimentBody = z.object({ config: z.unknown(), scenarioId: z.string().optional(), overrides: RunOverridesSchema.optional() });
 const RunScenarioBody = z.object({ overrides: RunOverridesSchema.optional() });
 const BatchBody = z.object({ spec: z.unknown() });
-const LabelBody = z.object({ batchId: z.string().optional(), experimentId: z.string().optional(), model: z.unknown(), force: z.boolean().optional() });
+const LabelBody = z.object({ batchId: z.string().optional(), experimentId: z.string().optional(), model: z.unknown(), force: z.boolean().optional(), whileBusy: z.boolean().optional() });
 const SampleBody = z.object({ n: z.number().int().min(1).max(1000), seed: z.number().int().min(0), name: z.string().max(200).optional() });
 const AnnotationBody = z.object({
   annotator: z.string().trim().min(1).max(100),
@@ -468,7 +468,7 @@ const ROUTES: Route[] = [
   {
     method: "GET",
     pattern: /^\/api\/exposure$/,
-    handle: ({ res, deps }) => sendJson(res, 200, { job: deps.exposure!.status(), busy: { runningExperiments: deps.service.runningIds().length } }),
+    handle: ({ res, deps }) => sendJson(res, 200, { job: deps.exposure!.status(), busy: { runningExperiments: deps.exposure!.runningExperiments() } }),
   },
   {
     method: "POST",
@@ -476,7 +476,7 @@ const ROUTES: Route[] = [
     handle: async ({ req, res, deps }) => {
       const input = await body(req, LabelBody);
       const scope = input.experimentId ? { experimentId: input.experimentId } : input.batchId ? { batchId: input.batchId } : {};
-      sendJson(res, 202, { job: deps.exposure!.start(scope, input.model, input.force ?? false) });
+      sendJson(res, 202, { job: deps.exposure!.start(scope, input.model, input.force ?? false, input.whileBusy ?? false) });
     },
   },
   {

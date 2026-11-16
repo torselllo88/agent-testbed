@@ -2,7 +2,7 @@ import type { TestbedVersion } from "../config/version.js";
 import type { ExperimentConfig } from "../experiment/config.js";
 import type { Outcome, RunStatus } from "../experiment/outcome.js";
 import type { Phase } from "../experiment/phases.js";
-import { ownerAlive, processOwnerId, type Db } from "./db.js";
+import { currentOwnerId, ownerAlive, processOwnerId, type Db } from "./db.js";
 
 export interface ExperimentRecord {
   id: string;
@@ -186,6 +186,13 @@ export class ExperimentRepository {
   listUnfinishedIds(): string[] {
     const rows = this.db.prepare(`SELECT id, owner_id FROM experiments WHERE finished_at IS NULL`).all() as Array<{ id: string; owner_id: string | null }>;
     return rows.filter((r) => !ownerAlive(this.db, r.owner_id)).map((r) => r.id);
+  }
+
+  /** Unfinished runs whose process is alive — this one included: what is running now, from any process on this database. */
+  countRunning(): number {
+    const own = currentOwnerId(this.db);
+    const rows = this.db.prepare(`SELECT owner_id FROM experiments WHERE finished_at IS NULL`).all() as Array<{ owner_id: string | null }>;
+    return rows.filter((r) => (own !== undefined && r.owner_id === own) || ownerAlive(this.db, r.owner_id)).length;
   }
 
   delete(id: string): void {

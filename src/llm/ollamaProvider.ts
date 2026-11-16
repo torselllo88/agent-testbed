@@ -31,6 +31,7 @@ interface OllamaPsModel {
   size?: number;
   size_vram?: number;
   context_length?: number;
+  digest?: string;
 }
 
 /**
@@ -48,6 +49,8 @@ export interface OllamaServing {
   /** sizeVram / size, 3 decimals; 1 = fully in GPU memory. */
   gpuFraction: number;
   contextLength: number | null;
+  /** The model file's digest: which weights answered, beyond the tag. */
+  digest: string | null;
 }
 
 /** /api/ps is local and cheap; a slow one must not hold up the run. */
@@ -131,8 +134,10 @@ export class OllamaProvider implements LlmProvider {
     const promptTokens = data.prompt_eval_count;
     const completionTokens = data.eval_count;
     const thinking = data.message?.thinking;
-    const overflow = contextOverflowSuspected(request.messages, request.contextLength, promptTokens);
     const placement = await this.serving(data.model || request.model, request.contextLength, request.signal);
+    // No window set: Ollama uses its own default, which /api/ps reports — check against that one (it truncates silently too).
+    const servedWindow = (placement.serving as OllamaServing | null | undefined)?.contextLength ?? undefined;
+    const overflow = contextOverflowSuspected(request.messages, request.contextLength ?? servedWindow, promptTokens);
     return {
       text: data.message?.content ?? "",
       requestedModel: request.model,
@@ -147,6 +152,8 @@ export class OllamaProvider implements LlmProvider {
         api: "ollama",
         contextLength: request.contextLength ?? null,
         ...(overflow ? { contextOverflowSuspected: true } : {}),
+        // Which window the overflow check used: the one sent, or (none sent) the one /api/ps reported after the call.
+        contextWindowChecked: request.contextLength !== undefined ? { tokens: request.contextLength, source: "requested" } : servedWindow !== undefined ? { tokens: servedWindow, source: "served" } : null,
         ...placement,
         // Thinking the model did anyway (e.g. think was not switched off): kept, never parsed as the answer.
         ...(thinking ? { thinking } : {}),
@@ -181,6 +188,7 @@ export class OllamaProvider implements LlmProvider {
       sizeVram: entry.size_vram,
       gpuFraction: Math.round((Math.min(entry.size_vram, entry.size) / entry.size) * 1000) / 1000,
       contextLength: typeof entry.context_length === "number" ? entry.context_length : null,
+      digest: typeof entry.digest === "string" ? entry.digest : null,
     };
     if (contextLength !== undefined && serving.contextLength !== null && serving.contextLength !== contextLength) {
       return { serving, servingUnknown: `loaded with a ${serving.contextLength}-token context window, the call asked for ${contextLength}: reloaded by another request in between` };

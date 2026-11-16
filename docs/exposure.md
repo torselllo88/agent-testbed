@@ -28,7 +28,17 @@ detector version. Results live next to the runs in the database
 
    One call per message; the labels come back as JSON with every proposition
    (native structured output where the model has it), with the shortest quote
-   as evidence. A message the detector could not answer is kept as
+   as evidence. The detector sees the message, **not who wrote it** — a label
+   must not depend on whether the holder of a fact or a relay says it (in a
+   ring, facts reach the proposer through others far more often). A
+   `correct` or `incorrect` whose quote is **not in the message** is kept as
+   `absent`. A quote counts when its words appear as one contiguous run in
+   the message, at least two words — formatting ignored (markdown, bullets,
+   dash variants, quote marks, case, line breaks), words not: "10,000" does not
+   match "100,000", and pieces stitched with "…" are no quote. Kept as `absent`,
+   with the claimed label as `unverified` (counted: `unverified_labels`):
+   a claim the detector cannot point to is a guess, and guesses add up with
+   the number of messages that reach the proposer — more in a complete graph. A message the detector could not answer is kept as
    *unlabeled* and counts as saying nothing — so the pass is marked **incomplete**
    (`exposure_complete = false`; the batch summary leaves such runs out of its
    means): relabel with a larger output cap. An answer cut at `maxOutputTokens`
@@ -63,19 +73,36 @@ trace says what the sender had seen — that check belongs to the analysis.
   **Start labeling**. It is a job on the server, one at a time, with progress
   (run, message) and **Cancel**. A run cut off by a cancel or a restart keeps
   no partial pass; starting again skips every run already labeled with that
-  model (tick *relabel* to redo them). If experiments are running, it asks
-  first: both queue at the same model server.
+  model (tick *relabel* to redo them). **The job yields to experiments:**
+  before every request to the model it waits while any experiment runs in any
+  process on the database — a CLI batch, or one started after the job — and
+  says so ("waiting for N running experiment(s)"). Otherwise the detector's
+  requests would queue at the same model server, and a detector model other
+  than the agents' makes the server swap models mid-run — reloads, CPU
+  offload, slower and numerically different runs, more timeouts for the longer
+  prompts. To label anyway: `whileBusy` in the API, `--while-busy` in the CLI. Only runs the
+  outcome rates count are labeled: aborted ones (timeouts, provider errors)
+  are skipped, as there.
 - **The summary per condition:** labeled runs; the share of the other agents'
   private facts that reached the proposer correctly (mean per run); runs with
   a distorted or conflicting fact; derived propositions reached; solution
   relay; messages the detector could not label; and **by source** — of the
   facts each agent held, how many reached the proposer correctly. Both CSVs
-  (runs, facts) download from there.
+  (runs, facts) download from there. Over the same runs as the outcome rates
+  (not aborted). If the runs were labeled with different instruments —
+  detector version, model, or any of its settings (temperature, thinking,
+  output cap, …; a short hash in the instrument name) — it says so: relabel
+  with one before comparing. **Unverified labels** per condition: claims whose
+  quote is not in the message; if they differ much between conditions, check
+  the detector before comparing.
 - **Manual labeling:** **Create sample** draws a fixed, seeded set of messages
-  from the batch's runs (no detector pass needed). **Label** opens it in the
+  from the batch's runs (no detector pass needed), **spread evenly over the
+  conditions**, so the detector's errors are checked in each — agreement is
+  also reported per condition. **Label** opens it in the
   browser: one message at a time, every proposition *absent / correct /
   incorrect*, under your name — several people label the same sample
-  independently, and nobody sees the detector's or anyone else's labels.
+  independently, and nobody sees the detector's or anyone else's labels, nor
+  who wrote the message (the detector does not see it either).
   "Rest → absent" fills what is still empty. **Agreement**: every pair of
   people, and the detector against each person (agreement, Cohen's κ,
   precision and recall per label). **CSV**: every manual label.
@@ -116,7 +143,9 @@ proposition — set `maxOutputTokens` accordingly (1500 for ~25 propositions).
 
 ## Validation
 
-In the browser (above) or with files: `agree` compares the filled-in sample with the detector's labels (the latest
+In the browser (above) or with files: `agree` also reports agreement and
+precision/recall of `correct` and `incorrect` **per condition** of the runs.
+`agree` compares the filled-in sample with the detector's labels (the latest
 pass of each run): agreement, **Cohen's kappa** over the three labels, a
 confusion matrix (`confusion[human][detector]`), precision and recall per
 label, the same by kind (fact / derived / solution), and every disagreement
@@ -130,15 +159,27 @@ propositions is ~800 labels — mostly `absent`, so look at the `correct` and
 
 | CSV | Columns |
 |---|---|
-| runs | `batch_id`, `experiment_id`, `condition_key`, `task_definition_hash`, `topology`, `outcome`, `first_proposal_outcome`, `first_proposal_class`, `detector_version`, `facts_hash`, `labeled_messages`, `unlabeled_messages`, `facts_*` (other agents' private facts: total, correct, distorted, conflicting, absent), `derived_*`, `solution_relay` |
+| runs | `batch_id`, `experiment_id`, `condition_key`, `task_definition_hash`, `topology`, `status`, `outcome`, `first_proposal_outcome`, `first_proposal_class`, `detector_version`, `facts_hash`, `labeled_messages`, `unlabeled_messages`, `facts_*` (other agents' private facts: total, correct, distorted, conflicting, absent), `derived_*`, `solution_relay` |
 | facts | `batch_id`, `experiment_id`, `condition_key`, `task_definition_hash`, `fact_id`, `kind`, `source`, `proposer_class`, `first_correct_turn`, `first_correct_from` |
-| sample | `experiment_id`, `message_id`, `sender`, `message`, `fact_id`, `kind`, `statement`, `human_label`, `notes` |
+| sample | `experiment_id`, `message_id`, `message`, `fact_id`, `kind`, `statement`, `human_label`, `notes` (no sender: blind, as the detector) |
 | manual labels (web UI) | `sample_id`, `annotator`, `experiment_id`, `message_id`, `fact_id`, `label`, `updated_at` |
 
 Join with the batch CSV on `experiment_id`.
 
+## A known limit: exposure is a union
+
+A proposition counts as reached if **any** message that reached the proposer
+asserts it. Over three rounds the proposer receives up to 15 messages in a
+complete graph of six and up to 6 in a ring, so a detector error on single
+messages becomes a larger error per run in the complete graph (with 2% false
+"correct" per message: about 26% against 11%). The quote check removes the
+guesses; the rest has to be measured. Report the detector's precision and
+recall **per condition** (the agreement page does), and before comparing
+conditions on exposure, check a few whole runs per condition by hand — the
+per-message sample does not see this.
+
 ## Versioning
 
-`DETECTOR_VERSION` (src/analysis/exposure.ts) changes with the prompt, the
+`DETECTOR_VERSION` (src/analysis/exposure.ts; now 2: no sender in the prompt, quotes checked) changes with the prompt, the
 label rules or the aggregation; `facts_hash` with the fact list; the model is
 stored with each pass. Compare passes only when all three match.

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "detector_output.schema.json",
+  "title": "Post-processed exposure record for one run (tools/exposure_postprocess.py)",
+  "type": "object",
+  "required": ["run_id", "detector_version", "claims", "operations"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "detector_version": {"type": "string"},
+    "extraction_model": {"type": "string"},
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["turn", "sender", "recipients", "type", "span", "hedged"],
+        "properties": {
+          "turn": {"type": "integer", "minimum": 1, "maximum": 18},
+          "sender": {"type": "string"},
+          "recipients": {"type": "array", "items": {"type": "string"}},
+          "type": {"enum": ["base", "derived", "solution", "unattributed", "non_claim"]},
+          "span": {"type": "string"},
+          "hedged": {"type": "boolean"},
+          "fact": {"type": "string"},
+          "value": {},
+          "source_role": {"type": "string"},
+          "item": {"type": "string"},
+          "destination": {"type": ["string", "null"]},
+          "proposal": {"type": "object"},
+          "truth": {"type": "boolean"},
+          "source": {"enum": ["own", "relayed", "inferred", "unsourced"]},
+          "grounding": {"enum": ["grounded", "ungrounded", "undefined"]},
+          "support": {"enum": ["supported", "unsupported", "undefined"]}
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "required": ["minimal_fact_set_exposed", "exposure", "unsupported_exposure", "levels", "category", "proposal_correct"],
+      "properties": {
+        "minimal_fact_set_exposed": {"type": "boolean"},
+        "exposure": {"type": "object", "additionalProperties": {"enum": ["absent", "correct", "incorrect", "conflicting"]}},
+        "unsupported_exposure": {"type": "array"},
+        "levels": {
+          "type": "object",
+          "additionalProperties": {"enum": ["entails_correct", "underdetermined", "excludes_correct", "inconsistent"]}
+        },
+        "category": {"enum": ["base_sufficient", "derived_sufficient", "solution_sufficient", "status_default_sufficient",
+                              "unsupported_only_sufficient", "insufficient", "misleading", "inconsistent"]},
+        "proposal_correct": {"type": "boolean"}
+      }
+    }
+  }
+}

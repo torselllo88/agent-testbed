@@ -51,7 +51,7 @@ export interface AppDeps {
   operatorToken?: string;
   /** The External Room API mounted under /api/external/* on this listener (EXTERNAL_API_LISTENER=main). */
   externalApi?: http.RequestListener;
-  /** Batch specs offered in the batch form (default: specs/ and examples/ under the working directory). */
+  /** Batch specs offered in the batch form (default: specs/, examples/ and experiments/pilot-settlement/ under the working directory). */
   specLibrary?: SpecLibrary;
   /** Exposure labeling jobs, summaries and manual labeling (created from db/providers/evaluators when omitted). */
   exposure?: ExposureService;

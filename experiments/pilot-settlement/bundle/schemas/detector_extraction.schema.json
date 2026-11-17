@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "detector_extraction.schema.json",
+  "title": "LLM extraction output for one message (closed schema; linguistic parsing only)",
+  "description": "The extractor never decides attribution, truth, grounding or support. Those are computed by tools/exposure_postprocess.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["span", "kind", "hedged"],
+        "properties": {
+          "span": {"type": "string", "description": "verbatim text of the statement"},
+          "kind": {"enum": ["fact", "derived", "proposal", "question", "conditional", "ignorance", "other"]},
+          "hedged": {"type": "boolean", "description": "explicit uncertainty marker: probably, maybe, might, likely, I think, I believe, not sure"},
+          "role_named": {"enum": ["Contract", "Compliance", "Settlement", "Verification", "Treasury", "Operations", null]},
+          "first_person": {"type": "boolean"},
+          "relay_marker": {"type": "boolean", "description": "says the information came from someone else (told, reported, said, according to)"},
+          "predicate": {"type": ["string", "null"], "description": "main verb or adjective as written, e.g. permits, authorized, allowed, ruled out, supports, accepted, approved, pending"},
+          "polarity": {"enum": ["positive", "negative", null]},
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": {"enum": ["destination", "route", "milestone", "approval"]},
+                "destination": {"enum": ["D1", "D2", null]},
+                "rail": {"enum": ["A", "B", null]}
+              }
+            }
+          },
+          "exhaustive": {"type": "boolean", "description": "only / just / sole / complete list / nothing else / no other / none"},
+          "scope_destination": {"enum": ["D1", "D2", null], "description": "set only for statements that fix one destination and list rails for it"},
+          "status_value": {"enum": ["accepted", "pending", "approved", null]},
+          "derived": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "item": {"enum": ["has_route", "eligible", "executable", "eligible_set", "executable_set", "reject_reason",
+                                "blocker", "selected_destination", "selected_rail"]},
+              "destination": {"enum": ["D1", "D2", null]},
+              "set_value": {"type": ["array", "null"], "items": {"enum": ["D1", "D2"]}},
+              "value": {"type": ["boolean", "string", "null"]}
+            }
+          },
+          "proposal": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "action": {"enum": ["execute", "hold", "reject"]},
+              "destination": {"enum": ["D1", "D2", null]},
+              "rail": {"enum": ["A", "B", null]},
+              "reason": {"enum": ["NO_ELIGIBLE_DESTINATION", "NO_ROUTE", "VERIFICATION_PENDING", "APPROVAL_PENDING", null]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

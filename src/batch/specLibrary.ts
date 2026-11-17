@@ -7,10 +7,11 @@ import path from "node:path";
  * folders (relative to where the server runs: the repository root) and loads
  * one into the batch form; nothing here writes files.
  *
- *   specs/     the group's own specs (pilot, calibration, real runs)
- *   examples/  examples that come with the testbed
+ *   specs/                       the group's own specs (pilot, calibration, real runs)
+ *   examples/                    examples that come with the testbed
+ *   experiments/pilot-settlement/  the pilot's own specs (probe, dev runs, controls)
  */
-export const DEFAULT_SPEC_DIRS = ["specs", "examples"];
+export const DEFAULT_SPEC_DIRS = ["specs", "examples", "experiments/pilot-settlement"];
 
 export interface SpecEntry {
   /** "<dir>/<file>" — what the UI asks for. */

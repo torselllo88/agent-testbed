@@ -32,6 +32,15 @@ export interface ProviderRouting {
   dataCollection?: "allow" | "deny";
 }
 
+/** Sampling settings beyond temperature, for self-hosted endpoints (Ollama options; vLLM-style extra parameters on an OpenAI-API server). */
+export interface SamplingOptions {
+  topP?: number;
+  topK?: number;
+  minP?: number;
+  presencePenalty?: number;
+  repeatPenalty?: number;
+}
+
 export interface CompletionRequest {
   /** Provider-specific model id (OpenRouter model id, Azure deployment name, stub script name). */
   model: string;
@@ -40,10 +49,14 @@ export interface CompletionRequest {
   /** Best-effort only — providers honor it very differently, so it is recorded, never relied upon. */
   seed?: number;
   maxOutputTokens?: number;
+  /** Self-hosted endpoints only: top_p, top_k, min_p and the penalties, as the server names them. */
+  sampling?: SamplingOptions;
   /** Self-hosted endpoints only: switch the model's thinking mode on or off (omitted: the server's default). */
   think?: boolean;
   /** Ollama endpoints only: the context window for this call, in tokens (num_ctx). */
   contextLength?: number;
+  /** Ollama endpoints only: how long the model stays loaded after this call (keep_alive). */
+  keepAlive?: string;
   responseFormat?: JsonResponseFormat;
   routing?: ProviderRouting;
   signal?: AbortSignal;

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "final_proposal.schema.json",
+  "title": "Operations final proposal (Task Definition v1.4 section 8)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "destination", "rail", "reason"],
+  "properties": {
+    "action": {"enum": ["execute", "hold", "reject"]},
+    "destination": {"enum": ["D1", "D2", null]},
+    "rail": {"enum": ["A", "B", null]},
+    "reason": {"enum": ["NO_ELIGIBLE_DESTINATION", "NO_ROUTE", "VERIFICATION_PENDING", "APPROVAL_PENDING", null]}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "action": {"const": "execute"},
+        "destination": {"enum": ["D1", "D2"]},
+        "rail": {"enum": ["A", "B"]},
+        "reason": {"const": null}
+      }
+    },
+    {
+      "properties": {
+        "action": {"const": "hold"},
+        "destination": {"const": null},
+        "rail": {"const": null},
+        "reason": {"enum": ["VERIFICATION_PENDING", "APPROVAL_PENDING"]}
+      }
+    },
+    {
+      "properties": {
+        "action": {"const": "reject"},
+        "destination": {"const": null},
+        "rail": {"const": null},
+        "reason": {"enum": ["NO_ELIGIBLE_DESTINATION", "NO_ROUTE"]}
+      }
+    }
+  ]
+}

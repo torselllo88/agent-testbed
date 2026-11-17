@@ -23,6 +23,8 @@ export const OUTCOMES = {
   // hit the condition with the longer prompts first, so it is excluded from rates, never counted as failure.
   TIMEOUT: { category: "infrastructure", status: "ABORTED" },
   PROVIDER_ERROR: { category: "infrastructure", status: "ABORTED" },
+  /** A protocol adapter's preflight: the counted prompt plus the output cap would not fit the context window (the call was not made). */
+  CONTEXT_BUDGET_VIOLATION: { category: "infrastructure", status: "ABORTED" },
   ERROR: { category: "infrastructure", status: "ABORTED" },
   INTERRUPTED: { category: "infrastructure", status: "ABORTED" },
   // Operator.

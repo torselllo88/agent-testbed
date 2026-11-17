@@ -1,0 +1,24 @@
+PUBLIC TASK RULES
+
+Request: settle amount {{amount}} for milestone {{milestone}} to destination {{requested_destination}}.
+The amount and the milestone are fixed context and do not affect the decision.
+
+Destinations: D1, D2. Rails: A, B.
+
+Private information. Each item is known to exactly one agent:
+- Contract knows which destinations it permits (any subset of D1, D2).
+- Compliance knows which destinations it authorizes (any subset of D1, D2).
+- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).
+- Verification knows whether verification of milestone M-204 is accepted or pending.
+- Treasury knows whether approval is approved or pending.
+Each private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.
+
+Decision rules. They apply in this order; the first rule that fires decides.
+1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.
+2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.
+3. If verification is pending: hold / VERIFICATION_PENDING.
+4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.
+5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.
+Only one settlement is executed.
+
+Final proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no "insufficient information" outcome.

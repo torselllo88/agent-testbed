@@ -45,12 +45,19 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       // The window of an OpenAI-API server is fixed when the model is served; it cannot be set per request.
       throw new ProviderError(`OpenAI-compatible endpoint "${this.endpoint}": contextLength can only be set per request on an Ollama endpoint`, false);
     }
-    const body: ChatCompletionCreateParamsNonStreaming & { chat_template_kwargs?: Record<string, unknown> } = {
+    const sampling = request.sampling ?? {};
+    const body: ChatCompletionCreateParamsNonStreaming & { chat_template_kwargs?: Record<string, unknown>; top_k?: number; min_p?: number; repetition_penalty?: number } = {
       model: request.model,
       messages: request.messages,
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.seed !== undefined ? { seed: request.seed } : {}),
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
+      ...(sampling.topP !== undefined ? { top_p: sampling.topP } : {}),
+      ...(sampling.presencePenalty !== undefined ? { presence_penalty: sampling.presencePenalty } : {}),
+      // vLLM / SGLang extra sampling parameters; a server that does not know them ignores or rejects them.
+      ...(sampling.topK !== undefined ? { top_k: sampling.topK } : {}),
+      ...(sampling.minP !== undefined ? { min_p: sampling.minP } : {}),
+      ...(sampling.repeatPenalty !== undefined ? { repetition_penalty: sampling.repeatPenalty } : {}),
       // The convention of vLLM and SGLang for models with a thinking mode (Qwen3, …); other servers ignore it.
       ...(request.think !== undefined ? { chat_template_kwargs: { enable_thinking: request.think } } : {}),
       ...(request.responseFormat

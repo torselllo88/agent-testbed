@@ -1,0 +1,72 @@
+{
+  "sampling_version": "pilot-sampling-v2",
+  "sampling_seed": 20261114,
+  "dev_seed": 20261115,
+  "accepted_attempt": 0,
+  "pool_sizes_after_dev_exclusion_mirror_classes": {
+    "A/rail_A/other_executable=True": 5,
+    "A/rail_A/other_executable=False": 26,
+    "A/rail_B/other_executable=True": 3,
+    "A/rail_B/other_executable=False": 12,
+    "B/contract/canonical_rail=A": 5,
+    "B/contract/canonical_rail=B": 3,
+    "B/compliance/canonical_rail=A": 5,
+    "B/compliance/canonical_rail=B": 3,
+    "B/route/canonical_rail=A": 2,
+    "C/verification/requested_executable=True": 47,
+    "C/verification/requested_executable=False": 39,
+    "C/approval/requested_executable=True": 47,
+    "C/approval/requested_executable=False": 38,
+    "R-ELIG/None": 29,
+    "R-ROUTE/None": 17
+  },
+  "state_balance_checks": {
+    "B_alternative_rail_A_in_4_6": true,
+    "C_requested_executable_in_4_6": true,
+    "C_per_blocker_requested_executable_in_2_3": true,
+    "A_other_executable_in_3_7": true
+  },
+  "speaking_slot_checks": {
+    "per_class_each_agent_each_slot_1_or_2": true,
+    "pilot_agent_slot_min": 5,
+    "pilot_agent_slot_max": 8,
+    "operations_slot_counts": [
+      8,
+      5,
+      7,
+      7,
+      7,
+      6
+    ]
+  },
+  "temporal_balance": {
+    "A": {
+      "ring_observed": 9,
+      "ring_expected": 9.01,
+      "complete_observed": 5.8,
+      "complete_expected": 5.84
+    },
+    "B": {
+      "ring_observed": 9.7,
+      "ring_expected": 8.99,
+      "complete_observed": 5.9,
+      "complete_expected": 5.83
+    },
+    "C": {
+      "ring_observed": 8.6,
+      "ring_expected": 8.81,
+      "complete_observed": 5.7,
+      "complete_expected": 5.72
+    },
+    "Reject": {
+      "ring_observed": 8.4,
+      "ring_expected": 7.66,
+      "complete_observed": 5.2,
+      "complete_expected": 4.96
+    }
+  },
+  "file_hashes": {
+    "dev_instances.json": "sha256:9fb3bc02718c9b41fb502116dfd46eb8ec810b535f2cd9a883da6b37a1873b24",
+    "pilot_instances.json": "sha256:512be8ee45042dd4ab8ad7a96af74743253b671cc26e1f9aaa2582950e77de0b"
+  }
+}

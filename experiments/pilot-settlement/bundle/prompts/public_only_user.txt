@@ -1,0 +1,8 @@
+No discussion took place, and you received no private information from the other agents.
+You must still return exactly one proposal, based on the public rules.
+
+Return the final proposal now.
+Return only one JSON object with exactly these fields:
+{"action": "execute" | "hold" | "reject", "destination": "D1" | "D2" | null, "rail": "A" | "B" | null, "reason": "NO_ELIGIBLE_DESTINATION" | "NO_ROUTE" | "VERIFICATION_PENDING" | "APPROVAL_PENDING" | null}
+For execute: destination and rail are set and reason is null.
+For hold and reject: destination and rail are null and reason is set.

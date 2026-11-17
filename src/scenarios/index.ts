@@ -13,6 +13,11 @@ import { serviceSettlementConfig } from "./serviceSettlement/config.js";
 import { serviceSettlementEvaluator } from "./serviceSettlement/evaluator.js";
 import { registerSettlementStubs } from "./serviceSettlement/stubScripts.js";
 import { settlementFamily } from "./serviceSettlement/family.js";
+import { PilotSettlementAdapter } from "./pilotSettlement/adapter.js";
+import { pilotSettlementConfig } from "./pilotSettlement/config.js";
+import { pilotSettlementEvaluator } from "./pilotSettlement/evaluator.js";
+import { pilotSettlementFamily } from "./pilotSettlement/family.js";
+import { registerPilotSettlementStubs } from "./pilotSettlement/stubScripts.js";
 import type { TaskFamily } from "../batch/taskFamily.js";
 
 export { DEMO, demoFacts, type DemoContent, type DemoSection } from "./demo.js";
@@ -89,13 +94,29 @@ export const BUILTIN_SCENARIOS: BuiltinScenario[] = [
     version: 2,
     config: () => serviceSettlementConfig(),
   },
+  {
+    id: "pilot-settlement",
+    name: "Pilot Settlement",
+    summary: "The pilot's task — Distributed Settlement Decision v1.4 under the pilot protocol adapter (bundle v0.3.1); 50 frozen instances, Complete vs Ring",
+    // v1: initial — adapter pilot-settlement 0.3.1, instance DEV-01, probe stub agents.
+    version: 1,
+    config: () => pilotSettlementConfig(),
+  },
 ];
 
 /** Task families by evaluator id: what a batch's `$instance` variable can draw on. */
-export const TASK_FAMILIES: ReadonlyMap<string, TaskFamily> = new Map([[settlementFamily.evaluatorId, settlementFamily]]);
+export const TASK_FAMILIES: ReadonlyMap<string, TaskFamily> = new Map([
+  [settlementFamily.evaluatorId, settlementFamily],
+  [pilotSettlementFamily.evaluatorId, pilotSettlementFamily],
+]);
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {
-  return new EvaluatorRegistry().register(spaceStationEvaluator).register(kestrelCascadeEvaluator).register(serviceSettlementEvaluator);
+  return new EvaluatorRegistry()
+    .register(spaceStationEvaluator)
+    .register(kestrelCascadeEvaluator)
+    .register(serviceSettlementEvaluator)
+    .register(pilotSettlementEvaluator)
+    .registerAdapter(new PilotSettlementAdapter());
 }
 
 export function registerBuiltinStubs(stub: StubProvider): StubProvider {
@@ -103,5 +124,6 @@ export function registerBuiltinStubs(stub: StubProvider): StubProvider {
   registerSpaceStationStubs(stub);
   registerCascadeStubs(stub);
   registerSettlementStubs(stub);
+  registerPilotSettlementStubs(stub);
   return stub;
 }

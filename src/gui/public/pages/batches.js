@@ -90,7 +90,7 @@ export async function renderBatches() {
       <div class="grid-2">
         <label class="field"><span class="field-label">Start from a spec file</span>
           <select id="b-spec"><option value="">— an empty form —</option>${specOptions}</select>
-          <span class="field-hint" id="b-spec-hint">${specs.length ? "*.batch.json in specs/ and examples/ on the server" : "no *.batch.json in specs/ or examples/"}</span></label>
+          <span class="field-hint" id="b-spec-hint">${specs.length ? "*.batch.json in specs/, examples/ and experiments/pilot-settlement/ on the server" : "no *.batch.json in specs/, examples/ or experiments/pilot-settlement/"}</span></label>
         <div class="field"><span class="field-label">&nbsp;</span>
           <div class="actions"><button type="button" id="b-spec-load">Load into the form</button></div></div>
       </div>
@@ -242,7 +242,7 @@ export async function renderBatches() {
   const specHint = document.getElementById("b-spec-hint");
   specSelect.addEventListener("change", () => {
     const entry = specs.find((s) => s.id === specSelect.value);
-    specHint.textContent = entry ? (entry.description ?? entry.name ?? entry.id) : "*.batch.json in specs/ and examples/ on the server";
+    specHint.textContent = entry ? (entry.description ?? entry.name ?? entry.id) : "*.batch.json in specs/, examples/ and experiments/pilot-settlement/ on the server";
   });
   document.getElementById("b-spec-load").addEventListener("click", async () => {
     if (!specSelect.value) return;

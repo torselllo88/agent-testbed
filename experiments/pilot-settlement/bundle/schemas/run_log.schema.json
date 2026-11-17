@@ -1,0 +1,669 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run_log.schema.json",
+  "title": "One run (discussion run, oracle call, public-only call or delivery probe)",
+  "type": "object",
+  "required": [
+    "run_id",
+    "instance_id",
+    "state_hash",
+    "condition",
+    "topology",
+    "config_version",
+    "software",
+    "model",
+    "generation",
+    "K",
+    "speaking_order",
+    "ring_positions",
+    "attempt",
+    "calls",
+    "final",
+    "validity",
+    "environment_snapshots"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "instance_id": {
+      "type": "string"
+    },
+    "state_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "instance_file_sha256": {
+      "type": "string"
+    },
+    "class": {
+      "type": "string"
+    },
+    "subtype": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "condition": {
+      "enum": [
+        "discussion",
+        "oracle",
+        "public_only",
+        "probe"
+      ]
+    },
+    "topology": {
+      "enum": [
+        "complete",
+        "ring",
+        "none"
+      ]
+    },
+    "config_version": {
+      "type": "string"
+    },
+    "software": {
+      "type": "object",
+      "required": [
+        "testbed_commit",
+        "file_hashes",
+        "ollama_version"
+      ],
+      "properties": {
+        "testbed_commit": {
+          "type": "string"
+        },
+        "file_hashes": {
+          "type": "object",
+          "description": "sha256 of config, prompts, render_prompts.py, settlement_task.py"
+        },
+        "ollama_version": {
+          "type": "string"
+        },
+        "hardware": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "name",
+        "digest"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "quantization": {
+          "type": "string"
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "required": [
+        "think",
+        "options",
+        "num_predict"
+      ],
+      "properties": {
+        "think": {
+          "type": "boolean"
+        },
+        "options": {
+          "type": "object",
+          "required": [
+            "num_ctx",
+            "temperature",
+            "top_p",
+            "top_k",
+            "min_p",
+            "seed"
+          ]
+        },
+        "num_predict": {
+          "type": "object"
+        }
+      }
+    },
+    "K": {
+      "const": 3
+    },
+    "speaking_order": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "ring_positions": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "0 = first execution of the run; 1 = the single permitted re-execution"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "calls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/call"
+      }
+    },
+    "final": {
+      "type": "object",
+      "required": [
+        "raw_content",
+        "parsed",
+        "schema_valid",
+        "canonical",
+        "correct_exact",
+        "field_correct",
+        "final_model_failure"
+      ],
+      "properties": {
+        "raw_content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parsed": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "schema_valid": {
+          "type": "boolean"
+        },
+        "extra_text": {
+          "type": "boolean"
+        },
+        "canonical": {
+          "$ref": "#/$defs/final_proposal"
+        },
+        "correct_exact": {
+          "type": "boolean"
+        },
+        "field_correct": {
+          "type": "object",
+          "required": [
+            "action",
+            "destination",
+            "rail",
+            "reason"
+          ],
+          "properties": {
+            "action": {
+              "type": "boolean"
+            },
+            "destination": {
+              "type": "boolean"
+            },
+            "rail": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "boolean"
+            }
+          }
+        },
+        "final_model_failure": {
+          "type": "boolean",
+          "description": "empty or unfinished final content; proposal null; scored incorrect"
+        }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "required": [
+        "status",
+        "detail"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "valid",
+            "technical_failure",
+            "environment_deviation",
+            "context_truncation",
+            "agent_system_failure"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "silent_turn_model_failure",
+              "over_length_regenerated",
+              "over_length_truncated",
+              "extra_text",
+              "final_model_failure"
+            ]
+          }
+        }
+      }
+    },
+    "server_log_excerpt": {
+      "type": "string",
+      "description": "path to the Ollama server log lines covering this run"
+    },
+    "thinking_log": {
+      "type": "string",
+      "description": "path to the diagnostic thinking file; never read by agents or the detector"
+    },
+    "environment_snapshots": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "when",
+          "taken_at",
+          "ollama_version",
+          "ollama_ps",
+          "nvidia_smi",
+          "normal"
+        ],
+        "properties": {
+          "when": {
+            "enum": [
+              "before_pair",
+              "between_runs",
+              "after_pair"
+            ]
+          },
+          "taken_at": {
+            "type": "string"
+          },
+          "ollama_version": {
+            "type": "string"
+          },
+          "ollama_ps": {
+            "type": "object"
+          },
+          "nvidia_smi": {
+            "type": "string"
+          },
+          "normal": {
+            "type": "boolean"
+          },
+          "deviation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "diagnostic_reruns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "paths of diagnostic reruns; never part of the primary result"
+    },
+    "preload": {
+      "type": "object",
+      "description": "preload request and response before the pair (num_ctx 8192, keep_alive 30m)"
+    }
+  },
+  "$defs": {
+    "attempt": {
+      "type": "object",
+      "required": [
+        "attempt_index",
+        "kind",
+        "seed",
+        "accepted"
+      ],
+      "properties": {
+        "attempt_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "initial",
+            "technical_retry",
+            "length_regeneration"
+          ]
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "user_text_sha256": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thinking_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thinking_chars": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "done_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt_eval_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "prompt_eval_cached_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "eval_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "content_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "thinking_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "total_duration_ns": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "model_failure": {
+          "type": "boolean"
+        },
+        "load_duration_ns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "> 1e9 on any call = mid-run reload = environment deviation"
+        }
+      }
+    },
+    "call": {
+      "type": "object",
+      "required": [
+        "call_index",
+        "call_type",
+        "speaker",
+        "recipients",
+        "visible_history_turns",
+        "system_text",
+        "user_text",
+        "prompt_tokens_counted",
+        "budget_ok",
+        "attempts",
+        "accepted_text",
+        "flags",
+        "seed"
+      ],
+      "properties": {
+        "call_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "call_type": {
+          "enum": [
+            "discussion",
+            "final",
+            "oracle",
+            "public_only"
+          ]
+        },
+        "turn": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 18
+        },
+        "round": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 3
+        },
+        "position_in_round": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 6
+        },
+        "speaker": {
+          "enum": [
+            "Operations",
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "visible_history_turns": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "system_text": {
+          "type": "string"
+        },
+        "user_text": {
+          "type": "string"
+        },
+        "prompt_tokens_counted": {
+          "type": "integer"
+        },
+        "budget_ok": {
+          "type": "boolean"
+        },
+        "attempts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/attempt"
+          }
+        },
+        "accepted_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "null for a silent turn (model failure); nothing is delivered"
+        },
+        "visible_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "over_length_regenerated",
+              "over_length_truncated",
+              "silent_turn_model_failure",
+              "final_model_failure",
+              "technical_retry",
+              "extra_text"
+            ]
+          }
+        },
+        "seed": {
+          "type": "integer",
+          "description": "tools/seeds.call_seed for this call; identical for every attempt"
+        }
+      }
+    },
+    "final_proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "destination",
+        "rail",
+        "reason"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "execute",
+            "hold",
+            "reject"
+          ]
+        },
+        "destination": {
+          "enum": [
+            "D1",
+            "D2",
+            null
+          ]
+        },
+        "rail": {
+          "enum": [
+            "A",
+            "B",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "NO_ELIGIBLE_DESTINATION",
+            "NO_ROUTE",
+            "VERIFICATION_PENDING",
+            "APPROVAL_PENDING",
+            null
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "execute"
+            },
+            "destination": {
+              "enum": [
+                "D1",
+                "D2"
+              ]
+            },
+            "rail": {
+              "enum": [
+                "A",
+                "B"
+              ]
+            },
+            "reason": {
+              "const": null
+            }
+          }
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "hold"
+            },
+            "destination": {
+              "const": null
+            },
+            "rail": {
+              "const": null
+            },
+            "reason": {
+              "enum": [
+                "VERIFICATION_PENDING",
+                "APPROVAL_PENDING"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "reject"
+            },
+            "destination": {
+              "const": null
+            },
+            "rail": {
+              "const": null
+            },
+            "reason": {
+              "enum": [
+                "NO_ELIGIBLE_DESTINATION",
+                "NO_ROUTE"
+              ]
+            }
+          }
+        }
+      ],
+      "title": "Final proposal (inlined copy of final_proposal.schema.json)"
+    }
+  },
+  "description": "Self-contained: no cross-file $ref, so a plain in-memory validator resolves every reference."
+}

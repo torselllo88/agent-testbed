@@ -49,12 +49,35 @@ export const PROVIDER_KINDS = ["openrouter", "azure", "openai-compatible", "stub
 /** The name of a self-hosted OpenAI-compatible endpoint (vLLM, TGI, …), configured in the environment — never its URL or key. */
 export const EndpointNameSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "lower-case letters, digits, - and _");
 
-/** think and contextLength are settings of a self-hosted model server: no other provider takes them. */
-function checkServingOptions(ref: { provider: string; think?: boolean; contextLength?: number }, ctx: z.RefinementCtx): void {
-  for (const key of ["think", "contextLength"] as const) {
-    if (ref[key] !== undefined && ref.provider !== "openai-compatible") {
-      ctx.addIssue({ code: "custom", path: [key], message: `${key} is only meaningful for a self-hosted endpoint (provider "openai-compatible")` });
-    }
+/**
+ * Sampling settings beyond temperature and seed — the knobs a self-hosted
+ * server exposes (Ollama options top_p, top_k, min_p, presence_penalty,
+ * repeat_penalty). Sent as given and recorded with every call; a protocol
+ * that fixes them (the pilot) sets them in its scenario.
+ */
+export const SamplingOptionsSchema = z
+  .object({
+    topP: z.number().min(0).max(1).optional(),
+    topK: z.number().int().min(0).optional(),
+    minP: z.number().min(0).max(1).optional(),
+    presencePenalty: z.number().min(-2).max(2).optional(),
+    repeatPenalty: z.number().min(0).optional(),
+  })
+  .strict();
+export type SamplingOptions = z.infer<typeof SamplingOptionsSchema>;
+
+/**
+ * think, contextLength and sampling are settings of a self-hosted model
+ * server: no other provider takes them. Sampling alone is also accepted on
+ * the stub (which ignores it), so a scenario can fix its sampling settings
+ * while its agents are still scripted; a `$models` switch to a self-hosted
+ * endpoint then carries them over.
+ */
+function checkServingOptions(ref: { provider: string; think?: boolean; contextLength?: number; sampling?: SamplingOptions; keepAlive?: string }, ctx: z.RefinementCtx): void {
+  for (const key of ["think", "contextLength", "sampling", "keepAlive"] as const) {
+    if (ref[key] === undefined || ref.provider === "openai-compatible") continue;
+    if ((key === "sampling" || key === "keepAlive") && ref.provider === "stub") continue;
+    ctx.addIssue({ code: "custom", path: [key], message: `${key} is only meaningful for a self-hosted endpoint (provider "openai-compatible")` });
   }
 }
 
@@ -90,6 +113,10 @@ export const ModelRefSchema = z.object({
    * long discussion — and Ollama truncates an over-long prompt silently.
    */
   contextLength: z.number().int().positive().optional(),
+  /** Self-hosted endpoints only: sampling settings beyond temperature and seed (see SamplingOptionsSchema). */
+  sampling: SamplingOptionsSchema.optional(),
+  /** Ollama endpoints only: how long the server keeps the model loaded after a call (keep_alive, e.g. "30m"). */
+  keepAlive: z.string().regex(/^-?\d+(\.\d+)?(ms|s|m|h)?$/, 'a duration such as "30m", or -1 to keep the model loaded').optional(),
   /**
    * "native": ask the provider to enforce the response JSON schema.
    * "prompt": describe the schema in the prompt only — for models whose
@@ -501,6 +528,27 @@ export type HumanInteractionConfig = z.infer<typeof HumanInteractionConfigSchema
 export const TransportConfigSchema = z.discriminatedUnion("type", [z.object({ type: z.literal("local") })]);
 export type TransportConfig = z.infer<typeof TransportConfigSchema>;
 
+/**
+ * A protocol adapter (src/experiment/protocolAdapter.ts) in place of the
+ * testbed's own agent protocol: the named adapter renders every model input
+ * and reads every answer, with its own parameters. The runner keeps the
+ * lifecycle, which an adapter may rely on being fixed: fixed discussion
+ * rounds, a required proposal in one attempt with no format retries, no vote
+ * (checked below). `replicate` distinguishes repeated executions of one
+ * condition that an adapter seeds differently; `control` asks the adapter for
+ * a control call instead of the group's protocol (set by a batch's `$solo`).
+ */
+export const ProtocolConfigSchema = z
+  .object({
+    adapter: z.string().min(1),
+    replicate: z.number().int().min(0).default(0),
+    control: z.enum(["oracle", "public_only"]).optional(),
+    /** Validated by the adapter's own schema. */
+    params: z.record(z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolConfig = z.infer<typeof ProtocolConfigSchema>;
+
 export const ExperimentConfigSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -530,8 +578,23 @@ export const ExperimentConfigSchema = z
     }),
     transport: TransportConfigSchema.default({ type: "local" }),
     humanInteraction: HumanInteractionConfigSchema.optional(),
+    protocol: ProtocolConfigSchema.optional(),
   })
   .superRefine((cfg, ctx) => {
+    if (cfg.protocol) {
+      // What every adapter may rely on: a fixed schedule of discussion turns and exactly one final call.
+      const need = (ok: boolean, path: (string | number)[], message: string) => {
+        if (!ok) ctx.addIssue({ code: "custom", path, message });
+      };
+      need(cfg.discussion !== undefined, ["discussion"], "a protocol adapter needs fixed discussion rounds (discussion.fixedRounds)");
+      need(cfg.scheduler.type === "round_robin", ["scheduler", "type"], "a protocol adapter needs the round_robin scheduler");
+      need(cfg.consensus.rule === "none", ["consensus", "rule"], 'a protocol adapter needs consensus.rule "none" (the adapter has no vote)');
+      need(cfg.decision.proposalRequired === true, ["decision", "proposalRequired"], "a protocol adapter needs a required proposal");
+      need(cfg.decision.maxProposalAttempts === 1, ["decision", "maxProposalAttempts"], "a protocol adapter makes exactly one final call: maxProposalAttempts must be 1");
+      need(cfg.decision.maxProposalFormatRetries === 0, ["decision", "maxProposalFormatRetries"], "a protocol adapter makes exactly one final call: maxProposalFormatRetries must be 0");
+      need(cfg.humanInteraction === undefined, ["humanInteraction"], "a protocol adapter does not support human interaction");
+      need(cfg.randomization === undefined, ["randomization"], "a protocol adapter takes its orders from its own parameters, not from randomization");
+    }
     const ids = new Set<string>();
     for (const [i, agent] of cfg.agents.entries()) {
       if (ids.has(agent.id)) ctx.addIssue({ code: "custom", path: ["agents", i, "id"], message: `duplicate agent id "${agent.id}"` });
@@ -692,6 +755,8 @@ export function taskDefinition(config: ExperimentConfig, evaluatorVersion: strin
     decision: config.decision,
     consensus: config.consensus,
     evaluator: { ...config.evaluator, version: evaluatorVersion },
+    // The adapter (how the task is put to the agents) and its parameters; not the replicate, which repeats one task.
+    ...(config.protocol ? { protocol: { adapter: config.protocol.adapter, ...(config.protocol.control ? { control: config.protocol.control } : {}), params: config.protocol.params } } : {}),
   };
 }
 
@@ -726,7 +791,7 @@ export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
  * stay — and are dropped for any other provider.
  */
 export function withModelChoice(ref: ModelRef, choice: ModelChoice): ModelRef {
-  const { routing: _routing, endpoint: _endpoint, think, contextLength, ...rest } = ref;
+  const { routing: _routing, endpoint: _endpoint, think, contextLength, sampling, keepAlive, ...rest } = ref;
   const selfHosted = choice.provider === "openai-compatible";
   const thinkNext = choice.think ?? think;
   const contextNext = choice.contextLength ?? contextLength;
@@ -738,6 +803,9 @@ export function withModelChoice(ref: ModelRef, choice: ModelChoice): ModelRef {
     structuredOutput: choice.structuredOutput ?? rest.structuredOutput,
     ...(selfHosted && thinkNext !== undefined ? { think: thinkNext } : {}),
     ...(selfHosted && contextNext !== undefined ? { contextLength: contextNext } : {}),
+    // The scenario's sampling settings stay on a self-hosted endpoint (the kind that takes them) and on the stub.
+    ...((selfHosted || choice.provider === "stub") && sampling !== undefined ? { sampling } : {}),
+    ...((selfHosted || choice.provider === "stub") && keepAlive !== undefined ? { keepAlive } : {}),
   };
 }
 

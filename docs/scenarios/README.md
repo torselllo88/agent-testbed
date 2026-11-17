@@ -25,6 +25,7 @@ identically with or without it. Two scenarios with the same task side share a
 | Station Kestrel (`station-kestrel`) | the same Space Station task | [kestrel.md](kestrel.md) |
 | Station Kestrel: Cascade (`station-kestrel-cascade`) | a different, harder task (evaluator `kestrel-cascade`) | [kestrel-cascade.md](kestrel-cascade.md) |
 | Service Settlement (`service-settlement`) | a research task: six functions, hidden-profile facts, outcome classes (evaluator `service-settlement`) | [service-settlement.md](service-settlement.md) |
+| Pilot Settlement (`pilot-settlement`) | the pilot's task (Distributed Settlement Decision v1.4) under the pilot's own protocol adapter; 50 frozen instances, Complete vs Ring (evaluator `pilot-settlement`) | [pilot-settlement.md](pilot-settlement.md) |
 
 Built-ins are read-only in the library and kept in sync with the code: when a
 built-in's version is bumped, its library entry is updated in place. Saved

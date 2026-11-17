@@ -1,0 +1,2315 @@
+{
+  "sampling_version": "pilot-sampling-v2",
+  "task_definition": "v1.4",
+  "exposure_spec": "v1.4",
+  "instances": [
+    {
+      "instance_id": "DEV-01",
+      "set": "dev",
+      "td_example_id": "A1",
+      "public_state": {
+        "requested_destination": "D2",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D2",
+        "permitted_destinations": [
+          "D1",
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1",
+          "D2"
+        ],
+        "supported_routes": [
+          "D1/B",
+          "D2/A"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": true,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:4f9525f766750bd5a7570bcf5b8f4f58ec1e435b9c19cc7c14b92cfe7d1c3b25",
+      "structural_key_hash": "sha256:f24692dbbae49d4d479da4bb08afc5b6aa27e90d2ac1337776e7247a5ea87ffc",
+      "class": "A",
+      "subtype": "rail_A",
+      "top_class": "A",
+      "canonical_outcome": {
+        "action": "execute",
+        "destination": "D2",
+        "rail": "A",
+        "reason": null
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D2=true",
+            "compliance.authorizes.D2=true",
+            "settlement.supports.D2.A=true",
+            "verification.status=accepted",
+            "treasury.status=approved"
+          ]
+        ],
+        "min_fact_set_size": 5,
+        "relevant_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": true,
+        "other_executable": true,
+        "n_supported_routes": 2,
+        "contract_permits_both": true,
+        "compliance_authorizes_both": true,
+        "canonical_destination": "D2",
+        "canonical_rail": "A"
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Contract",
+          "Settlement",
+          "Treasury",
+          "Compliance",
+          "Operations",
+          "Verification"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Settlement",
+          "Contract",
+          "Compliance",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Treasury",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Operations",
+            "Contract"
+          ],
+          "Contract": [
+            "Settlement",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Contract",
+            "Verification"
+          ],
+          "Verification": [
+            "Compliance",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Verification",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 3,
+          "Settlement": 1,
+          "Verification": 2,
+          "Treasury": 1
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 8,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 3
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 9,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 9
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-01-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-01-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-02",
+      "set": "dev",
+      "td_example_id": "A2",
+      "public_state": {
+        "requested_destination": "D1",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D1",
+        "permitted_destinations": [
+          "D1"
+        ],
+        "authorized_destinations": [
+          "D1",
+          "D2"
+        ],
+        "supported_routes": [
+          "D1/B",
+          "D2/A"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": true,
+        "contract.permits.D2": false,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:6ed53b0cf6cd75e66557e266f55d91f0a36255e655929bc490b126eed6ad8b72",
+      "structural_key_hash": "sha256:ac6e4970118717dbfa47a3ff2fb20126339b6cf10b93dcb0bbedc8a049299701",
+      "class": "A",
+      "subtype": "rail_B",
+      "top_class": "A",
+      "canonical_outcome": {
+        "action": "execute",
+        "destination": "D1",
+        "rail": "B",
+        "reason": null
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=true",
+            "compliance.authorizes.D1=true",
+            "settlement.supports.D1.A=false",
+            "settlement.supports.D1.B=true",
+            "verification.status=accepted",
+            "treasury.status=approved"
+          ]
+        ],
+        "min_fact_set_size": 6,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": true,
+        "other_executable": false,
+        "n_supported_routes": 2,
+        "contract_permits_both": false,
+        "compliance_authorizes_both": true,
+        "canonical_destination": "D1",
+        "canonical_rail": "B"
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Contract",
+          "Verification",
+          "Compliance",
+          "Treasury",
+          "Operations",
+          "Settlement"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Compliance",
+          "Treasury",
+          "Contract",
+          "Settlement",
+          "Verification"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Verification",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Operations",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Compliance",
+            "Contract"
+          ],
+          "Contract": [
+            "Treasury",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Contract",
+            "Verification"
+          ],
+          "Verification": [
+            "Settlement",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 3,
+          "Compliance": 1,
+          "Settlement": 2,
+          "Verification": 1,
+          "Treasury": 2
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 8,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 3
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 8,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Verification": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 9,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 9
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-02-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-02-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-03",
+      "set": "dev",
+      "td_example_id": "B1",
+      "public_state": {
+        "requested_destination": "D2",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D2",
+        "permitted_destinations": [
+          "D1",
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1"
+        ],
+        "supported_routes": [
+          "D1/A",
+          "D2/A"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": true,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": false,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:21fd142caf06ffca82394e8a258f48b27bebebeb297b82e69f5b3df01b3bf264",
+      "structural_key_hash": "sha256:7b743e5f853e7537b0658af05b42e47877de0a43ed2d5b1d75d239f414377832",
+      "class": "B",
+      "subtype": "compliance",
+      "top_class": "B",
+      "canonical_outcome": {
+        "action": "execute",
+        "destination": "D1",
+        "rail": "A",
+        "reason": null
+      },
+      "metadata": {
+        "b_failure_reason": "compliance",
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=true",
+            "compliance.authorizes.D1=true",
+            "compliance.authorizes.D2=false",
+            "settlement.supports.D1.A=true",
+            "verification.status=accepted",
+            "treasury.status=approved"
+          ]
+        ],
+        "min_fact_set_size": 6,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "compliance.authorizes.D2",
+          "settlement.supports.D1.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "compliance.authorizes.D2",
+          "settlement.supports.D1.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": true,
+        "n_supported_routes": 2,
+        "contract_permits_both": true,
+        "compliance_authorizes_both": false,
+        "canonical_destination": "D1",
+        "canonical_rail": "A"
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Verification",
+          "Settlement",
+          "Operations",
+          "Contract",
+          "Compliance",
+          "Treasury"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Verification",
+          "Settlement",
+          "Treasury",
+          "Contract",
+          "Compliance"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Compliance",
+            "Verification"
+          ],
+          "Verification": [
+            "Operations",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Verification",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Settlement",
+            "Contract"
+          ],
+          "Contract": [
+            "Treasury",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Contract",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 1,
+          "Settlement": 2,
+          "Verification": 1,
+          "Treasury": 3
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 7,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Verification": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 11,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 3
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 11
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-03-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-03-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-04",
+      "set": "dev",
+      "td_example_id": "B2",
+      "public_state": {
+        "requested_destination": "D1",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D1",
+        "permitted_destinations": [
+          "D1",
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1",
+          "D2"
+        ],
+        "supported_routes": [
+          "D2/B"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": false,
+        "settlement.supports.D2.B": true,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:65f9644519d86170a1d4fc1336771c97c5f5fe3e413a2cab4796ba2fd464a406",
+      "structural_key_hash": "sha256:6d5eb1b1bbea6f931accf927c4e35959bb1b66fab49793d6fd85fa8302aa1fc7",
+      "class": "B",
+      "subtype": "route",
+      "top_class": "B",
+      "canonical_outcome": {
+        "action": "execute",
+        "destination": "D2",
+        "rail": "B",
+        "reason": null
+      },
+      "metadata": {
+        "b_failure_reason": "route",
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D2=true",
+            "compliance.authorizes.D2=true",
+            "settlement.supports.D1.A=false",
+            "settlement.supports.D1.B=false",
+            "settlement.supports.D2.A=false",
+            "settlement.supports.D2.B=true",
+            "verification.status=accepted",
+            "treasury.status=approved"
+          ]
+        ],
+        "min_fact_set_size": 8,
+        "relevant_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B",
+          "settlement.supports.D2.A",
+          "settlement.supports.D2.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B",
+          "settlement.supports.D2.A",
+          "settlement.supports.D2.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": true,
+        "n_supported_routes": 1,
+        "contract_permits_both": true,
+        "compliance_authorizes_both": true,
+        "canonical_destination": "D2",
+        "canonical_rail": "B"
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Treasury",
+          "Contract",
+          "Operations",
+          "Settlement",
+          "Verification",
+          "Compliance"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Treasury",
+          "Settlement",
+          "Compliance",
+          "Verification",
+          "Contract"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Contract",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Operations",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Treasury",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Settlement",
+            "Verification"
+          ],
+          "Verification": [
+            "Compliance",
+            "Contract"
+          ],
+          "Contract": [
+            "Verification",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 1,
+          "Compliance": 3,
+          "Settlement": 2,
+          "Verification": 2,
+          "Treasury": 1
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 13,
+              "arrival_round": 3,
+              "hops_on_earliest_path": 3
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 7,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Verification": {
+              "earliest_arrival_turn": 8,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 13
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-04-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-04-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-05",
+      "set": "dev",
+      "td_example_id": "B3",
+      "public_state": {
+        "requested_destination": "D1",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D1",
+        "permitted_destinations": [
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1",
+          "D2"
+        ],
+        "supported_routes": [
+          "D1/A",
+          "D2/A",
+          "D2/B"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": false,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": true,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": true,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:6ceadd150c63785ebecfeb333666a04da06306d882bdecd6147607817fdf2040",
+      "structural_key_hash": "sha256:7052e23e5d5f6c1660f3c2fdc7cf346fe57f74ea2ea8e6e0c32a19503d5d9662",
+      "class": "B",
+      "subtype": "contract",
+      "top_class": "B",
+      "canonical_outcome": {
+        "action": "execute",
+        "destination": "D2",
+        "rail": "A",
+        "reason": null
+      },
+      "metadata": {
+        "b_failure_reason": "contract",
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=false",
+            "contract.permits.D2=true",
+            "compliance.authorizes.D2=true",
+            "settlement.supports.D2.A=true",
+            "verification.status=accepted",
+            "treasury.status=approved"
+          ]
+        ],
+        "min_fact_set_size": 6,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": true,
+        "n_supported_routes": 3,
+        "contract_permits_both": false,
+        "compliance_authorizes_both": true,
+        "canonical_destination": "D2",
+        "canonical_rail": "A"
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Operations",
+          "Treasury",
+          "Compliance",
+          "Settlement",
+          "Contract",
+          "Verification"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Verification",
+          "Treasury",
+          "Compliance",
+          "Contract",
+          "Settlement"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Settlement",
+            "Verification"
+          ],
+          "Verification": [
+            "Operations",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Verification",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Treasury",
+            "Contract"
+          ],
+          "Contract": [
+            "Compliance",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Contract",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 3,
+          "Settlement": 1,
+          "Verification": 1,
+          "Treasury": 2
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 10,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 10,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 3
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 10
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-05-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-05-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-06",
+      "set": "dev",
+      "td_example_id": "C1",
+      "public_state": {
+        "requested_destination": "D2",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D2",
+        "permitted_destinations": [
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D2"
+        ],
+        "supported_routes": [
+          "D2/A"
+        ],
+        "verification_status": "pending",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": false,
+        "compliance.authorizes.D1": false,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "pending",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:fbdd86defef9d49e5e8567678635e959dc65f5c6985e0d76b96726e9bcf8c254",
+      "structural_key_hash": "sha256:62dde88b29429a92207087e8f59617872faa03626cd016dd8abbbd4237490ea9",
+      "class": "C",
+      "subtype": "verification",
+      "top_class": "C",
+      "canonical_outcome": {
+        "action": "hold",
+        "destination": null,
+        "rail": null,
+        "reason": "VERIFICATION_PENDING"
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D2=true",
+            "compliance.authorizes.D2=true",
+            "settlement.supports.D2.A=true",
+            "verification.status=pending"
+          ]
+        ],
+        "min_fact_set_size": 4,
+        "relevant_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status"
+        ],
+        "core_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D2",
+          "settlement.supports.D2.A",
+          "verification.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": true,
+        "other_executable": false,
+        "n_supported_routes": 1,
+        "contract_permits_both": false,
+        "compliance_authorizes_both": false,
+        "canonical_destination": null,
+        "canonical_rail": null
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Treasury",
+          "Compliance",
+          "Contract",
+          "Verification",
+          "Operations",
+          "Settlement"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Contract",
+          "Treasury",
+          "Compliance",
+          "Verification",
+          "Settlement"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Settlement",
+            "Contract"
+          ],
+          "Contract": [
+            "Operations",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Contract",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Treasury",
+            "Verification"
+          ],
+          "Verification": [
+            "Compliance",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Verification",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 1,
+          "Compliance": 3,
+          "Settlement": 1,
+          "Verification": 2,
+          "Treasury": 2
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 3
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.75,
+            "sum_relay_steps": 3,
+            "latest_arrival_turn": 6
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-06-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-06-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-07",
+      "set": "dev",
+      "td_example_id": "C2",
+      "public_state": {
+        "requested_destination": "D1",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D1",
+        "permitted_destinations": [
+          "D1",
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1"
+        ],
+        "supported_routes": [
+          "D1/B"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "pending"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": true,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": false,
+        "settlement.supports.D2.A": false,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "pending"
+      },
+      "state_hash": "sha256:0547c19425cfb9cc7e9f9eb6d2bad2f6cb90df0fd62c7996b673711ec998dfe5",
+      "structural_key_hash": "sha256:0f03a44cfd2eafc93e08e5d138988e7fb101628487a30e2a44e39f131b6dd463",
+      "class": "C",
+      "subtype": "approval",
+      "top_class": "C",
+      "canonical_outcome": {
+        "action": "hold",
+        "destination": null,
+        "rail": null,
+        "reason": "APPROVAL_PENDING"
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=true",
+            "compliance.authorizes.D1=true",
+            "settlement.supports.D1.B=true",
+            "verification.status=accepted",
+            "treasury.status=pending"
+          ]
+        ],
+        "min_fact_set_size": 5,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.B",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": true,
+        "other_executable": false,
+        "n_supported_routes": 1,
+        "contract_permits_both": true,
+        "compliance_authorizes_both": false,
+        "canonical_destination": null,
+        "canonical_rail": null
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Verification",
+          "Settlement",
+          "Compliance",
+          "Treasury",
+          "Contract",
+          "Operations"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Compliance",
+          "Treasury",
+          "Verification",
+          "Settlement",
+          "Contract"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Contract",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Operations",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Compliance",
+            "Verification"
+          ],
+          "Verification": [
+            "Treasury",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Verification",
+            "Contract"
+          ],
+          "Contract": [
+            "Settlement",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 1,
+          "Compliance": 1,
+          "Settlement": 2,
+          "Verification": 3,
+          "Treasury": 2
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Verification": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 3
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 9,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 9
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 5
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-07-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-07-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-08",
+      "set": "dev",
+      "td_example_id": "R-ELIG-1",
+      "public_state": {
+        "requested_destination": "D2",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D2",
+        "permitted_destinations": [
+          "D1"
+        ],
+        "authorized_destinations": [
+          "D2"
+        ],
+        "supported_routes": [
+          "D1/A",
+          "D2/A"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": false,
+        "settlement.supports.D1.A": true,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": false,
+        "compliance.authorizes.D2": true,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:f8de82c1de7a6bd8119200656816bb5a06a724e25ca0eb911a265a0de0935bb3",
+      "structural_key_hash": "sha256:16a9f4139d5337c73f8a1d152b3ed9e2b649d8a6c935ad97c11e569b7f05f7fd",
+      "class": "R-ELIG",
+      "subtype": null,
+      "top_class": "Reject",
+      "canonical_outcome": {
+        "action": "reject",
+        "destination": null,
+        "rail": null,
+        "reason": "NO_ELIGIBLE_DESTINATION"
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D2=false",
+            "compliance.authorizes.D1=false"
+          ]
+        ],
+        "min_fact_set_size": 2,
+        "relevant_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D1"
+        ],
+        "core_facts": [
+          "contract.permits.D2",
+          "compliance.authorizes.D1"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": false,
+        "n_supported_routes": 2,
+        "contract_permits_both": false,
+        "compliance_authorizes_both": false,
+        "canonical_destination": null,
+        "canonical_rail": null
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Settlement",
+          "Treasury",
+          "Contract",
+          "Operations",
+          "Compliance",
+          "Verification"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Treasury",
+          "Verification",
+          "Settlement",
+          "Contract",
+          "Compliance"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Compliance",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Operations",
+            "Verification"
+          ],
+          "Verification": [
+            "Treasury",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Verification",
+            "Contract"
+          ],
+          "Contract": [
+            "Settlement",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Contract",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 1,
+          "Settlement": 3,
+          "Verification": 2,
+          "Treasury": 1
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 3
+            },
+            "Verification": {
+              "earliest_arrival_turn": 8,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 2
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 2,
+            "mean_distance": 1.5,
+            "sum_relay_steps": 1,
+            "latest_arrival_turn": 5
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 5
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-08-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-08-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-09",
+      "set": "dev",
+      "td_example_id": "R-ROUTE-1",
+      "public_state": {
+        "requested_destination": "D1",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D1",
+        "permitted_destinations": [
+          "D1"
+        ],
+        "authorized_destinations": [
+          "D1"
+        ],
+        "supported_routes": [
+          "D2/A",
+          "D2/B"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "approved"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": false,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": false,
+        "compliance.authorizes.D2": false,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": true,
+        "verification.status": "accepted",
+        "treasury.status": "approved"
+      },
+      "state_hash": "sha256:d8c72cb641045528757cb78e25a7a9763add5320894b4e041139a22634239c17",
+      "structural_key_hash": "sha256:6c4b260830ad8ac704c0aff70bbd3dafe7963fde0fdf160bcc5599d44038ab5b",
+      "class": "R-ROUTE",
+      "subtype": null,
+      "top_class": "Reject",
+      "canonical_outcome": {
+        "action": "reject",
+        "destination": null,
+        "rail": null,
+        "reason": "NO_ROUTE"
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=true",
+            "contract.permits.D2=false",
+            "compliance.authorizes.D1=true",
+            "settlement.supports.D1.A=false",
+            "settlement.supports.D1.B=false"
+          ],
+          [
+            "contract.permits.D1=true",
+            "compliance.authorizes.D1=true",
+            "compliance.authorizes.D2=false",
+            "settlement.supports.D1.A=false",
+            "settlement.supports.D1.B=false"
+          ]
+        ],
+        "min_fact_set_size": 5,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "contract.permits.D2",
+          "compliance.authorizes.D1",
+          "compliance.authorizes.D2",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.A",
+          "settlement.supports.D1.B"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": false,
+        "n_supported_routes": 2,
+        "contract_permits_both": false,
+        "compliance_authorizes_both": false,
+        "canonical_destination": null,
+        "canonical_rail": null
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Operations",
+          "Compliance",
+          "Contract",
+          "Settlement",
+          "Treasury",
+          "Verification"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Treasury",
+          "Settlement",
+          "Compliance",
+          "Contract",
+          "Verification"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Verification",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Operations",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Treasury",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Settlement",
+            "Contract"
+          ],
+          "Contract": [
+            "Compliance",
+            "Verification"
+          ],
+          "Verification": [
+            "Contract",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 3,
+          "Settlement": 2,
+          "Verification": 1,
+          "Treasury": 1
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 3
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 2,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 2.333,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 6
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 4
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-09-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-09-RING",
+          "topology": "ring"
+        }
+      ]
+    },
+    {
+      "instance_id": "DEV-10",
+      "set": "dev",
+      "td_example_id": null,
+      "public_state": {
+        "requested_destination": "D2",
+        "amount": 12000,
+        "milestone": "M-204"
+      },
+      "state": {
+        "requested_destination": "D2",
+        "permitted_destinations": [
+          "D1",
+          "D2"
+        ],
+        "authorized_destinations": [
+          "D1"
+        ],
+        "supported_routes": [
+          "D1/A",
+          "D2/A"
+        ],
+        "verification_status": "accepted",
+        "approval_status": "pending"
+      },
+      "base_facts": {
+        "contract.permits.D1": true,
+        "compliance.authorizes.D1": true,
+        "settlement.supports.D1.A": true,
+        "settlement.supports.D1.B": false,
+        "contract.permits.D2": true,
+        "compliance.authorizes.D2": false,
+        "settlement.supports.D2.A": true,
+        "settlement.supports.D2.B": false,
+        "verification.status": "accepted",
+        "treasury.status": "pending"
+      },
+      "state_hash": "sha256:d6eb6fd26d098222230282f616595b76bc5d6e281f1e80bf6258f1403995a9a7",
+      "structural_key_hash": "sha256:3972eb242fc60290c1e8bf1c732eec9765222e9d66825f39f2b571546c215c39",
+      "class": "C",
+      "subtype": "approval",
+      "top_class": "C",
+      "canonical_outcome": {
+        "action": "hold",
+        "destination": null,
+        "rail": null,
+        "reason": "APPROVAL_PENDING"
+      },
+      "metadata": {
+        "b_failure_reason": null,
+        "minimal_fact_sets": [
+          [
+            "contract.permits.D1=true",
+            "compliance.authorizes.D1=true",
+            "settlement.supports.D1.A=true",
+            "verification.status=accepted",
+            "treasury.status=pending"
+          ]
+        ],
+        "min_fact_set_size": 5,
+        "relevant_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "core_facts": [
+          "contract.permits.D1",
+          "compliance.authorizes.D1",
+          "settlement.supports.D1.A",
+          "verification.status",
+          "treasury.status"
+        ],
+        "minimal_role_sets": [
+          [
+            "Contract",
+            "Compliance",
+            "Settlement",
+            "Verification",
+            "Treasury"
+          ]
+        ]
+      },
+      "features": {
+        "requested_executable": false,
+        "other_executable": true,
+        "n_supported_routes": 2,
+        "contract_permits_both": true,
+        "compliance_authorizes_both": false,
+        "canonical_destination": null,
+        "canonical_rail": null
+      },
+      "topology_assignment": {
+        "speaking_order": [
+          "Verification",
+          "Operations",
+          "Compliance",
+          "Treasury",
+          "Contract",
+          "Settlement"
+        ],
+        "ring_positions": [
+          "Operations",
+          "Treasury",
+          "Contract",
+          "Settlement",
+          "Verification",
+          "Compliance"
+        ],
+        "ring_neighbors": {
+          "Operations": [
+            "Compliance",
+            "Treasury"
+          ],
+          "Treasury": [
+            "Operations",
+            "Contract"
+          ],
+          "Contract": [
+            "Treasury",
+            "Settlement"
+          ],
+          "Settlement": [
+            "Contract",
+            "Verification"
+          ],
+          "Verification": [
+            "Settlement",
+            "Compliance"
+          ],
+          "Compliance": [
+            "Verification",
+            "Operations"
+          ]
+        },
+        "required_roles": [
+          "Contract",
+          "Compliance",
+          "Settlement",
+          "Verification",
+          "Treasury"
+        ],
+        "ring_distance_to_operations": {
+          "Contract": 2,
+          "Compliance": 1,
+          "Settlement": 3,
+          "Verification": 2,
+          "Treasury": 1
+        },
+        "temporal_delivery": {
+          "ring": {
+            "Contract": {
+              "earliest_arrival_turn": 9,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 4
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 9,
+              "arrival_round": 2,
+              "hops_on_earliest_path": 3
+            },
+            "Verification": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 2
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          },
+          "complete": {
+            "Contract": {
+              "earliest_arrival_turn": 5,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Compliance": {
+              "earliest_arrival_turn": 3,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Settlement": {
+              "earliest_arrival_turn": 6,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Verification": {
+              "earliest_arrival_turn": 1,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            },
+            "Treasury": {
+              "earliest_arrival_turn": 4,
+              "arrival_round": 1,
+              "hops_on_earliest_path": 1
+            }
+          }
+        },
+        "required_role_covariates": {
+          "ring": {
+            "max_distance": 3,
+            "mean_distance": 1.8,
+            "sum_relay_steps": 4,
+            "latest_arrival_turn": 9
+          },
+          "complete": {
+            "max_distance": 1,
+            "sum_relay_steps": 0,
+            "latest_arrival_turn": 6
+          }
+        }
+      },
+      "runs": [
+        {
+          "run_id": "DEV-10-COMPLETE",
+          "topology": "complete"
+        },
+        {
+          "run_id": "DEV-10-RING",
+          "topology": "ring"
+        }
+      ]
+    }
+  ]
+}

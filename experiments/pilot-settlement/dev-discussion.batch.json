@@ -1,0 +1,38 @@
+{
+  "name": "Pilot Settlement: dev discussion runs, Ollama (gates G2, G5)",
+  "description": "The 10 dev instances × {complete, ring} on the lab's Ollama endpoint with the pilot's generation settings (think on, temperature 1.0, top_p 0.95, top_k 20, min_p 0, num_predict 2560, num_ctx 8192; per-call seeds from the adapter). The instance variable comes first, so each instance's complete and ring runs are adjacent. Set the endpoint name to yours.",
+  "base": {
+    "builtin": "pilot-settlement"
+  },
+  "repetitions": 1,
+  "order": "sequential",
+  "variables": [
+    {
+      "path": "$instance",
+      "label": "instance",
+      "values": ["DEV-01", "DEV-02", "DEV-03", "DEV-04", "DEV-05", "DEV-06", "DEV-07", "DEV-08", "DEV-09", "DEV-10"]
+    },
+    {
+      "path": "communication",
+      "label": "graph",
+      "values": [
+        { "topology": { "type": "complete" } },
+        { "topology": { "type": "ring" } }
+      ]
+    },
+    {
+      "path": "$models",
+      "label": "model",
+      "values": [
+        {
+          "provider": "openai-compatible",
+          "endpoint": "lab-ollama",
+          "model": "qwen3.8:27b",
+          "structuredOutput": "prompt",
+          "think": true,
+          "contextLength": 8192
+        }
+      ]
+    }
+  ]
+}

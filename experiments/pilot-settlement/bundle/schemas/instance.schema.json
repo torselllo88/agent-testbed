@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "instance.schema.json",
+  "title": "Pilot or development instance file",
+  "type": "object",
+  "required": [
+    "sampling_version",
+    "task_definition",
+    "exposure_spec",
+    "instances"
+  ],
+  "properties": {
+    "sampling_version": {
+      "type": "string"
+    },
+    "task_definition": {
+      "const": "v1.4"
+    },
+    "exposure_spec": {
+      "const": "v1.4"
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/instance"
+      }
+    }
+  },
+  "$defs": {
+    "dest": {
+      "enum": [
+        "D1",
+        "D2"
+      ]
+    },
+    "role": {
+      "enum": [
+        "Contract",
+        "Compliance",
+        "Settlement",
+        "Verification",
+        "Treasury"
+      ]
+    },
+    "agent": {
+      "enum": [
+        "Operations",
+        "Contract",
+        "Compliance",
+        "Settlement",
+        "Verification",
+        "Treasury"
+      ]
+    },
+    "fact_value": {
+      "type": "string",
+      "pattern": "^(contract\\.permits\\.D[12]|compliance\\.authorizes\\.D[12]|settlement\\.supports\\.D[12]\\.[AB])=(true|false)$|^verification\\.status=(accepted|pending)$|^treasury\\.status=(approved|pending)$"
+    },
+    "arrival": {
+      "type": "object",
+      "required": [
+        "earliest_arrival_turn",
+        "arrival_round",
+        "hops_on_earliest_path"
+      ],
+      "properties": {
+        "earliest_arrival_turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18
+        },
+        "arrival_round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "hops_on_earliest_path": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    },
+    "instance": {
+      "type": "object",
+      "required": [
+        "instance_id",
+        "set",
+        "public_state",
+        "state",
+        "base_facts",
+        "state_hash",
+        "class",
+        "subtype",
+        "top_class",
+        "canonical_outcome",
+        "metadata",
+        "features",
+        "topology_assignment",
+        "runs"
+      ],
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^(DEV-\\d{2}|P-\\d{2})$"
+        },
+        "set": {
+          "enum": [
+            "dev",
+            "pilot"
+          ]
+        },
+        "td_example_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "public_state": {
+          "type": "object",
+          "required": [
+            "requested_destination",
+            "amount",
+            "milestone"
+          ],
+          "properties": {
+            "requested_destination": {
+              "$ref": "#/$defs/dest"
+            },
+            "amount": {
+              "const": 12000
+            },
+            "milestone": {
+              "const": "M-204"
+            }
+          }
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requested_destination",
+            "permitted_destinations",
+            "authorized_destinations",
+            "supported_routes",
+            "verification_status",
+            "approval_status"
+          ],
+          "properties": {
+            "requested_destination": {
+              "$ref": "#/$defs/dest"
+            },
+            "permitted_destinations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/dest"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "authorized_destinations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/dest"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "supported_routes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "D1/A",
+                  "D1/B",
+                  "D2/A",
+                  "D2/B"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "verification_status": {
+              "enum": [
+                "accepted",
+                "pending"
+              ]
+            },
+            "approval_status": {
+              "enum": [
+                "approved",
+                "pending"
+              ]
+            }
+          }
+        },
+        "base_facts": {
+          "type": "object",
+          "minProperties": 10,
+          "maxProperties": 10
+        },
+        "state_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "structural_key_hash": {
+          "type": "string"
+        },
+        "class": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "R-ELIG",
+            "R-ROUTE"
+          ]
+        },
+        "subtype": {
+          "enum": [
+            "rail_A",
+            "rail_B",
+            "contract",
+            "compliance",
+            "route",
+            "verification",
+            "approval",
+            null
+          ]
+        },
+        "top_class": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "Reject"
+          ]
+        },
+        "canonical_outcome": {
+          "$ref": "#/$defs/final_proposal"
+        },
+        "metadata": {
+          "type": "object",
+          "required": [
+            "b_failure_reason",
+            "minimal_fact_sets",
+            "min_fact_set_size",
+            "relevant_facts",
+            "core_facts",
+            "minimal_role_sets"
+          ],
+          "properties": {
+            "b_failure_reason": {
+              "enum": [
+                "contract",
+                "compliance",
+                "route",
+                null
+              ]
+            },
+            "minimal_fact_sets": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/fact_value"
+                }
+              }
+            },
+            "min_fact_set_size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "relevant_facts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "core_facts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minimal_role_sets": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/role"
+                }
+              }
+            }
+          }
+        },
+        "features": {
+          "type": "object"
+        },
+        "topology_assignment": {
+          "type": "object",
+          "required": [
+            "speaking_order",
+            "ring_positions",
+            "ring_neighbors",
+            "required_roles",
+            "ring_distance_to_operations",
+            "temporal_delivery",
+            "required_role_covariates"
+          ],
+          "properties": {
+            "speaking_order": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/agent"
+              },
+              "minItems": 6,
+              "maxItems": 6,
+              "uniqueItems": true
+            },
+            "ring_positions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/agent"
+              },
+              "minItems": 6,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "prefixItems": [
+                {
+                  "const": "Operations"
+                }
+              ]
+            },
+            "ring_neighbors": {
+              "type": "object"
+            },
+            "required_roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/role"
+              }
+            },
+            "ring_distance_to_operations": {
+              "type": "object"
+            },
+            "temporal_delivery": {
+              "type": "object",
+              "required": [
+                "ring",
+                "complete"
+              ],
+              "properties": {
+                "ring": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/arrival"
+                  }
+                },
+                "complete": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/arrival"
+                  }
+                }
+              }
+            },
+            "required_role_covariates": {
+              "type": "object"
+            }
+          }
+        },
+        "runs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "final_proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "destination",
+        "rail",
+        "reason"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "execute",
+            "hold",
+            "reject"
+          ]
+        },
+        "destination": {
+          "enum": [
+            "D1",
+            "D2",
+            null
+          ]
+        },
+        "rail": {
+          "enum": [
+            "A",
+            "B",
+            null
+          ]
+        },
+        "reason": {
+          "enum": [
+            "NO_ELIGIBLE_DESTINATION",
+            "NO_ROUTE",
+            "VERIFICATION_PENDING",
+            "APPROVAL_PENDING",
+            null
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "execute"
+            },
+            "destination": {
+              "enum": [
+                "D1",
+                "D2"
+              ]
+            },
+            "rail": {
+              "enum": [
+                "A",
+                "B"
+              ]
+            },
+            "reason": {
+              "const": null
+            }
+          }
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "hold"
+            },
+            "destination": {
+              "const": null
+            },
+            "rail": {
+              "const": null
+            },
+            "reason": {
+              "enum": [
+                "VERIFICATION_PENDING",
+                "APPROVAL_PENDING"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "reject"
+            },
+            "destination": {
+              "const": null
+            },
+            "rail": {
+              "const": null
+            },
+            "reason": {
+              "enum": [
+                "NO_ELIGIBLE_DESTINATION",
+                "NO_ROUTE"
+              ]
+            }
+          }
+        }
+      ],
+      "title": "Final proposal (inlined copy of final_proposal.schema.json)"
+    }
+  },
+  "description": "Self-contained: no cross-file $ref, so a plain in-memory validator resolves every reference."
+}

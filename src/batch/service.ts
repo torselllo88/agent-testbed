@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ConfigValidationError, configHash, parseExperimentConfig, type ExperimentConfig } from "../experiment/config.js";
-import { checkRunnable, ConfigNotRunnableError, withEffectiveEvaluatorParams, type RunnerDeps } from "../experiment/runner.js";
+import { checkRunnable, ConfigNotRunnableError, withEffectiveEvaluatorParams, withEffectiveProtocolParams, type RunnerDeps } from "../experiment/runner.js";
 import type { ExperimentService } from "../experiment/service.js";
 import type { ProviderRegistry } from "../llm/registry.js";
 import { BatchRepository, type BatchRecord, type ResolvedBatch } from "../persistence/batchRepository.js";
@@ -150,9 +150,9 @@ export class BatchService {
           problems.push(...dropped.map((p) => `condition "${condition.key}": ${p}`));
           continue;
         }
-        const { evaluatorParams } = checkRunnable({ providers, evaluators: this.deps.evaluators }, parsed);
-        // As the run will snapshot and hash it: evaluator defaults applied.
-        const config = withEffectiveEvaluatorParams(parsed, evaluatorParams);
+        const { evaluatorParams, protocolParams } = checkRunnable({ providers, evaluators: this.deps.evaluators }, parsed);
+        // As the run will snapshot and hash it: evaluator (and adapter) defaults applied.
+        const config = withEffectiveEvaluatorParams(withEffectiveProtocolParams(parsed, protocolParams), evaluatorParams);
         conditionConfigs.set(condition.key, config);
         // The last line of defence: two conditions that are one config would compare a thing with itself.
         const hash = configHash(config);

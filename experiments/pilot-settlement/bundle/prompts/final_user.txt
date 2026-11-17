@@ -1,0 +1,9 @@
+DISCUSSION (messages you sent or received, oldest first):
+{{history}}
+
+The discussion is over. Return the final proposal now.
+Some information may not have reached you; you must still return exactly one proposal, based on the messages above and the public rules.
+Return only one JSON object with exactly these fields:
+{"action": "execute" | "hold" | "reject", "destination": "D1" | "D2" | null, "rail": "A" | "B" | null, "reason": "NO_ELIGIBLE_DESTINATION" | "NO_ROUTE" | "VERIFICATION_PENDING" | "APPROVAL_PENDING" | null}
+For execute: destination and rail are set and reason is null.
+For hold and reject: destination and rail are null and reason is set.

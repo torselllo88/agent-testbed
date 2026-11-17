@@ -187,6 +187,47 @@ the speaking order matters, not only the graph. It is an upper bound on what
 agents achieve and says nothing about what they did — use it to check that a
 horizon of K rounds can carry every fact to the proposer at all.
 
+### Protocol adapter
+
+**`protocol: { "adapter": "<id>", "replicate": 0, "control"?: "oracle" | "public_only", "params": {…} }`**
+replaces the testbed's own agent protocol — the JSON turns, readiness, the
+proposal envelope and the moderator's notices — with an experiment's exact
+one. The named adapter (registered next to the evaluators, e.g.
+`pilot-settlement`, see [Pilot Settlement](scenarios/pilot-settlement.md))
+renders every model input itself, may give every call its own seed, and reads
+every answer by its own rules: what a discussion turn delivers (a message to
+the agent's audience, a regeneration with a reminder, or nothing — a *silent
+turn* the run goes on past), and how the final answer is parsed. The runner
+keeps the lifecycle: round-robin turns, the fixed rounds, who hears whom
+(`communication`), the final call, the evaluator's structure check and
+judgement, budgets and the trace. Nothing in the generic core knows the
+adapter's task.
+
+What an adapter may rely on, and the config therefore requires: fixed
+discussion rounds, the `round_robin` scheduler, `consensus.rule: "none"`, a
+required proposal with `maxProposalAttempts` 1 and
+`maxProposalFormatRetries` 0 (exactly one final call: a failure there is a
+protocol outcome, never retried), no `humanInteraction`, no `randomization`
+(an adapter takes its orders from its own `params`). `params` is validated by
+the adapter's schema, and the adapter may refuse a config beyond that (roles,
+schedule, ring arrangement) before a run record exists. `replicate`
+distinguishes repeated executions of one condition the adapter seeds
+differently; `control` asks the adapter for a control call instead of the
+group's protocol — a batch's `$solo` sets it (`full` → `oracle`, `public` →
+`public_only`).
+
+What changes in the trace: every call is a raw call (`llm_call.raw: true`,
+no response format, no parse retries) carrying the adapter's seed, attempt
+kind (`initial`, `length_regeneration`) and, when the adapter counts prompt
+tokens, `promptTokensCounted`, `tokenCounter` and `budgetOk`. A call whose
+counted prompt plus the model's `maxOutputTokens` would not fit
+`contextLength` is not made: the run ends as `CONTEXT_BUDGET_VIOLATION`
+(infrastructure, excluded from rates). Silent turns, regenerations and
+truncations are `protocol_incident`s; `turn_completed` carries the adapter's
+flags. The run's `protocolFingerprint` is the adapter's (id, version and its
+rendered fixtures), and `experiment_started.protocolAdapter` names it; the
+adapter and its `params` (not `replicate`) are part of `taskDefinitionHash`.
+
 **Per-run overrides.** A run may override, without editing or versioning the
 saved scenario:
 
@@ -240,6 +281,20 @@ provider list, and the model field offers the models the server lists
 - **Keys** live only in the environment and are scrubbed from every trace.
 - A run naming an endpoint that is not configured where it runs is refused
   before it starts, saying which variable to set.
+- **`sampling`** — `{ "topP", "topK", "minP", "presencePenalty", "repeatPenalty" }`,
+  each optional — the sampling settings beyond temperature and seed, sent as
+  the server names them (Ollama options `top_p`, `top_k`, `min_p`,
+  `presence_penalty`, `repeat_penalty`; on an OpenAI-API server `top_p` and
+  `presence_penalty`, the rest as vLLM-style extra parameters) and recorded
+  with every call. They belong to the scenario like temperature: a `$models`
+  switch to a self-hosted endpoint keeps them, a switch to any other provider
+  drops them. The stub accepts and ignores them, so a scenario can fix its
+  sampling while its agents are still scripted.
+- **`keepAlive`** (Ollama only; a duration such as `"30m"`, or `-1`) — how
+  long the server keeps the model loaded after each call (`keep_alive`).
+  Omitted = the server's default (5 minutes), after which a slow turn can
+  find the model unloaded and reloaded mid-run. Like `sampling`, it belongs
+  to the scenario and survives a `$models` switch to a self-hosted endpoint.
 - **`think`** (`true` / `false`; omitted = the server's default) switches a
   model's thinking mode, e.g. Qwen3's. On an OpenAI-API server it is sent as
   `chat_template_kwargs.enable_thinking` (the vLLM / SGLang convention; other

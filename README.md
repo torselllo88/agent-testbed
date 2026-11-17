@@ -88,6 +88,7 @@ batches can be capped (`limits.totalCostCapUsd`, `limits.totalTokenCap`).
 | [Station Kestrel](docs/scenarios/kestrel.md) | The same task and evaluator (the same `taskDefinitionHash`) with named officers, personas, a narrator, viewer pacing and a post-run debrief. | `space-station` | en, ru authored |
 | [Station Kestrel: Cascade](docs/scenarios/kestrel-cascade.md) | A harder task with the Kestrel crew: two plausible recovery paths, an ordered action list and facts split so that no officer can find the safe plan alone. | `kestrel-cascade` | en, ru authored |
 | [Service Settlement](docs/scenarios/service-settlement.md) | Six organizational functions decide a contractor's milestone payment. Hidden-profile facts (the requested plan looks right on the shared facts), fixed discussion rounds, outcome classes (correct / unsafe / invalid / overcautious). A research task. | `service-settlement` | en |
+| [Pilot Settlement](docs/scenarios/pilot-settlement.md) | The pilot's task — Distributed Settlement Decision v1.4 — under the pilot's own protocol adapter: every model input rendered byte-identically to the reference, per-call seeds, 50 frozen instances, Complete vs Ring, run logs for the reference validator. | `pilot-settlement` | en |
 
 A scenario separates the task (facts, roles, private information, decision
 rules, evaluator) from behavior and presentation (names, personas, language,

@@ -104,11 +104,18 @@ export class OllamaProvider implements LlmProvider {
     if (request.seed !== undefined) options.seed = request.seed;
     if (request.maxOutputTokens !== undefined) options.num_predict = request.maxOutputTokens;
     if (request.contextLength !== undefined) options.num_ctx = request.contextLength;
+    const sampling = request.sampling ?? {};
+    if (sampling.topP !== undefined) options.top_p = sampling.topP;
+    if (sampling.topK !== undefined) options.top_k = sampling.topK;
+    if (sampling.minP !== undefined) options.min_p = sampling.minP;
+    if (sampling.presencePenalty !== undefined) options.presence_penalty = sampling.presencePenalty;
+    if (sampling.repeatPenalty !== undefined) options.repeat_penalty = sampling.repeatPenalty;
     const body = {
       model: request.model,
       messages: request.messages,
       stream: false,
       ...(request.think !== undefined ? { think: request.think } : {}),
+      ...(request.keepAlive !== undefined ? { keep_alive: request.keepAlive } : {}),
       ...(request.responseFormat ? { format: request.responseFormat.schema } : {}),
       ...(Object.keys(options).length ? { options } : {}),
     };

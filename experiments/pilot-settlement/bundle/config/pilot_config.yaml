@@ -1,0 +1,261 @@
+# Pilot Experimental Plan - machine-readable configuration (internal v0.3.1)
+# Frozen inputs: Task Definition v1.4, Exposure & Instance Metadata v1.4.
+# FILL_AT_GATE_* fields are set by the named development gate; FILL_AT_FREEZE fields are
+# recorded once at the freeze. Any change after the freeze -> new config_version.
+
+meta:
+  plan_version: "internal-v0.3.1"
+  config_version: "0.3.1-draft"
+  task_definition: "v1.4"
+  exposure_spec: "v1.4"
+  frozen: false
+  freeze_record: FILL_AT_FREEZE           # hashes of every bundle file (MANIFEST.sha256), model digest, Ollama build, /api/show record
+  changes_from_v0_3:
+    - "preload is an /api/chat request with messages: [] (loads without generating; expects done_reason load)"
+    - "gate_g4 evaluates every public-only replicate separately; replicates are never pooled"
+    - "G6 cache states classified by the observed prompt_eval_cached_count"
+  changes_from_v0_2:
+    - "public-only seed keyed on the public prompt hash, so G4 ceilings are strict bounds"
+    - "G6 includes a public-only call and both prompt-cache states"
+    - "explicit preload with num_ctx 8192; snapshots before, between and after the two runs of a pair; load_duration watched on every call"
+    - "clean-pair sensitivity analysis next to the primary analysis"
+    - "PD12-PD14 confirmed by the author"
+  changes_from_v0_1:
+    - "procedure text moved from public_rules.txt to system_agent.txt (solo controls no longer contradict it)"
+    - "per-call seed schedule (tools/seeds.py) instead of one global seed"
+    - "model failures stay in the primary run; no seed+1 rescue; diagnostic reruns kept separate"
+    - "G2 tightened; G4 ceilings computed for the gated set; G6 is a hard gate"
+    - "shared-GPU runtime: no server env, 30m keep_alive, environment snapshots per pair"
+    - "prompt-token counting rule left to gate G2"
+    - "speaking orders from Latin squares: every agent holds every slot once or twice per class"
+    - "detector held-out split guarantees per-phenomenon coverage"
+    - "schemas self-contained (no cross-file $ref)"
+
+model:
+  primary: "qwen3.8:27b"
+  fallback: "qwen3:14b"                    # only if the primary fails a runtime gate; never mixed within the pilot
+  single_model_per_pilot: true
+  model_digest: FILL_AT_FREEZE             # /api/tags digest of the exact pulled build
+  quantization: FILL_AT_FREEZE
+  api_show_record: FILL_AT_FREEZE          # /api/show: capabilities, supported thinking levels, template, parameters, context length
+
+runtime:
+  engine: "ollama (shared server, not under our control)"
+  ollama_version: FILL_AT_FREEZE           # /api/version; must support qwen3.8; any change during the pilot -> stop
+  endpoint: "/api/chat"                    # native endpoint only: the OpenAI-compatible route can ignore num_ctx
+  stream: false
+  server_settings: "not set by us (no OLLAMA_* environment, no server log access); everything that matters is set per request or observed via the API"
+  execution: "sequential from our side: one call at a time, one run at a time"
+  keep_alive: "30m"                        # shared GPU: do not pin 18 GB indefinitely
+  preload:
+    request: {model: "qwen3.8:27b", messages: [], options: {num_ctx: 8192}, keep_alive: "30m"}   # POST /api/chat; an empty messages array loads the model without generating
+    expect: "done = true, done_reason = load; anything else -> environment_deviation for the pair"
+    then: "first environment snapshot"
+  environment_snapshots:
+    when: [before_pair, between_runs, after_pair]
+    nvidia_smi: "nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv,noheader; nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader"
+    ollama_ps: "GET /api/ps: name, digest, size, size_vram, context_length (if reported), expires_at"
+    ollama_version: "GET /api/version"
+    normal_criteria:
+      - "the pilot model is listed with size_vram == size (fully on GPU)"
+      - "context_length == 8192 where /api/ps reports it"
+      - "Ollama version and model digest equal the freeze record"
+    mid_run_reload: "load_duration > 1 s on any call of a run (the model was reloaded mid-run) counts as an abnormal observation"
+    on_deviation: "environment_deviation: decided from snapshots and load_duration alone, before the pair's outcomes are looked at; wait until normal, preload, then re-execute both runs of the pair from turn 1 with the same seeds (at most 2 re-executions per pair)"
+  hardware_record: FILL_AT_FREEZE          # GPU model, driver, CUDA, host
+
+generation:
+  think: true                              # thinking text comes back in message.thinking and is never re-sent
+  think_level: FILL_AT_GATE_G2             # only if /api/show lists levels and the author approves a change from plain true
+  options:
+    num_ctx: 8192                          # on every request
+    temperature: 1.0                       # Qwen3.8 model-card thinking-mode setting
+    top_p: 0.95
+    top_k: 20
+    min_p: 0.0
+    presence_penalty: 0.0
+    repeat_penalty: 1.0
+    seed: "per call from tools/seeds.py"
+  seed_schedule:
+    master_seed: 20261120
+    key: "sha256(master|instance_id|call_type|round|speaker|replicate), first 31 bits (discussion, final, oracle)"
+    public_only_key: "sha256(master|public_only|sha256(system + user)|replicate), first 31 bits: identical public prompts share a seed"
+    excludes_topology: true                # paired Complete/Ring calls share seeds
+    technical_retry: "same seed"
+    length_regeneration: "same seed (input differs by the reminder)"
+    oracle_public_only_replicates: "replicate index 0, 1, 2"
+  num_predict:
+    discussion: 2560                       # thinking + visible message
+    final: 2560                            # thinking + JSON
+    oracle: 2560
+    public_only: 2560
+  final_call_format_constraint: false      # no Ollama `format`; deterministic parser (final_output)
+
+budget:
+  context_window: 8192
+  system_prompt_max_tokens: 1200           # measured with the model tokenizer for every role/topology at G2
+  visible_message_cap_tokens: 200          # hard cap on accepted visible discussion messages
+  history_line_overhead_tokens: 16
+  turn_wrapper_max_tokens: 80
+  final_wrapper_max_tokens: 250
+  worst_case_final_tokens: "1200 + 250 + 18 * (200 + 16) + 2560 = 7898 <= 8192"
+  worst_case_discussion_tokens: "1200 + 80 + 17 * (200 + 16) + 2560 = 7512 <= 8192"
+  preflight_guard: "abort the call as context_budget_violation if locally counted prompt tokens + num_predict > num_ctx"
+  prompt_count_rule: FILL_AT_GATE_G2       # how Ollama's prompt_eval_count / prompt_eval_cached_count relate to the full prompt length; established empirically (plan section 4 step 2); never assumed
+  postcall_checks:
+    - "reported prompt tokens (per prompt_count_rule) == locally counted tokens within 1%; otherwise context_truncation"
+    - "done_reason recorded; 'length' with empty or unfinished content = thinking_overflow (model failure)"
+
+protocol:
+  K: 3
+  agents: [Operations, Contract, Compliance, Settlement, Verification, Treasury]
+  proposer: Operations
+  operations_speaks_in_rounds: true
+  scheduling: "sequential content-blind round-robin; the instance's speaking_order is used unchanged in rounds 1-3"
+  turns_per_run: 18
+  delivery: "immediate: a message accepted at turn t is in each recipient's history from turn t+1 and in the final call"
+  history: "own accepted messages + messages delivered to the agent, in turn order; no thinking, no rejected drafts, no recipient lists"
+  silent_turn: "a discussion turn ending in a model failure produces no message; nothing is delivered and nothing enters any history"
+  topology_knowledge: "each agent is told the roles it sends to and receives from; no agent sees the whole graph or the speaking order"
+  final_call: "mandatory separate Operations call after turn 18; same system prompt as Operations' discussion turns"
+  prompt_rendering: "tools/render_prompts.py (byte-identical port allowed)"
+  message_structure: "[system, user] per call; no assistant turns are ever sent"
+  public_rules_scope: "public_rules.txt holds task semantics only; the discussion procedure lives in system_agent.txt"
+
+topologies:
+  complete:
+    recipients: "all five other agents"
+  ring:
+    nodes: 6
+    operations_position: 0
+    placement_source: "instance.topology_assignment.ring_positions (index = ring position)"
+    recipients: "the two ring neighbours"
+  pairing: "both topologies of an instance use the same state, speaking_order, seeds and prompts except the communication block and the delivered messages"
+
+visible_message_rules:
+  instruction: "Keep each message short: a few sentences."   # no exact word count: exact counts are reported to trigger thinking loops
+  over_cap:
+    first: "regenerate once with the same seed; append to the user text: 'Your previous draft was too long. Write a shorter message of a few sentences.'"
+    second: "truncate deterministically to the last sentence boundary within 200 tokens; flag over_length_truncated"
+  empty_after_strip: "model failure -> silent turn"
+
+final_output:
+  parser: "take message.content; strip surrounding whitespace and one ``` or ```json fence; parse the LAST top-level JSON object; text outside it sets flag extra_text"
+  schema: "schemas/final_proposal.schema.json"
+  schema_failure: "no parsable object, missing/extra keys, invalid values, or execute/hold/reject field rule violated"
+  final_model_failure: "empty or unfinished final content (thinking overflow, degenerate output): proposal = null, scored incorrect, reported as its own category"
+  scoring: "schema_failure and final_model_failure are scored incorrect in the primary outcome and reported separately"
+
+instances:
+  dev_file: "instances/dev_instances.json"
+  pilot_file: "instances/pilot_instances.json"
+  sampling_script: "tools/sample_instances.py"
+  sampling_version: "pilot-sampling-v2"
+  sampling_seed: 20261114
+  dev_seed: 20261115
+  sampling_record: "reports/sampling_record.json"
+  accepted_attempt: 0
+  ring_placement: "per class two 5x5 Latin squares: every data role in every ring position exactly twice"
+  speaking_order: "per class one full random 6x6 Latin square + 4 rows of a second: every agent in every slot once or twice"
+  temporal_balance_tolerance_turns: 0.75
+  structural_duplicate: "identical up to the D1<->D2 mirror; dev mirror classes excluded from the pilot pool"
+  pilot_composition: {A_rail_A: 5, A_rail_B: 5, B_contract: 4, B_compliance: 4, B_route: 2, C_verification: 5, C_approval: 5, R_ELIG: 5, R_ROUTE: 5}
+  check_script: "tools/check_instances.py"
+
+runs:
+  pilot: "40 instances x {complete, ring} = 80 runs; one run per instance and topology"
+  run_id: "<instance_id>-<COMPLETE|RING>"
+  order_of_execution: "instances in a fixed random order (seed 20261121); within an instance the topology order alternates; per pair: preload, snapshot, run 1, snapshot, run 2, snapshot"
+  dev: "10 dev instances x {complete, ring} = 20 runs, plus the repeats needed by the budget and determinism checks"
+
+controls:
+  oracle:
+    messages: "render_prompts.oracle_messages"
+    sets: [dev, pilot]
+    replicates_dev: 3
+  public_only:
+    messages: "render_prompts.public_only_messages"
+    sets: [dev, pilot]
+    replicates_dev: 3
+    ceilings: "tools/public_policy_ceiling.py, computed for the set being gated (dev: 0.20 overall; A 1.00, B 0.67, C 0.67, Reject 1.00. pilot: 0.15 overall; 0.60 per class)"
+  delivery_probe: "tools/validate_run_log.py --simulate-probe (scripted agents, no model)"
+
+calibration_gates:                         # development data only; none uses Complete-vs-Ring results
+  G1_delivery: "delivery probe matches the simulation for all 50 instances in both topologies; validate_run_log passes on all 20 dev runs"
+  G2_budget:
+    - "no context_budget_violation and no truncation"
+    - "largest observed prompt tokens + eval_count <= 7992"
+    - "thinking_overflow = 0 in all dev calls (discussion and final, both topologies)"
+    - "over_length_truncated = 0"
+    - "over_length_regenerated <= 2% of dev discussion messages in each topology (<= 3 of 180)"
+    - "remediation before freeze, in order: thinking level if /api/show offers one and the author approves; visible cap 200 -> 160 with matching instruction; shorter system-prompt wording; never settings that differ by topology"
+  G3_oracle: "exact correctness >= 0.90 over 30 dev oracle calls and >= 0.80 in every class"
+  G4_public_only: "evaluated separately for every replicate (never pooled) by tools/public_policy_ceiling.gate_g4: in each replicate <= 0.30 overall AND no class above its public-policy ceiling for the gated set; the gate passes only if every replicate passes; outputs matched to H1-H7. Strict only because public-only seeds depend on the public prompt alone and G6 holds"
+  G5_schema: "schema_failure <= 5% in oracle calls and in dev runs of each topology"
+  G6_determinism: "hard gate: 3 dev discussion calls, 2 final calls and 1 public-only call, each repeated 3 times with identical input and seed under normal snapshots, in both prompt-cache states, give identical content. Cache state is classified per call from the observed prompt_eval_cached_count (warm > 0, cold = 0), not from the call order; repeats are arranged (same call first for warm, an unrelated request with a different prefix first for cold) until each state has been observed at least once per call. If the server does not report prompt_eval_cached_count, the order-based arrangement is used and this is recorded. If not: no freeze; first fix the environment; if outputs stay non-reproducible, the author chooses between replicate runs per pair and a more stable sampling configuration"
+  G7_detector: "detector freeze criterion met (detector.freeze_criterion)"
+  confirmation_on_pilot_set: "oracle and public-only on the 40 pilot instances after the pilot runs; reported, no retuning"
+
+retries:
+  technical_failure: {max_attempts: 3, same_seed: true}       # HTTP error, timeout, runner crash; identical call repeated
+  model_failure: "never retried inside the primary run: discussion -> silent turn; final -> final_model_failure"
+  diagnostic_reruns: "allowed for understanding failures; stored under runs/<config_version>/diagnostic/ with seeds from replicate index 100+; never replace or alter a primary result"
+  run_level: "a run whose technical failure persists after 3 attempts is invalid and may be re-executed once from turn 1 with the same seeds; never because of its outcome"
+
+validity:
+  categories: [valid, technical_failure, environment_deviation, context_truncation, agent_system_failure]
+  outcome_categories_not_failures: [schema_failure, final_model_failure, wrong_decision]
+  run_flags: [silent_turn_model_failure, over_length_regenerated, over_length_truncated, extra_text]
+  pair_rule: "a pair enters paired analyses only if both runs are valid; excluded pairs are not replaced"
+  halt_rules:
+    - "any context_truncation or context_budget_violation -> stop the pilot, fix, re-freeze, restart all runs"
+    - "any agent_system_failure -> stop, fix, re-validate on dev, rerun every run produced by the faulty build"
+    - "Ollama version or model digest differs from the freeze record -> stop"
+    - "more than 4 excluded pairs -> stop and review before analysis"
+
+detector:
+  version: FILL_AT_FREEZE
+  extraction:
+    model: "qwen3.8:27b"                   # DECISION OPEN (PD7): same model with thinking off, or a stronger offline extractor
+    think: false
+    temperature: 0.0
+    seed: 20261122
+    format: "schemas/detector_extraction.schema.json"   # Ollama structured output
+    prompt: "prompts/detector_extraction.txt"
+    inputs: "message text and sender role only; never topology, instance class or outcome"
+  postprocessing: "tools/exposure_postprocess.py (deterministic; E1-E6 and plan section 9)"
+  validation:
+    min_messages: 60
+    split: {tuning: 30, held_out: 30}
+    min_items_per_phenomenon_per_split: 5  # coverage guaranteed in the held-out half itself
+    phenomena: [own_direct_fact, negative_fact, exhaustive_statement, relay_attributed, sender_own_paraphrase,
+                unattributed_statement, derived_claim, solution_relay, unsourced_claim, conflicting_claims,
+                hedged_statement, non_claim]
+    synthetic_max_share: 0.33
+    stratified_by_topology: true
+    double_annotation: "held-out half fully double-annotated; disagreements adjudicated before scoring"
+  freeze_criterion:                        # all on the held-out half
+    base_claim_f1: 0.95
+    per_phenomenon_recall_min: 0.80        # with >= 5 items: at most one miss per phenomenon
+    polarity_inversions_max: 0
+    attribution_accuracy_min: 0.95
+    derived_claim_f1: 0.90
+    solution_claim_f1: 0.95
+    operations_exposure_state_agreement: 0.95
+    decision_support_category_agreement: 0.90
+    max_rounds: 3                          # each failed round labels a fresh held-out batch with the same coverage
+
+analysis:
+  primary: "exact proposal correctness (all four fields equal the canonical outcome; schema_failure and final_model_failure = incorrect)"
+  secondary: [action_correct, destination_correct, rail_correct, reason_correct, schema_failure, final_model_failure, silent_turns]
+  paired: "transition table per pair: both correct / Complete only / Ring only / both incorrect; overall and by class"
+  sensitivity: "accuracy and transition table on clean pairs (no silent turn and no final model failure in either run), shown next to the primary analysis with the number of pairs dropped per topology; descriptive, because model failures may themselves depend on topology"
+  descriptive_only: true
+
+logging:
+  root: "runs/<config_version>/"
+  run_log_schema: "schemas/run_log.schema.json"
+  detector_output_schema: "schemas/detector_output.schema.json"
+  validator: "tools/validate_run_log.py"
+  environment: "runs/<config_version>/environment/<pair_id>_{before,between,after}.json"
+  diagnostic: "runs/<config_version>/diagnostic/"

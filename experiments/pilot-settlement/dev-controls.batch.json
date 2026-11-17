@@ -1,0 +1,35 @@
+{
+  "name": "Pilot Settlement: oracle and public-only controls, dev instances (gates G3, G4)",
+  "description": "Operations alone on the 10 dev instances: the oracle call (every role card, $solo full) and the public-only call ($solo public), one replicate (protocol.replicate 0; run again with replicate 1 and 2 for the three dev replicates). Set the endpoint name to yours.",
+  "base": {
+    "builtin": "pilot-settlement"
+  },
+  "repetitions": 1,
+  "order": "sequential",
+  "variables": [
+    {
+      "path": "$instance",
+      "label": "instance",
+      "values": ["DEV-01", "DEV-02", "DEV-03", "DEV-04", "DEV-05", "DEV-06", "DEV-07", "DEV-08", "DEV-09", "DEV-10"]
+    },
+    {
+      "path": "$solo",
+      "label": "control",
+      "values": ["full", "public"]
+    },
+    {
+      "path": "$models",
+      "label": "model",
+      "values": [
+        {
+          "provider": "openai-compatible",
+          "endpoint": "lab-ollama",
+          "model": "qwen3.8:27b",
+          "structuredOutput": "prompt",
+          "think": true,
+          "contextLength": 8192
+        }
+      ]
+    }
+  ]
+}

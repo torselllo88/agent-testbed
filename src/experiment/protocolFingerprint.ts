@@ -16,6 +16,7 @@ import {
   VOTE_JSON_SCHEMA,
 } from "./protocol.js";
 import { AUTHORED_PROTOCOL_LANGUAGES, protocolStrings } from "./protocolStrings.js";
+import type { ProtocolAdapter } from "./protocolAdapter.js";
 
 /**
  * A fingerprint of the shared protocol assets: everything the core itself
@@ -209,5 +210,19 @@ export function protocolFingerprintFor(config: ExperimentConfig): string {
   const key = `${variant.fixedRounds}/${variant.proposalRequired}/${variant.network}/${variant.noVote}/${variant.solo}`;
   let fingerprint = byVariant.get(key);
   if (!fingerprint) byVariant.set(key, (fingerprint = computeProtocolFingerprint(variant)));
+  return fingerprint;
+}
+
+const byAdapter = new Map<string, string>();
+
+/**
+ * The fingerprint of a protocol adapter's protocol (config.protocol): its id
+ * and version with its rendered fixtures (fingerprintAssets) — nothing of the
+ * testbed's own templates, which such a run never uses.
+ */
+export function adapterFingerprint(adapter: Pick<ProtocolAdapter, "id" | "version" | "fingerprintAssets">): string {
+  const key = `${adapter.id}@${adapter.version}`;
+  let fingerprint = byAdapter.get(key);
+  if (!fingerprint) byAdapter.set(key, (fingerprint = sha256(canonicalJson({ adapter: adapter.id, version: adapter.version, assets: adapter.fingerprintAssets() })).slice(0, 16)));
   return fingerprint;
 }

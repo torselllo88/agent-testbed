@@ -22,7 +22,7 @@ export interface CallLog {
 }
 export type CallBudget = Pick<BudgetTracker, "recordCall" | "remainingMs" | "checkTimeLimit">;
 
-export interface LlmCallSpec<T> {
+interface CallSpecBase {
   category: UsageCategory;
   /** A run's calls use CallPurpose; other callers name their own purposes. */
   purpose: CallPurpose | (string & {});
@@ -30,6 +30,16 @@ export interface LlmCallSpec<T> {
   agentId: string | null;
   modelRef: ModelRef;
   messages: ChatMessage[];
+  /** Opaque context for the stub provider (e.g. { agentId, purpose, agentTurn }). */
+  context?: Record<string, unknown>;
+  turn?: number;
+  /** A seed for this call only (a protocol adapter's per-call schedule); overrides the model reference's. */
+  seed?: number;
+  /** Extra fields recorded on the call's llm_call event(s) as they are (a protocol adapter's attempt kind, counted tokens, …). */
+  meta?: Record<string, unknown>;
+}
+
+export interface LlmCallSpec<T> extends CallSpecBase {
   response: {
     name: string;
     /** Parses and validates the extracted JSON object. */
@@ -37,14 +47,24 @@ export interface LlmCallSpec<T> {
     /** Sent to the provider when modelRef.structuredOutput is "native". */
     jsonSchema: Record<string, unknown>;
   };
-  /** Opaque context for the stub provider (e.g. { agentId, purpose, agentTurn }). */
-  context?: Record<string, unknown>;
-  turn?: number;
 }
+
+/** A call whose answer is taken as text: no response format, no parsing, no parse retries (a protocol adapter reads it). */
+export type RawCallSpec = CallSpecBase;
 
 export type LlmCallResult<T> =
   | { ok: true; value: T; rawText: string; attempts: number }
   | { ok: false; parseError: string; rawText: string; attempts: number };
+
+export interface RawCallResult {
+  text: string;
+  finishReason: string | null;
+  usage: CompletionResult["usage"];
+  providerMeta: Record<string, unknown> | null;
+  servedModel: string;
+  /** Provider attempts made (transient failures retried). */
+  attempts: number;
+}
 
 /** A delay in ms as timers accept it: a whole number within Node's 32-bit timer range (fractional or huge values throw or fire at once). */
 export function timerMs(ms: number): number {
@@ -121,20 +141,36 @@ export class LlmCaller {
     return { ok: false, parseError: lastError, rawText: lastText, attempts };
   }
 
+  /** One call whose answer is returned as text, recorded like any other (transient provider failures retried; nothing parsed). */
+  async callRaw(spec: RawCallSpec): Promise<RawCallResult> {
+    const completion = await this.completeWithRetries(spec, [...spec.messages], 0);
+    this.log.append(EventType.LLM_CALL, { ...completion.eventPayload, raw: true }, spec.agentId);
+    const { result } = completion;
+    return {
+      text: result.text,
+      finishReason: result.finishReason ?? null,
+      usage: result.usage,
+      providerMeta: result.providerMeta ?? null,
+      servedModel: result.servedModel,
+      attempts: completion.providerAttempts,
+    };
+  }
+
   /**
    * Returns the first successful completion (its llm_call event is appended
    * by call(), once parsing is known). Failed provider attempts are logged
    * and budgeted here, as they happen.
    */
   private async completeWithRetries(
-    spec: LlmCallSpec<unknown>,
+    spec: CallSpecBase & { response?: LlmCallSpec<unknown>["response"] },
     messages: ChatMessage[],
     parseAttempt: number
   ): Promise<{ result: CompletionResult; providerAttempts: number; eventPayload: Record<string, unknown> }> {
     const providerKey = modelProviderKey(spec.modelRef) as ProviderId;
     const provider = this.providers.get(providerKey);
-    const native = spec.modelRef.structuredOutput === "native";
+    const native = spec.modelRef.structuredOutput === "native" && spec.response !== undefined;
     const routing = effectiveOpenRouterRouting(spec.modelRef);
+    const seed = spec.seed ?? spec.modelRef.seed;
 
     for (let providerAttempt = 0; ; providerAttempt++) {
       this.throwIfStopped();
@@ -155,13 +191,15 @@ export class LlmCaller {
         provider: provider.id,
         requestedModel: spec.modelRef.model,
         temperature: spec.modelRef.temperature ?? null,
-        seed: spec.modelRef.seed ?? null,
+        seed: seed ?? null,
         maxOutputTokens: spec.modelRef.maxOutputTokens ?? null,
         // Serving options of a self-hosted endpoint, as sent (null: the server's default).
         think: spec.modelRef.think ?? null,
         contextLength: spec.modelRef.contextLength ?? null,
+        sampling: spec.modelRef.sampling ?? null,
+        keepAlive: spec.modelRef.keepAlive ?? null,
         structuredOutput: spec.modelRef.structuredOutput,
-        responseFormat: spec.response.name,
+        responseFormat: spec.response?.name ?? null,
         parseAttempt,
         providerAttempt,
         queueWaitMs,
@@ -169,6 +207,7 @@ export class LlmCaller {
         // that actually served the call is in providerMeta.upstreamProvider (a display name,
         // not a slug — never compared to these by string).
         routing: routing ? { requested: spec.modelRef.routing ?? null, effective: routing } : null,
+        ...(spec.meta ?? {}),
         messages,
       };
 
@@ -178,11 +217,13 @@ export class LlmCaller {
           model: spec.modelRef.model,
           messages,
           temperature: spec.modelRef.temperature,
-          seed: spec.modelRef.seed,
+          seed,
           maxOutputTokens: spec.modelRef.maxOutputTokens,
+          sampling: spec.modelRef.sampling,
           think: spec.modelRef.think,
           contextLength: spec.modelRef.contextLength,
-          responseFormat: native ? { name: spec.response.name, schema: spec.response.jsonSchema } : undefined,
+          keepAlive: spec.modelRef.keepAlive,
+          responseFormat: native && spec.response ? { name: spec.response.name, schema: spec.response.jsonSchema } : undefined,
           routing: routing ?? undefined,
           signal,
           context: spec.context,

@@ -29,7 +29,8 @@ import {
 } from "./config.js";
 import type { EvaluationResult } from "../evaluation/types.js";
 import type { NarratorSender, RunExtension, RunExtensionContext, RunExtensionFactory } from "./extensions.js";
-import { protocolFingerprintFor } from "./protocolFingerprint.js";
+import { adapterFingerprint, protocolFingerprintFor } from "./protocolFingerprint.js";
+import type { AdapterCall, AdapterContext, AdapterLogEntry, ProtocolAdapter, TurnDecision } from "./protocolAdapter.js";
 import { protocolStrings, type ProtocolStrings } from "./protocolStrings.js";
 import { EventLog, EventType, redactSecrets } from "./events.js";
 import { LlmCaller } from "./llmCaller.js";
@@ -186,6 +187,10 @@ export class ExperimentRunner {
   private readonly layout: Layout;
   /** The agents each restricted message reached, by transport message id; a message not listed reached everyone. */
   private readonly audiences = new Map<string, readonly string[]>();
+  /** The protocol adapter of config.protocol, rendering every model input and reading every answer; null: the testbed's own protocol. */
+  private readonly adapter: ProtocolAdapter | null;
+  /** Under an adapter: every accepted discussion message, in turn order — what the adapter renders histories from. */
+  private readonly adapterLog: AdapterLogEntry[] = [];
   private readonly abort = new AbortController();
 
   private phase: Phase = Phase.INITIALIZING;
@@ -240,7 +245,7 @@ export class ExperimentRunner {
     const runnable = checkRunnable(deps, overridden);
     // One set of evaluator params — schema defaults applied — for the snapshot, the evaluator and both hashes.
     // Frozen for the whole run: nothing (an extension included) can change what agents are given or how the run is budgeted.
-    this.config = deepFreeze(withEffectiveEvaluatorParams(overridden, runnable.evaluatorParams));
+    this.config = deepFreeze(withEffectiveEvaluatorParams(withEffectiveProtocolParams(overridden, runnable.protocolParams), runnable.evaluatorParams));
     this.id = options.id ?? randomUUID();
     this.strings = protocolStrings(this.config.conversation.language);
     this.agents = new Map(this.config.agents.map((a) => [a.id, a]));
@@ -248,6 +253,7 @@ export class ExperimentRunner {
 
     this.evaluator = runnable.evaluator;
     this.evaluatorParams = this.config.evaluator.params;
+    this.adapter = runnable.adapter;
 
     this.experiments = new ExperimentRepository(deps.db);
     this.log = new EventLog(this.id, new EventRepository(deps.db), deps.providers.secretValues(), () => this.phase);
@@ -441,8 +447,10 @@ export class ExperimentRunner {
       config,
       configHash: configHash(config),
       taskDefinitionHash: taskDefinitionHash(config, this.evaluator.version),
-      // The shared protocol assets agents read (prompt templates, notices, schemas) — see protocolFingerprint.ts.
-      protocolFingerprint: protocolFingerprintFor(config),
+      // The shared protocol assets agents read (prompt templates, notices, schemas) — see protocolFingerprint.ts;
+      // under a protocol adapter, the adapter's own (id, version, rendered fixtures).
+      protocolFingerprint: this.adapter ? adapterFingerprint(this.adapter) : protocolFingerprintFor(config),
+      ...(this.adapter ? { protocolAdapter: { id: this.adapter.id, version: this.adapter.version } } : {}),
       testbedVersion: getTestbedVersion(),
       environment: this.environment,
       evaluator: { id: this.evaluator.id, version: this.evaluator.version },
@@ -567,6 +575,7 @@ export class ExperimentRunner {
   }
 
   private async discussionTurn(agentId: string, readinessRecheck = false): Promise<void> {
+    if (this.adapter) return this.adapterDiscussionTurn(agentId);
     const agent = this.agents.get(agentId)!;
     // Why the agent is being asked (lifecycle information, not task content):
     // without it, models answer a re-check with a restated confirmation, which
@@ -633,6 +642,7 @@ export class ExperimentRunner {
   }
 
   private async runProposal(): Promise<FrozenProposal | "declined"> {
+    if (this.adapter) return this.adapterProposal();
     const { decision } = this.config;
     const proposer = this.agents.get(decision.proposerId)!;
     const required = decision.proposalRequired === true;
@@ -741,6 +751,160 @@ export class ExperimentRunner {
         { attempt: this.proposalAttempt, error: failure.error }
       )
     );
+  }
+
+  // ---------------------------------------------------------------- protocol adapter (config.protocol)
+
+  private adapterContext(agent: AgentConfig, turn: number, round: number | null, reminder?: string): AdapterContext {
+    return { config: this.config, agent, log: this.adapterLog, turn, round, replicate: this.config.protocol!.replicate, ...(reminder !== undefined ? { reminder } : {}) };
+  }
+
+  /**
+   * One raw call under the adapter. The preflight context budget first: when
+   * the adapter counted the prompt and the model has a window and an output
+   * cap, the prompt plus the cap must fit — otherwise the call is not made and
+   * the run ends as CONTEXT_BUDGET_VIOLATION (infrastructure). What was
+   * counted, and whether it fitted, is recorded on the llm_call event.
+   */
+  private async adapterCall(agent: AgentConfig, purpose: "discussion" | "proposal", call: AdapterCall, turn: number, context: Record<string, unknown>, meta: Record<string, unknown>) {
+    const { contextLength, maxOutputTokens } = agent.model;
+    const counted = call.promptTokensCounted;
+    const budgetOk = counted !== undefined && contextLength !== undefined && maxOutputTokens !== undefined ? counted + maxOutputTokens <= contextLength : null;
+    const budget = { promptTokensCounted: counted ?? null, tokenCounter: call.tokenCounter ?? null, budgetOk };
+    if (budgetOk === false) {
+      this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "context_budget_violation", turn, purpose, ...budget, maxOutputTokens, contextLength }, agent.id);
+      throw new TerminateRun(
+        termination("CONTEXT_BUDGET_VIOLATION", `The ${purpose} call of ${agent.id} at turn ${turn} would not fit the context window: ${counted} prompt tokens (${call.tokenCounter}) + ${maxOutputTokens} output > ${contextLength}`, {
+          turn,
+          purpose,
+          agentId: agent.id,
+          ...budget,
+          maxOutputTokens,
+          contextLength,
+        })
+      );
+    }
+    return this.llm.callRaw({ category: "agent", purpose, agentId: agent.id, modelRef: agent.model, messages: call.messages, seed: call.seed, context, turn, meta: { ...budget, ...meta } });
+  }
+
+  /**
+   * A discussion turn under the adapter: it renders the call, reads the
+   * answer, may ask once more (an over-length answer, with its reminder) and
+   * decides what is delivered — a message, to the agent's audience, or nothing
+   * (a silent turn: a model failure that the run goes on past). The accepted
+   * message is what later calls see, in the adapter's own history format.
+   */
+  private async adapterDiscussionTurn(agentId: string): Promise<void> {
+    const adapter = this.adapter!;
+    const agent = this.agents.get(agentId)!;
+    const turn = this.startTurn(agentId, "discussion");
+    const agentTurn = this.discussionTurnsByAgent.get(agentId) ?? 0;
+    this.discussionTurnsByAgent.set(agentId, agentTurn + 1);
+    const discussionTurn = this.discussion.turnsUsed + 1;
+    const round = Math.floor(this.discussion.turnsUsed / this.config.agents.length) + 1;
+
+    const flags = new Set<string>();
+    let reminder: string | undefined;
+    let decision: TurnDecision;
+    for (let attempt = 0; ; attempt++) {
+      const ctx = this.adapterContext(agent, discussionTurn, round, reminder);
+      const call = adapter.renderDiscussionCall(ctx);
+      const answer = await this.adapterCall(
+        agent,
+        "discussion",
+        call,
+        turn,
+        { agentId, purpose: "discussion", speaker: agent.name, agentTurn, turn, discussionTurn, round, attempt },
+        { attemptKind: attempt === 0 ? "initial" : "length_regeneration", attemptIndex: attempt }
+      );
+      decision = adapter.acceptTurn({ text: answer.text, finishReason: answer.finishReason }, ctx, attempt);
+      for (const flag of decision.flags) flags.add(flag);
+      if (decision.kind !== "regenerate") break;
+      reminder = decision.reminder;
+      this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "over_length_regenerated", turn, attempt }, agentId);
+    }
+
+    if (decision.kind === "silent") {
+      this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "silent_turn_model_failure", turn, reason: decision.reason }, agentId);
+      this.log.append(EventType.AGENT_META, { turn, pass: true, target: null, intent: null, readyToCommit: null, flags: [...flags] }, agentId);
+      this.lastTurn = { agentId, pass: true, target: null };
+      this.completeTurn(agentId, turn, { kind: "discussion", result: "silent", flags: [...flags] });
+      return;
+    }
+    if (flags.has("over_length_truncated")) this.log.append(EventType.PROTOCOL_INCIDENT, { kind: "over_length_truncated", turn, visibleTokens: decision.visibleTokens }, agentId);
+    this.log.append(EventType.AGENT_META, { turn, pass: false, target: null, intent: null, readyToCommit: null, flags: [...flags], visibleTokens: decision.visibleTokens }, agentId);
+    const audience = audienceOf(this.layout, agentId);
+    await this.publish({ kind: "agent", agentId }, decision.text, { discussionTurn, round, visibleTokens: decision.visibleTokens }, audience);
+    this.adapterLog.push({ turn: discussionTurn, round, speakerId: agentId, audience: audience ? audience.filter((id) => id !== agentId) : null, text: decision.text });
+    this.lastTurn = { agentId, pass: false, target: null };
+    this.completeTurn(agentId, turn, { kind: "discussion", result: "message", flags: [...flags] });
+  }
+
+  /**
+   * The final call under the adapter: one call, read by the adapter (a model
+   * failure or a schema failure ends the run as a protocol outcome — no
+   * retry, no feedback), then the evaluator's own structure check as for
+   * every proposal. No vote follows: the proposal is the decision.
+   */
+  private async adapterProposal(): Promise<FrozenProposal> {
+    const adapter = this.adapter!;
+    const proposer = this.agents.get(this.config.decision.proposerId)!;
+    this.log.append(EventType.PROPOSAL_REQUESTED, { attempt: this.proposalAttempt, proposerId: proposer.id }, proposer.id);
+    await this.checkpoint();
+    this.enforceHardLimits(1);
+    const turn = this.startTurn(proposer.id, "proposal");
+    const control = this.config.protocol?.control ?? null;
+    const ctx = this.adapterContext(proposer, this.discussion.turnsUsed + 1, null);
+    const call = adapter.renderProposalCall(ctx);
+    const answer = await this.adapterCall(
+      proposer,
+      "proposal",
+      call,
+      turn,
+      { agentId: proposer.id, purpose: "proposal", speaker: proposer.name, proposalAttempt: this.proposalAttempt, formatTry: 0, turn, control },
+      { attemptKind: "initial", attemptIndex: 0, ...(control ? { control } : {}) }
+    );
+    const decision = adapter.acceptProposal({ text: answer.text, finishReason: answer.finishReason }, ctx);
+
+    const reject = (kind: "model_failure" | "schema", error: string, proposal?: unknown, extraText?: boolean): never => {
+      this.log.append(
+        EventType.PROPOSAL_REJECTED_FORMAT,
+        { attempt: this.proposalAttempt, formatTry: 0, kind, error, rawText: answer.text, finishReason: answer.finishReason, ...(proposal !== undefined ? { proposal } : {}), ...(extraText !== undefined ? { extraText } : {}) },
+        proposer.id
+      );
+      this.completeTurn(proposer.id, turn, { kind: "proposal", result: kind === "model_failure" ? "model_failure" : "schema_invalid" });
+      throw new TerminateRun(
+        termination(kind === "model_failure" ? "PROPOSAL_PARSE_FAILED" : "PROPOSAL_INVALID", `Proposer ${proposer.id} did not produce a valid proposal: ${error}`, {
+          attempt: this.proposalAttempt,
+          error,
+          kind,
+          finishReason: answer.finishReason,
+        })
+      );
+    };
+    if (decision.kind === "model_failure") reject("model_failure", `model failure (${decision.reason})`);
+    if (decision.kind === "schema_failure") reject("schema", decision.error, undefined, decision.extraText);
+    if (decision.kind !== "proposal") throw new Error(`protocol adapter "${adapter.id}": unknown proposal decision`);
+    // Structure only — the evaluator's schema, as for every proposal; never success constraints.
+    const validated = this.evaluator.proposalSchema.safeParse(decision.proposal);
+    if (!validated.success) reject("schema", formatZodError(validated.error), decision.proposal, decision.extraText);
+    const body = validated.success ? validated.data : undefined;
+
+    const frozen: FrozenProposal = deepFreeze({
+      id: `${this.id}:p${this.proposalAttempt}`,
+      attempt: this.proposalAttempt,
+      proposerId: proposer.id,
+      rationale: "",
+      body,
+      hash: sha256(canonicalJson(body)),
+    });
+    this.log.append(EventType.PROPOSAL_FROZEN, { ...frozen, extraText: decision.extraText }, proposer.id);
+    this.frozenProposals.push(frozen);
+    this.completeTurn(proposer.id, turn, { kind: "proposal", result: "frozen", flags: decision.extraText ? ["extra_text"] : [] });
+    // The room's record of the decision, as under the testbed's own protocol; no agent is asked anything after it.
+    const notice = { kind: "proposal_submitted", proposalId: frozen.id };
+    await this.publish({ kind: "system" }, this.strings.proposalSubmitted({ attempt: frozen.attempt, proposerName: proposer.name, body: JSON.stringify(frozen.body), rationale: null, voting: false }), { notice });
+    return frozen;
   }
 
   /** Blind and parallel: every agent votes on the same frozen proposal and the same transcript snapshot, without seeing any other vote. */
@@ -1117,6 +1281,12 @@ export function withEffectiveEvaluatorParams(config: ExperimentConfig, evaluator
   return { ...config, evaluator: { ...config.evaluator, params: evaluatorParams as Record<string, unknown> } };
 }
 
+/** Likewise for a protocol adapter's parameters (config.protocol.params with the adapter's schema defaults applied). */
+export function withEffectiveProtocolParams(config: ExperimentConfig, protocolParams: unknown): ExperimentConfig {
+  if (!config.protocol || protocolParams === undefined) return config;
+  return { ...config, protocol: { ...config.protocol, params: protocolParams as Record<string, unknown> } };
+}
+
 /** The API a self-hosted endpoint speaks; null for any other provider. */
 function apiOf(providers: ProviderRegistry, ref: ExperimentConfig["agents"][number]["model"]): "openai" | "ollama" | null {
   const provider = providers.get(modelProviderKey(ref) as ProviderId);
@@ -1126,7 +1296,7 @@ function apiOf(providers: ProviderRegistry, ref: ExperimentConfig["agents"][numb
 export function checkRunnable(
   deps: Pick<RunnerDeps, "providers" | "evaluators">,
   config: ExperimentConfig
-): { evaluator: ScenarioEvaluator; evaluatorParams: unknown } {
+): { evaluator: ScenarioEvaluator; evaluatorParams: unknown; adapter: ProtocolAdapter | null; protocolParams: unknown } {
   const problems: string[] = [];
   let evaluator: ScenarioEvaluator | undefined;
   let evaluatorParams: unknown;
@@ -1137,6 +1307,19 @@ export function checkRunnable(
     else problems.push(`evaluator.params: ${formatZodError(params.error)}`);
   } catch (err) {
     problems.push(err instanceof Error ? err.message : String(err));
+  }
+  let adapter: ProtocolAdapter | null = null;
+  let protocolParams: unknown;
+  if (config.protocol) {
+    try {
+      adapter = deps.evaluators.adapter(config.protocol.adapter);
+      const params = adapter.paramsSchema.safeParse(config.protocol.params);
+      if (params.success) protocolParams = params.data;
+      else problems.push(`protocol.params: ${formatZodError(params.error)}`);
+      if (evaluatorParams !== undefined) problems.push(...adapter.checkConfig(config));
+    } catch (err) {
+      problems.push(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const modelRefs: Array<[string, ExperimentConfig["agents"][number]["model"]]> = config.agents.map((a) => [`agent "${a.id}"`, a.model]);
@@ -1164,5 +1347,5 @@ export function checkRunnable(
   }
 
   if (problems.length > 0 || !evaluator) throw new ConfigNotRunnableError(problems);
-  return { evaluator, evaluatorParams };
+  return { evaluator, evaluatorParams, adapter, protocolParams };
 }

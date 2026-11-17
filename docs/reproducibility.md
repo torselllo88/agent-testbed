@@ -45,6 +45,10 @@
   not describe the whole runtime: readiness logic, scheduling and parsing are
   code, and the git commit stays the final provenance. Recorded in
   `experiment_started`, `metrics.protocolFingerprint` and the batch CSV.
+  A run under a [protocol adapter](configuration.md#protocol-adapter) uses
+  none of the core's templates: its fingerprint is the adapter's — id,
+  version and the adapter's own rendered fixtures — and
+  `experiment_started.protocolAdapter` names the adapter.
 
 A run's identity, then:
 

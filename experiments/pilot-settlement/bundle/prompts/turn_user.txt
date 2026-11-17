@@ -1,0 +1,4 @@
+DISCUSSION SO FAR (messages you sent or received, oldest first):
+{{history}}
+
+Round {{round}} of 3. It is your turn. Write your next message.

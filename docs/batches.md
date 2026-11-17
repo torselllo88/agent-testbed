@@ -63,7 +63,10 @@ into `specs/`. The UI never writes files on the server. An optional
   ([communication topology](configuration.md#communication-topology)). Keys
   and the CSV show an instance by its id; the run's name gets ` · <id>`, and
   `task_definition_hash` tells instances apart. Invalid parameters, unknown
-  ids and a base without a family are refused before anything runs.
+  ids and a base without a family are refused before anything runs. A family
+  may have a last word on the condition once the other variables are applied
+  (its `finalize`): the pilot's instances set the ring's arrangement when the
+  condition's topology is a ring without an explicit order.
 
   ```jsonc
   "variables": [

@@ -1,0 +1,24 @@
+{
+  "name": "Pilot Settlement: delivery probe, dev instances (gate G1)",
+  "description": "The 10 dev instances × {complete, ring} with the scripted probe agents (no model): every discussion reply is PROBE + the tokens the agent holds, so recipients, ordering, history assembly and immediate delivery are checked against tools/validate_run_log.py --simulate-probe. Export the run logs with `npm run pilot -- export --batch <id> --out <dir>` and validate them with `npm run pilot -- validate <dir>/*.json`.",
+  "base": {
+    "builtin": "pilot-settlement"
+  },
+  "repetitions": 1,
+  "order": "sequential",
+  "variables": [
+    {
+      "path": "$instance",
+      "label": "instance",
+      "values": ["DEV-01", "DEV-02", "DEV-03", "DEV-04", "DEV-05", "DEV-06", "DEV-07", "DEV-08", "DEV-09", "DEV-10"]
+    },
+    {
+      "path": "communication",
+      "label": "graph",
+      "values": [
+        { "topology": { "type": "complete" } },
+        { "topology": { "type": "ring" } }
+      ]
+    }
+  ]
+}

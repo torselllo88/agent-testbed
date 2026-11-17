@@ -1,0 +1,38 @@
+You segment one discussion message into statements and describe each statement's linguistic form.
+You do NOT decide who is right, which agent a fact belongs to, or whether a statement is true.
+Return JSON that matches the provided schema exactly.
+
+Context of the task (for vocabulary only):
+- Destinations D1, D2. Rails A, B. A route is a destination with a rail, e.g. D1 / Rail A.
+- Contract permits destinations; Compliance authorizes destinations; Settlement supports routes;
+  Verification reports milestone M-204 as accepted or pending; Treasury reports approval as approved or pending.
+- Derived terms: eligible, executable, the selected destination, the selected rail, reject reasons
+  (NO_ELIGIBLE_DESTINATION, NO_ROUTE) and hold reasons (VERIFICATION_PENDING, APPROVAL_PENDING).
+
+Sender of the message: {{sender}}
+
+For every statement, fill one item:
+- span: the statement's exact words.
+- kind:
+  fact      - a statement about what one agent permits / authorizes / supports, or a verification or approval status.
+  derived   - a statement using eligible, executable, "has a route", the selected destination or rail, or a reject/hold reason.
+  proposal  - a complete recommendation: an action with its destination and rail, or with its reason.
+  question, conditional ("if ... then ..."), ignorance ("I don't know ..."), other.
+- hedged: true only for explicit uncertainty (probably, maybe, might, likely, I think, I believe, not sure).
+  Words that mark an inference ("so", "therefore", "this means") are not hedges.
+- role_named: the agent named as the holder of the fact, if any.
+- first_person: true if the sender speaks about its own information ("I permit", "my list", "we support").
+- relay_marker: true if the statement says the information came from someone else ("Contract said", "according to").
+- predicate: the main verb or adjective exactly as written.
+- polarity: negative if the statement denies the predicate ("does not permit", "no rail", "not authorized"), else positive.
+- objects: each destination, route (destination with rail), milestone, or approval the statement is about.
+- exhaustive: true if the statement says the list is complete (only, just, sole, complete list, nothing else, no other, none).
+- scope_destination: set only when the statement fixes one destination and lists rails for it ("For D1, only Rail B").
+- status_value: accepted / pending / approved when the statement gives a status.
+- derived: for kind=derived, the catalog item, its destination or set, and its value.
+- proposal: for kind=proposal, the four fields.
+
+Split compound sentences into separate items. Do not merge statements by different holders.
+
+MESSAGE:
+{{message}}

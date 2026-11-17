@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { canonicalJson, ModelChoiceSchema, withModelChoice, type ExperimentConfig, type ModelRef } from "../experiment/config.js";
-import { instantiate, type TaskFamily } from "./taskFamily.js";
+import { instantiate, resolveInstance, type TaskFamily } from "./taskFamily.js";
 
 /**
  * A batch: one base configuration, a set of variables (dotted config paths
@@ -248,9 +248,15 @@ export function conditionConfig(
   // The instance first: it replaces the task, and every other variable (models, topology, …) layers on top.
   const instance = variables.find((v) => v.path === "$instance");
   const solo = variables.find((v) => v.path === "$solo");
-  const config = instance ? instantiate(base, condition.values[variableLabel(instance)], families) : (structuredClone(base) as unknown as Record<string, unknown>);
+  const instanceValue = instance ? condition.values[variableLabel(instance)] : undefined;
+  const config = instance ? instantiate(base, instanceValue, families) : (structuredClone(base) as unknown as Record<string, unknown>);
   for (const variable of variables) {
     if (variable !== instance && variable !== solo) applyVariable(config, variable.path, condition.values[variableLabel(variable)]);
+  }
+  // The family's last word on the condition (e.g. the instance's ring arrangement, once the topology is known).
+  if (instance) {
+    const resolved = resolveInstance(base, instanceValue, families);
+    resolved.family.finalize?.(config, resolved.instance.params);
   }
   // Last: it removes the other agents, the discussion and the vote, whatever else was set.
   return solo ? decideAlone(config, condition.values[variableLabel(solo)]) : config;
@@ -285,5 +291,8 @@ export function decideAlone(config: Record<string, unknown>, value: unknown): Re
   };
   delete next.communication;
   delete next.randomization;
+  // Under a protocol adapter the adapter renders the control call itself: "full" is its oracle, "public" its public-only call.
+  const protocol = config.protocol as { adapter?: string } | undefined;
+  if (protocol?.adapter) next.protocol = { ...protocol, control: value === "full" ? "oracle" : "public_only" };
   return next;
 }

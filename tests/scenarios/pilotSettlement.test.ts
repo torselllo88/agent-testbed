@@ -499,12 +499,12 @@ describe("pilot settlement: calls to an Ollama endpoint", () => {
     expect(first.format).toBeUndefined();
     expect(first.messages.map((m) => m.role)).toEqual(["system", "user"]);
     const calls = ofType(harness.events(runner.id), "llm_call");
-    expect(calls[0]!.payload).toMatchObject({ raw: true, budgetOk: true, tokenCounter: "approximate", attemptKind: "initial", keepAlive: "30m", sampling: { topP: 0.95, topK: 20, minP: 0, presencePenalty: 0, repeatPenalty: 1 } });
+    expect(calls[0]!.payload).toMatchObject({ raw: true, budgetOk: true, tokenCounter: "tokenizer", attemptKind: "initial", keepAlive: "30m", sampling: { topP: 0.95, topK: 20, minP: 0, presencePenalty: 0, repeatPenalty: 1 } });
     expect(typeof calls[0]!.payload.promptTokensCounted).toBe("number");
 
-    // The guard: an adapter whose counter sees a prompt too long for the window never lets the call out.
+    // The guard: an adapter whose counter sees a prompt too long for the window (3000 per message, two messages) never lets the call out.
     server.requests.length = 0;
-    const evaluators = new EvaluatorRegistry().register(pilotSettlementEvaluator).registerAdapter(new PilotSettlementAdapter({ kind: "approximate", count: () => 6000 }));
+    const evaluators = new EvaluatorRegistry().register(pilotSettlementEvaluator).registerAdapter(new PilotSettlementAdapter({ kind: "tokenizer", count: () => 3000 }));
     const tight = new ExperimentRunner({ db: harness.db, providers: harness.providers, evaluators }, withOllama(pilotSettlementConfig("DEV-07")));
     await tight.run();
     const record = harness.record(tight.id);

@@ -271,6 +271,10 @@ export class PilotSettlementAdapter implements ProtocolAdapter {
       }
     }
     // The plan's generation settings (§3.3) on a real endpoint; the stub ignores them. Change here when the plan changes.
+    // A real endpoint also needs the model's tokenizer: the budget guard and the visible cap count with it (§3.4, §3.7).
+    if (this.counter.kind !== "tokenizer" && config.agents.some((a) => a.model.provider !== "stub")) {
+      problems.push("pilot-settlement: a run on a model needs the model's tokenizer (experiments/pilot-settlement/model/show-verbose.json); the adapter only has the approximate counter");
+    }
     for (const a of config.agents) {
       const m = a.model;
       if (m.provider === "stub") continue;
@@ -365,9 +369,14 @@ export class PilotSettlementAdapter implements ProtocolAdapter {
     return this.withCount({ messages, seed: callSeed(instanceId, "final", null, "Operations", ctx.replicate) });
   }
 
+  /**
+   * The prompt's token count: the messages counted one by one and summed. The chat template's own
+   * tokens (role markers, newlines, the thinking prefix) are not in it; how the count relates to the
+   * server's `prompt_eval_count` is the plan's `prompt_count_rule` (§3.7, gate G2 step 3).
+   */
   private withCount(call: AdapterCall): AdapterCall {
-    const text = call.messages.map((m) => m.content).join("\n");
-    return { ...call, promptTokensCounted: this.counter.count(text), tokenCounter: this.counter.kind };
+    const counted = call.messages.reduce((n, m) => n + this.counter.count(m.content), 0);
+    return { ...call, promptTokensCounted: counted, tokenCounter: this.counter.kind };
   }
 
   acceptTurn(answer: RawAnswer, ctx: AdapterContext, attempt: number): TurnDecision {

@@ -4,6 +4,7 @@
  *
  *   npm run pilot -- export   (--batch <id> | --experiment <id>) --out <dir> [--db <dir>]
  *   npm run pilot -- validate <run_log.json>… [--python "<command>"]
+ *   npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]
  *
  * export: one run log per run (schemas/run_log.schema.json of the bundle),
  * from the trace; thinking texts go to <run_id>.thinking.json next to it.
@@ -11,6 +12,9 @@
  * independent check (a log that fails it is not structurally valid). The
  * validator is run with `uv run --no-project python` by default; --python
  * names another interpreter command (e.g. "python3").
+ * calibrate: gate G2 against the real server (plan §4 steps 1–4, and 6 with
+ * --worst-case): model record, system-prompt counts, counting semantics
+ * (prompt_count_rule), truncation canary; the report goes to --out.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -20,6 +24,7 @@ import { openDb } from "../persistence/db.js";
 import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { BUNDLE_DIR } from "../scenarios/pilotSettlement/adapter.js";
+import { calibrate, writeCalibration } from "../scenarios/pilotSettlement/calibrate.js";
 import { writeRunLog } from "../scenarios/pilotSettlement/runLog.js";
 
 const { positionals, values } = parseArgs({
@@ -30,18 +35,42 @@ const { positionals, values } = parseArgs({
     experiment: { type: "string" },
     out: { type: "string" },
     python: { type: "string", default: "uv run --no-project python" },
+    "base-url": { type: "string" },
+    model: { type: "string" },
+    "worst-case": { type: "boolean", default: false },
+    "num-predict": { type: "string" },
   },
 });
 
 const usage = (): never => {
   console.error(
     "usage:\n  npm run pilot -- export (--batch <id> | --experiment <id>) --out <dir> [--db <dir>]\n" +
-      '  npm run pilot -- validate <run_log.json>... [--python "<command>"]'
+      '  npm run pilot -- validate <run_log.json>... [--python "<command>"]\n' +
+      "  npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]"
   );
   process.exit(2);
 };
 
 switch (positionals[0]) {
+  case "calibrate": {
+    if (!values["base-url"] || !values.model || !values.out) usage();
+    const numPredict = values["num-predict"] !== undefined ? Number(values["num-predict"]) : undefined;
+    if (numPredict !== undefined && !(Number.isInteger(numPredict) && numPredict > 0)) usage();
+    calibrate({ baseUrl: values["base-url"]!, model: values.model!, worstCase: values["worst-case"], step3NumPredict: numPredict, log: (line) => console.error(line) })
+      .then((report) => {
+        const file = writeCalibration(report, values.out!);
+        console.log(`calibration written to ${file}`);
+        for (const line of report.summary) console.log(line);
+        const failed = [report.step2.pass, report.step3.pass, report.step4.pass, report.step6?.pass ?? true].filter((p) => !p).length;
+        if (report.step1.recordDifferences.length) console.log(`step 1: the server differs from the frozen record — ${report.step1.recordDifferences.length} difference(s), see the report`);
+        process.exit(failed ? 1 : 0);
+      })
+      .catch((err) => {
+        console.error(`calibration failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      });
+    break;
+  }
   case "export": {
     if (!values.out || (!values.batch && !values.experiment)) usage();
     const db = openDb(values.db);

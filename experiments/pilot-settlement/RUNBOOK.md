@@ -1,0 +1,104 @@
+# Pilot Settlement — runbook for the node
+
+What to run on the pilot node, gate by gate, and what to bring back. Every
+command is run in the testbed checkout on the node (`~/opt/agent-testbed`),
+with the Ollama server up on the same node. Nothing here is run from the
+laptop.
+
+## 0. Before any gate
+
+```sh
+cd ~/opt/agent-testbed
+git pull
+npm ci                      # only after a pull that changed package-lock.json
+npm run build               # type-check; must end without errors
+curl -s localhost:11434/api/version        # the Ollama server answers
+nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv
+```
+
+The endpoint the batch specs name is `lab-ollama`; `.env` on the node must
+have:
+
+```
+OPENAI_COMPATIBLE_ENDPOINTS=lab-ollama
+OPENAI_COMPATIBLE_LAB_OLLAMA_BASE_URL=http://localhost:11434
+OPENAI_COMPATIBLE_LAB_OLLAMA_API=ollama
+OPENAI_COMPATIBLE_LAB_OLLAMA_MAX_CONCURRENT=1
+```
+
+## 1. Gate G1 — the delivery probe (no model)
+
+```sh
+npm test -- tests/scenarios/pilotSettlement.test.ts      # the probe over all 50 instances × 2 topologies
+npm run batch -- experiments/pilot-settlement/pilot-probe.batch.json --out /tmp/probe.json
+npm run pilot -- export --batch <batch id printed above> --out /tmp/probe-logs
+npm run pilot -- validate /tmp/probe-logs/*.json --python python3
+```
+
+Expected: every test green; every exported log passes the validator's
+schema check. Nothing to bring back.
+
+## 2. Gate G2 — calibration against the server (plan §4, steps 1–4 and 6)
+
+One command, about 5–8 minutes of GPU (model load, 6 short thinking calls of
+up to 512 tokens, the canary, and with `--worst-case` one full final call of
+up to 2560 tokens):
+
+```sh
+mkdir -p experiments/pilot-settlement/calibration
+npm run pilot -- calibrate --base-url http://localhost:11434 --model qwen3.8:27b \
+  --out experiments/pilot-settlement/calibration/$(date +%F)-g2.json --worst-case
+```
+
+Progress goes to stderr, the summary to stdout, the report to `--out`. Exit
+code 0: every step passed; 1: a step failed or the server refused (the
+message says which). The steps:
+
+1. model record — Ollama version, digest, `/api/show` compared with the
+   frozen `model/show.json`; a difference means the server does not serve
+   the recorded model (stop and tell);
+2. every system prompt (50 instances × 2 topologies × 6 roles) counted with
+   the model's tokenizer, all ≤ 1200;
+3. three pilot prompts cold and warm: the `prompt_count_rule` (how
+   `prompt_eval_count` relates to the adapter's count), whether
+   `prompt_eval_cached_count` is reported, whether `eval_count` equals
+   thinking + visible tokens;
+4. the truncation canary (about 9000 tokens at `num_ctx` 8192): the server
+   must refuse or report fewer tokens than counted;
+6. (`--worst-case`) the final call with 18 messages of 200 tokens through
+   the real model: must end with `done_reason: stop` and a parsable proposal.
+
+**Bring back** the JSON report (it is small; it contains no prompt texts,
+only counts, digests and durations). From it the rule is written into the
+adapter and the change log. If step 3 or 4 fails, bring the report back all
+the same — it says what the server did.
+
+To rerun step 3 at the plan's output cap instead of 512 tokens:
+`--num-predict 2560` (six full generations, about 10 more minutes).
+
+## 3. Development runs (plan §4 steps 5–6; gates G2, G5, G6)
+
+**Not before the pair runner is in the testbed** (preload with
+`messages: []`, the three environment snapshots, the deviation rule). When it
+is, this section gets the exact commands; the specs are already there:
+
+| Spec | Runs |
+|---|---|
+| `dev-discussion.batch.json` | 10 dev instances × {complete, ring}, one run each |
+| `dev-controls.batch.json` | oracle and public-only calls of Operations, replicate 0 (set `protocol.replicate` for 1 and 2) |
+
+Running them today (without snapshots) is possible —
+`npm run batch -- experiments/pilot-settlement/dev-discussion.batch.json` —
+but every log would export without environment data and could not count as
+`valid` under §11. Budget: about 20 runs × 19 calls with thinking up to 2560
+tokens, several hours of the GPU.
+
+## 4. Bringing logs back
+
+```sh
+npm run pilot -- export --batch <id> --out ~/pilot-logs/<batch name>
+npm run pilot -- validate ~/pilot-logs/<batch name>/*.json --python python3
+```
+
+Then from the laptop: `scp -r pvgpu1:~/pilot-logs ./pilot-logs` (outside the
+repository). Thinking texts are in `<run_id>.thinking.json` next to each log.

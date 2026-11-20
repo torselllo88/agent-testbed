@@ -1,0 +1,915 @@
+{
+ "source": {
+  "model": "qwen3.8:27b",
+  "ollama_version": "0.33.2",
+  "measured": "2026-11-17",
+  "show_verbose_sha256": "8e0dd1ae4692b72eb098757a6a4cdfe74893cd905648e3fffcf80e7aacef07df",
+  "method": "POST /api/generate {raw:true, stream:false, options:{num_predict:1, num_ctx:8192}} on the pilot node; prompt_eval_count of the first (cold-cache) call; every text sent after a cache-busting prompt and then once more (warm): both counts were equal for every text, prompt_eval_cached_count is not reported by 0.33.2"
+ },
+ "texts": {
+  "sys:DEV-01:complete:Operations": {
+   "sha256": "057dc0f747423b14aa19f6772fbc1bf82741a231bdc28dfacc55c537dba8c416",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-01:complete:Contract": {
+   "sha256": "1192ee1f884ebc17c1e876ca8550d67dc5b184691bc707424e757559d061a9a2",
+   "chars": 2707,
+   "prompt_eval_count": 595
+  },
+  "sys:DEV-01:complete:Compliance": {
+   "sha256": "471a91da3b1f745b0db2cb8058011bb414788255053405f5a84d516b8bcc1941",
+   "chars": 2717,
+   "prompt_eval_count": 600
+  },
+  "sys:DEV-01:complete:Settlement": {
+   "sha256": "d4b8ce47aa3949490d34045ac88122fd7767024e3d4bc466189319e280d2fffa",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-01:complete:Verification": {
+   "sha256": "edaa06e93917a57e282884af3b887c1b5ceca144294bb6f50eca319b26d06249",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-01:complete:Treasury": {
+   "sha256": "8fe90f36904cc44b95964ab82db7458d87aa47085b7a757f5767a8744d479f22",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-01:ring:Operations": {
+   "sha256": "23c1ffa6efaffb6e57ab489d4a98f86b6ff899267c9e075ef0d0b0c199651884",
+   "chars": 2631,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-01:ring:Contract": {
+   "sha256": "2aee4ec2ea73956d2f9dca2ae124de2d50e7e4564c301549c45c640df73b797a",
+   "chars": 2635,
+   "prompt_eval_count": 583
+  },
+  "sys:DEV-01:ring:Compliance": {
+   "sha256": "4c2cce2f50b30ac7a6e0c28d0acf7f77278c25f0d3dc3ab8879a3125ec352734",
+   "chars": 2649,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-01:ring:Settlement": {
+   "sha256": "42485a9ce1343df578d31dd66ce04976c9b5facfd6d25efb224eb36cdc57bedf",
+   "chars": 2741,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-01:ring:Verification": {
+   "sha256": "f2cabcfc7808ab6142b32a064a9b23d9de58ea6f9581bf5239a1945d488c8da5",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-01:ring:Treasury": {
+   "sha256": "a6cac26dd7e18af49eff6bb434ed1b3434c87fbe02da4d4c116953741f2944ca",
+   "chars": 2603,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-01": {
+   "sha256": "a5f3caac873fca034c591aea2c75a7c2430ddf6d0b43b4cd83543b0fc07ba954",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-01": {
+   "sha256": "41150154f665fa0be1165e9440d6adbf6cc62fd5c9916525dbccf93c3c165a28",
+   "chars": 1097,
+   "prompt_eval_count": 288
+  },
+  "public_user:DEV-01": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-01": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-01": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-02:complete:Operations": {
+   "sha256": "283ba9310b6ca1c88052b8f6d49ab7a67006deae578b5cbdb670bbaa3c16e0dc",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-02:complete:Contract": {
+   "sha256": "5400dd6627856930a10d53b091c850633e0c297e58e0f6f988d91327471e6bd9",
+   "chars": 2715,
+   "prompt_eval_count": 597
+  },
+  "sys:DEV-02:complete:Compliance": {
+   "sha256": "6d826a6578bc4a3e757800da2dc566b22fd64b19320ce39020732e3429a0da8b",
+   "chars": 2717,
+   "prompt_eval_count": 600
+  },
+  "sys:DEV-02:complete:Settlement": {
+   "sha256": "303b5d05ced286da4f533e0ac39a1d01cbc91d1026e73aa377761cf459e245b5",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-02:complete:Verification": {
+   "sha256": "3770b0a2b5f7cb1c61c86adedcc383edc3227e22f7f59bb55f208e021fb457a3",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-02:complete:Treasury": {
+   "sha256": "fe1430c57237bf9e3485e8a5b61a2f9b4b727d054da7c4b771246ebd24a52c3b",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-02:ring:Operations": {
+   "sha256": "c681ebc8587db652885d179452f7f143008c6061d7ec17382d7f4bd1411a3958",
+   "chars": 2639,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-02:ring:Contract": {
+   "sha256": "0e9424964357f4354336fabe4fe22441df8a3dea09877b1c560b20c76f5fa724",
+   "chars": 2639,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-02:ring:Compliance": {
+   "sha256": "0a80db763626b6ec71b74753c390de568398432296efe0946a900acfd678d282",
+   "chars": 2645,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-02:ring:Settlement": {
+   "sha256": "02f5966fdb4f09ce0f45e6793c0ad97fd8f68ab56b8f16cafbcb039d67013274",
+   "chars": 2745,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-02:ring:Verification": {
+   "sha256": "4ac2fb61885f6d34c909e8b9e6a2bce00133d1b8a90f05a8c2cd070f2668bd24",
+   "chars": 2611,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-02:ring:Treasury": {
+   "sha256": "8fb6944cebf7c7eb078190751564466a39cb505d6ddcb34bd267c916fcb1a8e9",
+   "chars": 2595,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-02": {
+   "sha256": "0368ca6cfd7e7982c097f89287a9a269e18940a29698736cfa95582e38d1251c",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-02": {
+   "sha256": "eb61819f8d5bf977b81a642c55d894620b5a6c44e1979c277a1857007f8ad891",
+   "chars": 1105,
+   "prompt_eval_count": 290
+  },
+  "public_user:DEV-02": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-02": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-02": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-03:complete:Operations": {
+   "sha256": "057dc0f747423b14aa19f6772fbc1bf82741a231bdc28dfacc55c537dba8c416",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-03:complete:Contract": {
+   "sha256": "1192ee1f884ebc17c1e876ca8550d67dc5b184691bc707424e757559d061a9a2",
+   "chars": 2707,
+   "prompt_eval_count": 595
+  },
+  "sys:DEV-03:complete:Compliance": {
+   "sha256": "32135d95395de50996fdb81567e2ee6fd224c288cfdd0f2959ecd503407d44ed",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-03:complete:Settlement": {
+   "sha256": "b6c9e42f3f28cf823d12933147254955dc064c547b601b0538e4d5cd7a1ff3ff",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-03:complete:Verification": {
+   "sha256": "edaa06e93917a57e282884af3b887c1b5ceca144294bb6f50eca319b26d06249",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-03:complete:Treasury": {
+   "sha256": "8fe90f36904cc44b95964ab82db7458d87aa47085b7a757f5767a8744d479f22",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-03:ring:Operations": {
+   "sha256": "69f15cfb145eb7487336d3507bcc41f7acf04c1e2e9481f7e4354933ab737b28",
+   "chars": 2639,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-03:ring:Contract": {
+   "sha256": "1c290ff7f4a7be58cbb543ed7e6a3c04840ba058d0cb27a2323be26ce02eeb97",
+   "chars": 2631,
+   "prompt_eval_count": 583
+  },
+  "sys:DEV-03:ring:Compliance": {
+   "sha256": "b66e71603405e87c3f6d8696c7b53f0ef99c58b263131b1b5420f4084cee753a",
+   "chars": 2653,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-03:ring:Settlement": {
+   "sha256": "0d14a23f180c204bc89d129274196a8d3d58957c1265e17de0f18a86585b036f",
+   "chars": 2745,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-03:ring:Verification": {
+   "sha256": "507a05bca718fd76d9c58111f23140cb4755f309be4de3cb33afdeb23f37ce0a",
+   "chars": 2611,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-03:ring:Treasury": {
+   "sha256": "1ce015e47fb90292971b7de84d7d4ec5531c35624ecdd6eb89fa50b4927bde77",
+   "chars": 2595,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-03": {
+   "sha256": "a5f3caac873fca034c591aea2c75a7c2430ddf6d0b43b4cd83543b0fc07ba954",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-03": {
+   "sha256": "1bb1dcbcc1a5332d59e8724352755ebc75dddfc0c919bc9ad6b1fb14fdc0901c",
+   "chars": 1105,
+   "prompt_eval_count": 289
+  },
+  "public_user:DEV-03": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-03": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-03": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-04:complete:Operations": {
+   "sha256": "283ba9310b6ca1c88052b8f6d49ab7a67006deae578b5cbdb670bbaa3c16e0dc",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-04:complete:Contract": {
+   "sha256": "08d79de6871a88084f1e8f827808a36a304936f1213567459b3bb693e96aef20",
+   "chars": 2707,
+   "prompt_eval_count": 595
+  },
+  "sys:DEV-04:complete:Compliance": {
+   "sha256": "6d826a6578bc4a3e757800da2dc566b22fd64b19320ce39020732e3429a0da8b",
+   "chars": 2717,
+   "prompt_eval_count": 600
+  },
+  "sys:DEV-04:complete:Settlement": {
+   "sha256": "69ff9864d11c821b099b5dcb2f5fc439731ed6a17fcb7ed69399c276c601bbd2",
+   "chars": 2821,
+   "prompt_eval_count": 630
+  },
+  "sys:DEV-04:complete:Verification": {
+   "sha256": "3770b0a2b5f7cb1c61c86adedcc383edc3227e22f7f59bb55f208e021fb457a3",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-04:complete:Treasury": {
+   "sha256": "fe1430c57237bf9e3485e8a5b61a2f9b4b727d054da7c4b771246ebd24a52c3b",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-04:ring:Operations": {
+   "sha256": "e55c53bedd80a933dc39ac7ed9597e198b2a7b77b475429d3b13ec4883829486",
+   "chars": 2627,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-04:ring:Contract": {
+   "sha256": "d976dd1078bf52745749de7ca362ff1c4bc6ec452d7a58305924b5bc12045709",
+   "chars": 2639,
+   "prompt_eval_count": 583
+  },
+  "sys:DEV-04:ring:Compliance": {
+   "sha256": "b97c5d81a28b2c19cdb836c3688f1fbc8e02f0e62bbf260be392ce2bf01ca0b8",
+   "chars": 2653,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-04:ring:Settlement": {
+   "sha256": "7533008d8b7a764d07b4f3f7d2445a4953af688ea4c8c908a564dcaf5e2ef48f",
+   "chars": 2749,
+   "prompt_eval_count": 618
+  },
+  "sys:DEV-04:ring:Verification": {
+   "sha256": "7a62967bd93c63a8e8fd2757a3b1300d3d91bae9613bf6a698408c4803631848",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-04:ring:Treasury": {
+   "sha256": "db2a3f6d182d8ab9a7146f70d1a49b054839811e8b135b99ea1b68c2a502146d",
+   "chars": 2599,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-04": {
+   "sha256": "0368ca6cfd7e7982c097f89287a9a269e18940a29698736cfa95582e38d1251c",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-04": {
+   "sha256": "c0f43dac23ffadb0ce356d2ead57eb4606928b1f7b6aaf7abd5d9db06e1a7efb",
+   "chars": 1105,
+   "prompt_eval_count": 290
+  },
+  "public_user:DEV-04": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-04": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-04": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-05:complete:Operations": {
+   "sha256": "283ba9310b6ca1c88052b8f6d49ab7a67006deae578b5cbdb670bbaa3c16e0dc",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-05:complete:Contract": {
+   "sha256": "91bca973899701d388aeede4c7efafb7133143f6f6336d9a66288ad2bf84d89e",
+   "chars": 2715,
+   "prompt_eval_count": 597
+  },
+  "sys:DEV-05:complete:Compliance": {
+   "sha256": "6d826a6578bc4a3e757800da2dc566b22fd64b19320ce39020732e3429a0da8b",
+   "chars": 2717,
+   "prompt_eval_count": 600
+  },
+  "sys:DEV-05:complete:Settlement": {
+   "sha256": "0b54b37e291ff486fa9103100671f395452ff52b4012e97b1844afc121d2b857",
+   "chars": 2805,
+   "prompt_eval_count": 626
+  },
+  "sys:DEV-05:complete:Verification": {
+   "sha256": "3770b0a2b5f7cb1c61c86adedcc383edc3227e22f7f59bb55f208e021fb457a3",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-05:complete:Treasury": {
+   "sha256": "fe1430c57237bf9e3485e8a5b61a2f9b4b727d054da7c4b771246ebd24a52c3b",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-05:ring:Operations": {
+   "sha256": "c4de2679f35bba7833d2889410277521c7dda662bfffff8d81a5a9aa5abb4cdd",
+   "chars": 2639,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-05:ring:Contract": {
+   "sha256": "18b53b4e980f51991beae90c92d0898026d599f55d72314fda6d5ce4c157ae18",
+   "chars": 2643,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-05:ring:Compliance": {
+   "sha256": "5a2c535b5faff6768eea6a4bcc10849a573e08e8c62ac654e61703cd09315cf7",
+   "chars": 2641,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-05:ring:Settlement": {
+   "sha256": "cce426f767d2d68a0e8155e7092ee86ffcb5bec62c1001a3327f8da22fac3ac4",
+   "chars": 2733,
+   "prompt_eval_count": 614
+  },
+  "sys:DEV-05:ring:Verification": {
+   "sha256": "6e35cd46947327bcf8bac5a610da0d2c27f5616ceed8f2bcf73acf1f666607da",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-05:ring:Treasury": {
+   "sha256": "b3798d97e91ab70a6d9037d82fb3784549ae4667629fa3869872c08d3eac213a",
+   "chars": 2603,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-05": {
+   "sha256": "0368ca6cfd7e7982c097f89287a9a269e18940a29698736cfa95582e38d1251c",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-05": {
+   "sha256": "539d978215b8affbb3951802c7f30baa65af1b9541620ba63532c05ed590babf",
+   "chars": 1097,
+   "prompt_eval_count": 288
+  },
+  "public_user:DEV-05": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-05": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-05": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-06:complete:Operations": {
+   "sha256": "057dc0f747423b14aa19f6772fbc1bf82741a231bdc28dfacc55c537dba8c416",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-06:complete:Contract": {
+   "sha256": "ed00ebb4a07f401bc68e28f3f11eecaa4427350190e1fd67253b9b4b019e2304",
+   "chars": 2715,
+   "prompt_eval_count": 597
+  },
+  "sys:DEV-06:complete:Compliance": {
+   "sha256": "b74d4da41a81da2582301d42b0e7256438931bfb13451058317475bb1917008b",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-06:complete:Settlement": {
+   "sha256": "6897e9c7a499341cb2578b83929577d0b97194c7ea8615171117b9dafab0d43a",
+   "chars": 2821,
+   "prompt_eval_count": 630
+  },
+  "sys:DEV-06:complete:Verification": {
+   "sha256": "152b5ae51cfe1cffcce7dc89685ef94992cb7d1971c8dc7abf804889cb7f34e8",
+   "chars": 2674,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-06:complete:Treasury": {
+   "sha256": "8fe90f36904cc44b95964ab82db7458d87aa47085b7a757f5767a8744d479f22",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-06:ring:Operations": {
+   "sha256": "970b5d0d6821961bef9034d6dd95a0b5fdc1284d55124ce5c2983add293a3910",
+   "chars": 2631,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-06:ring:Contract": {
+   "sha256": "2e7fa9ad1106b23d835e717fbeecee21737902b1f129202ea59187d1dee3bf98",
+   "chars": 2639,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-06:ring:Compliance": {
+   "sha256": "9099fcd3c11f0aac13ffbf79de9b683a0dbbb7e2a2998c3606940eab1cb35c35",
+   "chars": 2657,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-06:ring:Settlement": {
+   "sha256": "d5ead4184da01b35d0fa41e0fe6d5efbb460e12a643bdd43507458c4f0d960ef",
+   "chars": 2757,
+   "prompt_eval_count": 618
+  },
+  "sys:DEV-06:ring:Verification": {
+   "sha256": "200efef94723d12c625ba0138e546250d90334787a093f53c0bd567d28c1695c",
+   "chars": 2610,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-06:ring:Treasury": {
+   "sha256": "576cc94a289fe7dcd29eca8e24bc09e64759531af9167cb980b868146251aa55",
+   "chars": 2595,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-06": {
+   "sha256": "a5f3caac873fca034c591aea2c75a7c2430ddf6d0b43b4cd83543b0fc07ba954",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-06": {
+   "sha256": "04f899dbe147aff013e3f5ea6f5888c7b670f2a7a4004df6ec533cd58a4c420a",
+   "chars": 1120,
+   "prompt_eval_count": 293
+  },
+  "public_user:DEV-06": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-06": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-06": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-07:complete:Operations": {
+   "sha256": "283ba9310b6ca1c88052b8f6d49ab7a67006deae578b5cbdb670bbaa3c16e0dc",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-07:complete:Contract": {
+   "sha256": "08d79de6871a88084f1e8f827808a36a304936f1213567459b3bb693e96aef20",
+   "chars": 2707,
+   "prompt_eval_count": 595
+  },
+  "sys:DEV-07:complete:Compliance": {
+   "sha256": "103d68a3db00a3b8f59dc8a5d868820937bc466fbf817a979d2777daf78a6d53",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-07:complete:Settlement": {
+   "sha256": "439c9eb98cbda956f44accf5181136168e2435fc1aec3d7095253348381cfe09",
+   "chars": 2821,
+   "prompt_eval_count": 630
+  },
+  "sys:DEV-07:complete:Verification": {
+   "sha256": "3770b0a2b5f7cb1c61c86adedcc383edc3227e22f7f59bb55f208e021fb457a3",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-07:complete:Treasury": {
+   "sha256": "2dcd39c81b1315a4445f00e75e6a8f41951b7a604c065eab11fff04e61df7056",
+   "chars": 2670,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-07:ring:Operations": {
+   "sha256": "f3f879688d18e6d62624b5da118399f42e6f7381791692713f2a3abdb162402d",
+   "chars": 2631,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-07:ring:Contract": {
+   "sha256": "bdef2856ce0bc5e6034e50168e08bda8686cb8e49e6680923c713d7975fbe92c",
+   "chars": 2635,
+   "prompt_eval_count": 583
+  },
+  "sys:DEV-07:ring:Compliance": {
+   "sha256": "1bcded0107773c25697f8e6a7ee8548f26224cce570d2450f89f4a3c3d8d671e",
+   "chars": 2653,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-07:ring:Settlement": {
+   "sha256": "038c6fd4073d63e7e1a5be7c4a7d0bd95e9e185051634db9c8f5f2f52794da74",
+   "chars": 2753,
+   "prompt_eval_count": 618
+  },
+  "sys:DEV-07:ring:Verification": {
+   "sha256": "d860439778a9f1e3afbb8f9a6a8fbe65b90d5e338397b9bc4c52eda82b8425cd",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-07:ring:Treasury": {
+   "sha256": "566972e411bfb742c08f3cb8e088e8ec2dd9e3c9d44e767da7f9e7cfd8892af0",
+   "chars": 2602,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-07": {
+   "sha256": "0368ca6cfd7e7982c097f89287a9a269e18940a29698736cfa95582e38d1251c",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-07": {
+   "sha256": "06f361000b3c59279872d6f0f13a1f13921adb33d9898db7c4922d4eedaf38af",
+   "chars": 1112,
+   "prompt_eval_count": 291
+  },
+  "public_user:DEV-07": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-07": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-07": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-08:complete:Operations": {
+   "sha256": "057dc0f747423b14aa19f6772fbc1bf82741a231bdc28dfacc55c537dba8c416",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-08:complete:Contract": {
+   "sha256": "57ef3de5db873d1ecfe86fa7faf34516bbd4f2cbfeead6a2672b76e650ab34cc",
+   "chars": 2715,
+   "prompt_eval_count": 597
+  },
+  "sys:DEV-08:complete:Compliance": {
+   "sha256": "b74d4da41a81da2582301d42b0e7256438931bfb13451058317475bb1917008b",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-08:complete:Settlement": {
+   "sha256": "b6c9e42f3f28cf823d12933147254955dc064c547b601b0538e4d5cd7a1ff3ff",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-08:complete:Verification": {
+   "sha256": "edaa06e93917a57e282884af3b887c1b5ceca144294bb6f50eca319b26d06249",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-08:complete:Treasury": {
+   "sha256": "8fe90f36904cc44b95964ab82db7458d87aa47085b7a757f5767a8744d479f22",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-08:ring:Operations": {
+   "sha256": "69f626cad51c8f3c871d4bacb220a477d295f87e9533d729659debd910e960a1",
+   "chars": 2631,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-08:ring:Contract": {
+   "sha256": "839c7a9ec3a4f1b5e99f435b0081a0973dcc98bc6a31f5b099bb401c138fbb84",
+   "chars": 2643,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-08:ring:Compliance": {
+   "sha256": "4d6a2ab0c58cc1209112daa15c31ca4683e72af9189291063773ab5afffc1805",
+   "chars": 2653,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-08:ring:Settlement": {
+   "sha256": "c368b8337057fa1acf59c1d5302f6b676496b17e667f2e9fcdc74dbbe65770d9",
+   "chars": 2745,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-08:ring:Verification": {
+   "sha256": "bf655adc487dfcac63ba1c764bfd3b0cc5ac835a288e6b4e3bf7670f72ad158f",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-08:ring:Treasury": {
+   "sha256": "a6cac26dd7e18af49eff6bb434ed1b3434c87fbe02da4d4c116953741f2944ca",
+   "chars": 2603,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-08": {
+   "sha256": "a5f3caac873fca034c591aea2c75a7c2430ddf6d0b43b4cd83543b0fc07ba954",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-08": {
+   "sha256": "318582e17fec9b81261fc4ed8d9d4b930efc1b19e8a61dd5da8a7c02162253a6",
+   "chars": 1113,
+   "prompt_eval_count": 291
+  },
+  "public_user:DEV-08": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-08": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-08": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-09:complete:Operations": {
+   "sha256": "283ba9310b6ca1c88052b8f6d49ab7a67006deae578b5cbdb670bbaa3c16e0dc",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-09:complete:Contract": {
+   "sha256": "5400dd6627856930a10d53b091c850633e0c297e58e0f6f988d91327471e6bd9",
+   "chars": 2715,
+   "prompt_eval_count": 597
+  },
+  "sys:DEV-09:complete:Compliance": {
+   "sha256": "103d68a3db00a3b8f59dc8a5d868820937bc466fbf817a979d2777daf78a6d53",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-09:complete:Settlement": {
+   "sha256": "10cb65777993cd6df85544b190539b13d90d994c5efbbb0b366e3ed6038a84a6",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-09:complete:Verification": {
+   "sha256": "3770b0a2b5f7cb1c61c86adedcc383edc3227e22f7f59bb55f208e021fb457a3",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-09:complete:Treasury": {
+   "sha256": "fe1430c57237bf9e3485e8a5b61a2f9b4b727d054da7c4b771246ebd24a52c3b",
+   "chars": 2671,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-09:ring:Operations": {
+   "sha256": "71257f92ac05a8da72b6697f4993bd0840e2db8e3d672f4a633ee71308ce1b98",
+   "chars": 2635,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-09:ring:Contract": {
+   "sha256": "9eb15c9d22a45ec4fb47df5fb658861cbaa5840b29a017b282077c455da90c9d",
+   "chars": 2647,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-09:ring:Compliance": {
+   "sha256": "b54c28787eb66863af915405d4dfbb2a665d78f027ad1e5e8f9197f810c2142e",
+   "chars": 2653,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-09:ring:Settlement": {
+   "sha256": "317fbdc345900bfe9c649c4dd0607461d1939a1cca8b481982f21ca5fe7e90f5",
+   "chars": 2741,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-09:ring:Verification": {
+   "sha256": "56bc1af2e0bbc0dcf484dc04ecf4fc098f155567eae9200fed0720cb02059e5a",
+   "chars": 2607,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-09:ring:Treasury": {
+   "sha256": "db2a3f6d182d8ab9a7146f70d1a49b054839811e8b135b99ea1b68c2a502146d",
+   "chars": 2599,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-09": {
+   "sha256": "0368ca6cfd7e7982c097f89287a9a269e18940a29698736cfa95582e38d1251c",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-09": {
+   "sha256": "e340cbd3e833f65d25122635c46ce8326fea9cf6cf9eb24cdd122c15cf5533db",
+   "chars": 1113,
+   "prompt_eval_count": 291
+  },
+  "public_user:DEV-09": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-09": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-09": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "sys:DEV-10:complete:Operations": {
+   "sha256": "057dc0f747423b14aa19f6772fbc1bf82741a231bdc28dfacc55c537dba8c416",
+   "chars": 2703,
+   "prompt_eval_count": 593
+  },
+  "sys:DEV-10:complete:Contract": {
+   "sha256": "1192ee1f884ebc17c1e876ca8550d67dc5b184691bc707424e757559d061a9a2",
+   "chars": 2707,
+   "prompt_eval_count": 595
+  },
+  "sys:DEV-10:complete:Compliance": {
+   "sha256": "32135d95395de50996fdb81567e2ee6fd224c288cfdd0f2959ecd503407d44ed",
+   "chars": 2725,
+   "prompt_eval_count": 601
+  },
+  "sys:DEV-10:complete:Settlement": {
+   "sha256": "b6c9e42f3f28cf823d12933147254955dc064c547b601b0538e4d5cd7a1ff3ff",
+   "chars": 2813,
+   "prompt_eval_count": 628
+  },
+  "sys:DEV-10:complete:Verification": {
+   "sha256": "edaa06e93917a57e282884af3b887c1b5ceca144294bb6f50eca319b26d06249",
+   "chars": 2675,
+   "prompt_eval_count": 588
+  },
+  "sys:DEV-10:complete:Treasury": {
+   "sha256": "71ad472567f4eb84c977315db1afee8cd83fdd092f7f7bce5b722842e8ae67c0",
+   "chars": 2670,
+   "prompt_eval_count": 585
+  },
+  "sys:DEV-10:ring:Operations": {
+   "sha256": "69f626cad51c8f3c871d4bacb220a477d295f87e9533d729659debd910e960a1",
+   "chars": 2631,
+   "prompt_eval_count": 581
+  },
+  "sys:DEV-10:ring:Contract": {
+   "sha256": "2fcc84579a173176ed12b7a1864681685b3bae60e5d338e23d86a454a257c248",
+   "chars": 2631,
+   "prompt_eval_count": 583
+  },
+  "sys:DEV-10:ring:Compliance": {
+   "sha256": "88aa2ef3338ca2a01fb489d7bcf052e59f051e09c8f705765926e463a78064f8",
+   "chars": 2661,
+   "prompt_eval_count": 589
+  },
+  "sys:DEV-10:ring:Settlement": {
+   "sha256": "c368b8337057fa1acf59c1d5302f6b676496b17e667f2e9fcdc74dbbe65770d9",
+   "chars": 2745,
+   "prompt_eval_count": 616
+  },
+  "sys:DEV-10:ring:Verification": {
+   "sha256": "0bfeaa4051cfaa67e192d254e2d7b34e4b1b41370fc92c8a2b84959395be8b0b",
+   "chars": 2611,
+   "prompt_eval_count": 576
+  },
+  "sys:DEV-10:ring:Treasury": {
+   "sha256": "f117e459e43409bf6cc4c71ca7c64c7e2dd2c4ccf32ff2786e772871eb6d1d34",
+   "chars": 2594,
+   "prompt_eval_count": 573
+  },
+  "oracle_sys:DEV-10": {
+   "sha256": "a5f3caac873fca034c591aea2c75a7c2430ddf6d0b43b4cd83543b0fc07ba954",
+   "chars": 1777,
+   "prompt_eval_count": 405
+  },
+  "oracle_user:DEV-10": {
+   "sha256": "20bf3da675843aea0f9c38db3a504958254677d36c7a33b87098bdc9bcba255a",
+   "chars": 1104,
+   "prompt_eval_count": 289
+  },
+  "public_user:DEV-10": {
+   "sha256": "87b7cb61a8cec630394cdd9717d831492af990e2f5575b8c7c6bd4395cd13b27",
+   "chars": 584,
+   "prompt_eval_count": 154
+  },
+  "turn1:DEV-10": {
+   "sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+   "chars": 139,
+   "prompt_eval_count": 38
+  },
+  "final_empty:DEV-10": {
+   "sha256": "83d9f7136acb48981c8c7cba8a83b4edf8674f6e7fd87834b38fd50b68cf61aa",
+   "chars": 661,
+   "prompt_eval_count": 173
+  },
+  "p:hello": {
+   "sha256": "aa3ec16e6acc809d8b2818662276256abfd2f1b441cb51574933f3d4bd115d11",
+   "chars": 12,
+   "prompt_eval_count": 3,
+   "text": "Hello world."
+  },
+  "p:numbers": {
+   "sha256": "c0dce23a9f1acb2d40c8ff5333f455b13b0f6d88130ea8a59479056e512be9d6",
+   "chars": 90,
+   "prompt_eval_count": 50,
+   "text": "Settlement of 12 000 for milestone M-204 to D1 via Rail A. Amount 12000; 3.14; 2026-11-17."
+  },
+  "p:apos": {
+   "sha256": "45a980c1750cf96016c24fed0cecf7ea12c0c68b35a11ab06d2e33537a0d9e71",
+   "chars": 67,
+   "prompt_eval_count": 20,
+   "text": "It's Verification's call; they'd HOLD. We'll EXECUTE. Don't REJECT."
+  },
+  "p:newlines": {
+   "sha256": "74b58a631480bed3bd50e364967356329ebce8c5e1a2b974cced94a24f002b42",
+   "chars": 69,
+   "prompt_eval_count": 23,
+   "text": "Line one.\nLine two.\n\nLine four after blank.\n   indented\n\tTabbed line\n"
+  },
+  "p:punct": {
+   "sha256": "a4aaf967dd33d4626b02a6bebcb8c50dea284e7ea926dcdc8ef5e0e6c9e36c25",
+   "chars": 90,
+   "prompt_eval_count": 29,
+   "text": "[Round 2] Treasury: approved (pending?) -- D2/Rail B!!! {\"action\": \"hold\", \"reason\": null}"
+  },
+  "p:unicode": {
+   "sha256": "c7c1c56af06c2bb6363c15db3686cb4f06d5e0945418966fac2f4df1c834fc29",
+   "chars": 57,
+   "prompt_eval_count": 22,
+   "text": "Café naïve résumé — «кириллица» 中文 😀 é (combining acute)"
+  },
+  "p:spaces": {
+   "sha256": "e26f2c6ed6e230e88b69b68e66eec9093844a3a6b7de93c7b1e4f89295281517",
+   "chars": 17,
+   "prompt_eval_count": 10,
+   "text": "a  b   c    d\n  x"
+  },
+  "p:history": {
+   "sha256": "17bbb7b59932c5ea92f9d085819117ad651e1b0b7ff44370701794f7d016ced2",
+   "chars": 122,
+   "prompt_eval_count": 35,
+   "text": "[Round 1] You (Operations): PROBE Contract-TOKEN Treasury-TOKEN\n[Round 1] Contract: PROBE Contract-TOKEN\n(no messages yet)"
+  },
+  "p:special": {
+   "sha256": "51ae3f089f3c7c7a4b67d6487741227810e89e0fd50701d7ae6cad0fe2f2ba81",
+   "chars": 60,
+   "prompt_eval_count": 12,
+   "text": "text with <|im_start|>system and <|im_end|> and <think> tags"
+  }
+ }
+}

@@ -76,9 +76,10 @@ against the plan), fixed:
 
 Known gaps of this delivery (next deliveries):
 
-- Prompt tokens are counted with the planning estimate (4 characters per
+- ~~Prompt tokens are counted with the planning estimate (4 characters per
   token, `token_counter: "approximate"`) until the model's tokenizer and
-  chat template are in place (gate G2). The preflight guard uses this count.
+  chat template are in place (gate G2). The preflight guard uses this count.~~
+  Done below (same day).
 - The pair runner (preload with `messages: []`, snapshots before / between
   / after, environment-deviation re-execution) is not there yet; a run
   served by the stub provider records snapshots that say so, a run on
@@ -86,3 +87,73 @@ Known gaps of this delivery (next deliveries):
 - The detector extraction and the TypeScript port of
   `tools/exposure_postprocess.py` (with its 15 tests and the Python
   cross-check) are not there yet.
+
+## 2026-11-17 — model record and the model's tokenizer (plan §4 steps 1–3)
+
+- **Model record** (§4 step 1, freeze record): `model/show.json` and
+  `model/show-verbose.json` — `/api/show` of `qwen3.8:27b` on the pilot node,
+  Ollama 0.33.2 (`/api/version`). Provenance, original digests and what the
+  record says are in `model/README.md`. Findings that touch the plan:
+  - capabilities `completion, vision, tools, thinking`; **no thinking levels**
+    are listed, so the G2 fallback "a lower thinking level" (§4) is not
+    available for this model — `think` is on or off (PD3 stays as agreed).
+  - the chat template is Ollama's built-in renderer (`RENDERER qwen3.8`,
+    template `{{ .Prompt }}`), not a text template: the template's own tokens
+    are not reproducible from the record and are measured as part of
+    `prompt_count_rule` (§3.7), not derived.
+  - the model's own sampling defaults equal the plan's settings (temperature
+    1, top_k 20, top_p 0.95, min_p 0, presence 0, repeat 1); the adapter still
+    sends them explicitly.
+- **Tokenizer** (§4 step 2): `src/scenarios/pilotSettlement/tokenizer.ts`
+  rebuilds the model's tokenizer from the verbose record (byte-level BPE,
+  llama.cpp's `qwen35` pre-tokenizer regex, special tokens matched
+  literally). Checked against the server: 179 texts (all 120 dev system
+  prompts, oracle / public-only prompts, empty-history turn and final texts,
+  probe strings with numbers, apostrophes, newlines, unicode, special tokens)
+  sent raw to `/api/generate` on the node, `prompt_eval_count` compared with
+  the local count — **179 of 179 equal**, every text decodes back to itself
+  (`tests/scenarios/pilotTokenizer.test.ts`, fixture
+  `tests/fixtures/pilot-tokenizer-counts.json`).
+  - Dev system prompts: 573 – 630 tokens (plan's estimate about 680, cap
+    1200); all 50 instances × both topologies are under the cap (the test
+    asserts it).
+  - The adapter now counts every prompt and every visible message with the
+    tokenizer (`token_counter: "tokenizer"` in the logs); the prompt count is
+    the two messages counted separately and summed. The visible cap of 200
+    tokens and the sentence-boundary truncation are therefore the model's
+    tokens from now on.
+  - **Decision (testbed):** a run on a real endpoint is refused when the
+    adapter only has the approximate counter (the record file missing) — the
+    budget guard and the cap must use the model's tokens (§3.4, §3.7).
+- **Counting semantics, first observations** (§4 step 3, not yet the rule):
+  on Ollama 0.33.2 `prompt_eval_count` of a raw prompt equals its full token
+  count whether the prefix is cached or not (every text measured cold and
+  warm: identical counts, the warm `prompt_eval_duration` about ten times
+  shorter), and `prompt_eval_cached_count` is **not reported** by this
+  version. The three-prompt cold / warm comparison through `/api/chat` with
+  the template, and the truncation canary (step 4), remain to be run before
+  `prompt_count_rule` is written into the config.
+- Ollama 0.33.2 has no `/api/tokenize`; raw `/api/generate` with
+  `num_predict` 1 is the server-side count used for the check.
+
+## 2026-11-20 — G2 calibration command; the node is operated by the author
+
+- From now on every action on the pilot node (calibration, dev and pilot
+  runs, exports) is done by the author; the testbed delivers commands and
+  the steps in `RUNBOOK.md`.
+- `npm run pilot -- calibrate` (`src/scenarios/pilotSettlement/calibrate.ts`):
+  plan §4 steps 1–4 and, with `--worst-case`, step 6 in one command against
+  the server — the `/api/show` record compared with the frozen one, all 600
+  system prompts counted, three pilot prompts (DEV-01 discussion round 1,
+  final with empty history, oracle; the pilot's seeds) cold and warm through
+  `/api/chat` with the plan's settings, the truncation canary (about 9000
+  local tokens at `num_ctx` 8192), the synthetic worst-case final call. It
+  derives `prompt_count_rule` from the observed overheads, checks that
+  `eval_count` equals thinking + visible tokens (plus the think markup), and
+  writes a JSON report with pass / fail per step. Tested against a scripted
+  server (`tests/scenarios/pilotCalibrate.test.ts`). The step-3 calls use
+  `num_predict` 512 by default (enough thinking to compare `eval_count`
+  without a full generation); `--num-predict 2560` runs them at the plan's cap.
+- The rule found will be recorded here and in the adapter (the bundle's
+  `pilot_config.yaml` is frozen by the manifest; the filled value is proposed
+  to the authors rather than written into the bundle).

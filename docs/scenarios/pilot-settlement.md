@@ -80,15 +80,34 @@ instances in `tests/scenarios/pilotSettlement.test.ts`.
   **refuses** a real endpoint configured otherwise (a fixed `seed` included),
   so a run on a model is always under the plan's settings — change
   `PILOT_GENERATION` in `adapter.ts` when the plan changes.
-- Preflight budget: when the adapter counted the prompt and the model has a
-  window and an output cap, a call whose prompt plus cap would not fit is not
-  made; the run ends as `CONTEXT_BUDGET_VIOLATION` (infrastructure, excluded
-  from rates). Until the model's tokenizer is in place the count is the
-  planning estimate (4 characters per token, `tokenCounter: "approximate"` on
-  the call).
+- Preflight budget: the adapter counts every prompt (the two messages, each
+  with the model's tokenizer, summed — `tokenCounter: "tokenizer"` on the
+  call); a call whose count plus the output cap would not fit the window is
+  not made, and the run ends as `CONTEXT_BUDGET_VIOLATION` (infrastructure,
+  excluded from rates). The count leaves out the chat template's own tokens
+  (role markers, the thinking prefix); their number, and so the relation to
+  Ollama's `prompt_eval_count`, is the plan's `prompt_count_rule` (gate G2).
+  Without the model record the adapter falls back to the planning estimate
+  (4 characters per token, `"approximate"`) and **refuses a real endpoint**.
 
 Thinking returned by the model is kept with the call (`providerMeta.thinking`)
 and never re-sent; the run-log export moves it to a separate file.
+
+## The model record and the tokenizer
+
+`experiments/pilot-settlement/model/` holds the frozen `/api/show` record of
+`qwen3.8:27b` from the pilot node (`show.json`, and `show-verbose.json` with the
+vocabulary; see the README there for what it says). The tokenizer
+(`src/scenarios/pilotSettlement/tokenizer.ts`) is rebuilt from the verbose
+record: GPT-2 byte-level BPE over `tokenizer.ggml.tokens` / `merges`, the
+`qwen35` pre-tokenizer regex of llama.cpp, control and user-defined tokens
+(`<|im_start|>`, `<think>`, …) matched literally. It is checked token for
+token against the server's own counts of 179 texts (every dev system prompt,
+the control prompts, probe strings) in `tests/scenarios/pilotTokenizer.test.ts`
+(fixture `tests/fixtures/pilot-tokenizer-counts.json`, measured with
+`/api/generate` `raw: true` on Ollama 0.33.2). The adapter registered by
+`createEvaluatorRegistry` uses it for the visible-message cap, the truncation
+and the preflight count whenever the record file is present.
 
 ## Instances and batches
 
@@ -140,6 +159,16 @@ own `tools/validate_run_log.py` on each log (with `uv run --no-project
 python` by default; `--python python3` for another interpreter) — the
 independent check a run must pass to count as structurally valid.
 
+`npm run pilot -- calibrate --base-url <url> --model <name> --out <file>
+[--worst-case] [--num-predict <n>]` is gate G2 against the real server (plan
+§4): the model record compared with the frozen one, every system prompt
+counted, three pilot prompts cold and warm through `/api/chat` with the plan's
+settings (the `prompt_count_rule`: how `prompt_eval_count` relates to the
+adapter's count), the truncation canary, and with `--worst-case` the synthetic
+final call with 18 messages of 200 tokens. The report (JSON, with a `summary`)
+goes to `--out`; the exit code is 1 when a step fails. The steps to run on the
+node are in `experiments/pilot-settlement/RUNBOOK.md`.
+
 Validity (plan §11) is decided from the trace and the environment data,
 never from the outcome: `context_truncation` (a budget violation or a
 suspected overflow), `technical_failure` (a provider or runtime failure),
@@ -166,6 +195,9 @@ itself is the unit test above.
 | `stubScripts.ts` | the probe |
 | `config.ts` | the built-in config |
 | `runLog.ts` | the run-log export |
-| `src/cli/pilot.ts` | `npm run pilot -- export | validate` |
-| `experiments/pilot-settlement/` | the bundle, batch specs, change log |
+| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate` |
+| `tokenizer.ts` | the model's tokenizer from the show record; `tokenizerCounter` |
+| `calibrate.ts` | gate G2 calibration against the server (`npm run pilot -- calibrate`) |
+| `experiments/pilot-settlement/` | the bundle, batch specs, change log, the model record (`model/`) |
+| `tests/fixtures/pilot-tokenizer-counts.json` | the server's token counts the tokenizer is checked against |
 | `tests/fixtures/pilot-settlement-reference.json` | the reference outputs the tests compare with |

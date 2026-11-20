@@ -13,7 +13,8 @@ import { serviceSettlementConfig } from "./serviceSettlement/config.js";
 import { serviceSettlementEvaluator } from "./serviceSettlement/evaluator.js";
 import { registerSettlementStubs } from "./serviceSettlement/stubScripts.js";
 import { settlementFamily } from "./serviceSettlement/family.js";
-import { PilotSettlementAdapter } from "./pilotSettlement/adapter.js";
+import { approximateCounter, PilotSettlementAdapter } from "./pilotSettlement/adapter.js";
+import { pilotModelRecordPresent, tokenizerCounter } from "./pilotSettlement/tokenizer.js";
 import { pilotSettlementConfig } from "./pilotSettlement/config.js";
 import { pilotSettlementEvaluator } from "./pilotSettlement/evaluator.js";
 import { pilotSettlementFamily } from "./pilotSettlement/family.js";
@@ -116,7 +117,7 @@ export function createEvaluatorRegistry(): EvaluatorRegistry {
     .register(kestrelCascadeEvaluator)
     .register(serviceSettlementEvaluator)
     .register(pilotSettlementEvaluator)
-    .registerAdapter(new PilotSettlementAdapter());
+    .registerAdapter(new PilotSettlementAdapter(pilotModelRecordPresent() ? tokenizerCounter() : approximateCounter));
 }
 
 export function registerBuiltinStubs(stub: StubProvider): StubProvider {

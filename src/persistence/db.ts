@@ -166,7 +166,7 @@ export function ownerAlive(db: Db, ownerId: string | null): boolean {
   // always pid 1. (Pid checks assume one pid namespace per host name.)
   if (sameHost && (row.pid === process.pid || !pidExists(row.pid!))) return false;
   const ttl = sameHost ? FROZEN_OWNER_TTL_MS : LEASE_TTL_MS;
-  const now = (leaseClocks.get(db) ?? performance.now)();
+  const now = (leaseClocks.get(db) ?? (() => performance.now()))();
   let seen = observations.get(db);
   if (!seen) observations.set(db, (seen = new Map()));
   const last = seen.get(ownerId);

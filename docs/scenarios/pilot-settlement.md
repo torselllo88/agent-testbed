@@ -180,7 +180,21 @@ most twice. A version or digest change stops the run (`PilotStopped`, exit 3).
 Each pair's run logs are written as soon as it finishes, with the snapshots,
 the preload and the execution `attempt` in them; `pairs/<instance>.json`
 records the pair. The runs themselves go through the `ExperimentService`
-like any other run.
+like any other run. `--kind controls` makes the pair the oracle and the
+public-only call of Operations alone (`$solo` full / public, run ids
+`-ORACLE` / `-PUBLIC_ONLY`, `-rep<n>` for `--replicate n`), with the same
+preload, snapshots and deviation rule — the controls of gates G3 and G4
+with environment data.
+
+`npm run pilot -- determinism --logs <dev logs> --base-url <url> --model <name>
+--out <file> [--instance <id>]` is gate G6 (`determinism.ts`): the 3
+discussion and 2 final calls with the largest prompts in the dev logs (their
+system and user texts and seeds as sent) and the public-only call of an
+instance, each 3× cold (after a cache-busting prompt) and 3× warm with the
+same seed, under snapshots before and after. Identical content in every
+repeat, within each cache state, and normal snapshots pass; the cache state
+is classified by call order because the server does not report
+`prompt_eval_cached_count`.
 
 `npm run pilot -- calibrate --base-url <url> --model <name> --out <file>
 [--worst-case] [--num-predict <n>]` is gate G2 against the real server (plan
@@ -220,10 +234,11 @@ itself is the unit test above.
 | `stubScripts.ts` | the probe |
 | `config.ts` | the built-in config |
 | `runLog.ts` | the run-log export |
-| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate | pairs` |
+| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate | pairs | determinism` |
 | `tokenizer.ts` | the model's tokenizer from the show record; `tokenizerCounter` |
 | `calibrate.ts` | gate G2 calibration against the server (`npm run pilot -- calibrate`) |
-| `pairRunner.ts` | the pair runner: preload, snapshots, deviation re-execution (`npm run pilot -- pairs`) |
+| `pairRunner.ts` | the pair runner: preload, snapshots, deviation re-execution (`npm run pilot -- pairs`), discussion and controls pairs |
+| `determinism.ts` | gate G6 (`npm run pilot -- determinism`) |
 | `experiments/pilot-settlement/` | the bundle, batch specs, change log, the model record (`model/`) |
 | `tests/fixtures/pilot-tokenizer-counts.json` | the server's token counts the tokenizer is checked against |
 | `tests/fixtures/pilot-settlement-reference.json` | the reference outputs the tests compare with |

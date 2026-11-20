@@ -502,6 +502,10 @@ describe("pilot settlement: calls to an Ollama endpoint", () => {
       const call0 = (exactLog.calls as Array<{ prompt_tokens_counted: number; token_counter: string; attempts: Array<{ prompt_eval_count: number }> }>)[0]!;
       expect(call0.token_counter).toBe("tokenizer");
       expect(call0.attempts[0]!.prompt_eval_count).toBe(call0.prompt_tokens_counted + 15);
+      // Plan §3.7: visible tokens counted with the tokenizer, thinking tokens = eval_count − visible tokens.
+      const a0 = call0.attempts[0] as unknown as { content: string; content_tokens: number; thinking_tokens: number; eval_count: number };
+      expect(a0.content_tokens).toBe(tokenizer.count(a0.content));
+      expect(a0.thinking_tokens).toBe(a0.eval_count - a0.content_tokens);
 
       // Within the tolerance (1%) still valid; 2% short on one call: context truncation, named in the detail.
       server.promptEvalCount = (body) => Math.ceil((counted(body) + 15) * 0.995);

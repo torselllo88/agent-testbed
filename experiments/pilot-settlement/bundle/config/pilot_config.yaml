@@ -5,7 +5,7 @@
 
 meta:
   plan_version: "internal-v0.3.1"
-  config_version: "0.3.1-draft"
+  config_version: "0.3.2-draft"           # 2026-11-20: system_agent.txt length wording (gate G2); see the testbed CHANGELOG
   task_definition: "v1.4"
   exposure_spec: "v1.4"
   frozen: false
@@ -133,7 +133,7 @@ topologies:
   pairing: "both topologies of an instance use the same state, speaking_order, seeds and prompts except the communication block and the delivered messages"
 
 visible_message_rules:
-  instruction: "Keep each message short: a few sentences."   # no exact word count: exact counts are reported to trigger thinking loops
+  instruction: "Keep each message concise: no more than four sentences and under 100 words."   # 0.3.2-draft (gate G2: regeneration rate 2.2 % / 10 % with "Keep each message short: a few sentences."); the earlier note "no exact word count: exact counts are reported to trigger thinking loops" is watched via thinking_overflow and thinking length in the rerun
   over_cap:
     first: "regenerate once with the same seed; append to the user text: 'Your previous draft was too long. Write a shorter message of a few sentences.'"
     second: "truncate deterministically to the last sentence boundary within 200 tokens; flag over_length_truncated"

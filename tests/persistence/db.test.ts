@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInMemoryDb, withTransaction } from "../../src/persistence/db.js";
+import { ownerAlive, createInMemoryDb, withTransaction } from "../../src/persistence/db.js";
 
 describe("db", () => {
   it("creates the testbed schema", () => {
@@ -22,5 +22,14 @@ describe("db", () => {
       })
     ).toThrow("abort");
     expect(db.prepare(`SELECT COUNT(*) AS n FROM scenarios`).get()).toEqual({ n: 0 });
+  });
+  it("sees another live process's lease with the default clock (a second process on the same database, e.g. the GUI next to the pair runner)", () => {
+    const db = createInMemoryDb();
+    // Another host, current heartbeat: liveness is judged by the heartbeat standing still for the lease TTL, measured with the process clock.
+    db.prepare("INSERT INTO process_leases (owner_id, pid, host, heartbeat_at) VALUES (?, ?, ?, ?)").run("proc_other", null, "other-host", new Date().toISOString());
+    expect(ownerAlive(db, "proc_other")).toBe(true);
+    expect(ownerAlive(db, "proc_other")).toBe(true);
+    expect(ownerAlive(db, null)).toBe(false);
+    expect(ownerAlive(db, "proc_unknown")).toBe(false);
   });
 });

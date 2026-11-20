@@ -224,3 +224,120 @@ Ollama 0.33.2, `qwen3.8:27b` digest `aaee06c3…7813`, 3.5 minutes).
   recovery with identical seeds, a failed preload without re-executions
   left, a digest change (`tests/scenarios/pilotPairs.test.ts`).
 - Dev runs can now be made: `RUNBOOK.md` §3.
+
+## 2026-11-20 — fix: a second process on the database (the GUI next to the pair runner)
+
+- `ownerAlive` (`src/persistence/db.ts`) called `performance.now` unbound,
+  which Node 24 rejects (`ERR_INVALID_THIS`); the branch runs only when
+  another live process holds a lease on the database — exactly the GUI
+  started on the node while `pilot -- pairs` runs. The startup recovery then
+  failed every minute, harmlessly: the exception came before any row was
+  touched, so the running pair experiments were never marked interrupted.
+  Fixed (the clock is bound); regression test in `tests/persistence/db.test.ts`.
+  With the fix the GUI sees the pair runner's runs as live (heartbeat) and
+  leaves them alone.
+
+## 2026-11-20 — dev runs (plan §4 step 5): 20 of 20 valid; G2 fails on regenerations
+
+Run by the author with `pilot -- pairs --instances dev` (10:59–14:43 on the
+node, 10 pairs, no environment deviation, no re-execution, every preload
+`load`, all 60 snapshots normal). Every log passes `validate_run_log.py`
+and the schema (G1 part 2). The technical report of §10.3, per topology:
+
+| | Complete | Ring |
+|---|---|---|
+| runs valid / correct (exact) / schema-valid | 10 / 10 / 10 | 10 / 10 / 10 |
+| calls; technical retries; silent turns; thinking overflow | 190; 0; 0; 0 | 190; 0; 0; 0 |
+| `done_reason: length` attempts; context truncation | 0; 0 | 0; 0 |
+| peak prompt + eval (cap 7992) | 3237 (DEV-02 final) | 2745 |
+| prompt tokens max / median | 3089 / 1692 | 1949 / 1120 |
+| accepted message tokens median / p90 / max | 93 / 161 / 193 | 114 / 171 / 195 |
+| thinking tokens, discussion, median / p90 / max | 128 / 272 / 354 | 271 / 564 / 1216 |
+| over_length_regenerated (of 180 discussion calls) | 4 (2.2 %) | 18 (10.0 %) |
+| over_length_truncated | 0 | 0 |
+| call duration median / max; total | 22 s / 61 s; 79 min | 36 s / 146 s; 145 min |
+
+- **G2**: every criterion holds except the regeneration rate — ≤ 2 % is
+  at most 3 of 180; Complete has 4, Ring 18. All 22 over-length drafts were
+  202–322 tokens (median 230) and every second draft came in well under the
+  cap (49–134 tokens); nothing was truncated. 13 of the 22 are Operations
+  (who summarises everyone), 14 of 22 in round 2. The 10 % vs 2.2 %
+  difference is a technical-rate gap above 5 points — §10.3 would flag it
+  as a possible confound; it fits the longer messages and the much longer
+  thinking under the ring (agents hold less and reason more).
+- **G5** (schema failures ≤ 5 %): 0 in both topologies — passes for dev
+  runs; the oracle part waits for the controls.
+- **G6** cannot be classified "by the observed prompt_eval_cached_count"
+  on this server: 0.33.2 does not report the field (calibration). Proposed
+  to the authors: classify the cache state by call order with a
+  cache-busting prompt between cold calls, as `pilot -- calibrate` does.
+- Correctness on dev (not a gate, reported for the record): 20 of 20
+  exact — every class incl. C (hold) and R-ELIG / R-ROUTE (reject).
+- Offline cross-check: `prompt_eval_count` = counted + 15 on every
+  initial attempt; on every length regeneration the attempt's own count +
+  15 (+ 17 for the appended reminder on the call's initial count). The
+  runtime post-call check flagged nothing.
+- Export: `content_tokens` and `thinking_tokens` (= `eval_count` −
+  visible tokens) are now filled with the model's tokenizer (§3.7); the
+  dev logs above were produced before this and carry null there.
+
+**Options for the regeneration criterion** (author's decision; every
+prompt change reruns G2–G6; "comprehension fixes to prompt wording" and
+"budget parameters" are the allowed kinds of change):
+
+1. Make the length instruction concrete in `system_agent.txt` (now "Keep
+   each message short: a few sentences."), e.g. "at most four sentences,
+   under 100 words" — the accepted messages are 70–85 words on median, the
+   over-length drafts 150–240 words.
+2. Raise the visible cap to 256: the drafts would fit (2 of 360 left over,
+   0.6 %), but the design worst case 1200 + 80 + 17 × (256 + 16) + 2560
+   = 8464 exceeds 8192; it would need the system-prompt cap lowered to
+   about 900 (measured max 630) to keep the formula under 7992.
+3. Keep both and accept the rate as a documented deviation of the gate.
+
+## 2026-11-20 — prompt change for gate G2: the length instruction (config_version 0.3.2-draft)
+
+Decided by the author after the dev-run report above (option 1): a
+comprehension fix to the prompt wording, the visible cap stays 200 tokens.
+
+- `prompts/system_agent.txt`, MESSAGE FORMAT: "Keep each message short: a
+  few sentences." → **"Keep each message concise: no more than four
+  sentences and under 100 words."** The regeneration reminder (plan §3.5,
+  `pilot_config.yaml`) is unchanged.
+- `config/pilot_config.yaml`: `config_version` 0.3.1-draft → 0.3.2-draft
+  (the file's own rule: any change → new version). `MANIFEST.sha256`
+  recomputed for the two files (27/27 verify); `pilot_bundle_v0.3.1.zip`
+  stays the original delivery, untouched.
+- Testbed: `tests/fixtures/pilot-settlement-reference.json` regenerated
+  from the bundle's own tools with the new wording (the condenser was
+  first checked to reproduce the old fixture byte for byte); the
+  tokenizer fixture keeps the 2026-11-17 server counts, its test puts the
+  measured line back before comparing.
+- Consequence (plan §9): gates G2–G6 are rerun on dev with the new wording;
+  the 20 dev logs of 2026-11-20 (config_version 0.3.1-draft) stay as the
+  record of the failed G2.
+- G6 (decided by the author): the cache state is classified by call order
+  with a cache-busting prompt between cold calls, since the server does not
+  report `prompt_eval_cached_count`.
+
+## 2026-11-20 — controls pairs and the G6 command; the rerun plan
+
+- `pilot -- pairs --kind controls`: the oracle and the public-only call of an
+  instance as one pair (preload, three snapshots, deviation rule,
+  `--replicate n` → `-rep<n>`), so the controls of G3 / G4 carry the same
+  environment data as the discussion runs (the schema requires the
+  snapshots on every log). Configs built with the batch machinery's
+  `$solo` (`decideAlone`).
+- `pilot -- determinism` (`determinism.ts`): gate G6 as the plan states it,
+  with the cache state set and classified by call order (author's decision):
+  the 3 discussion and 2 final calls with the largest prompts in the dev
+  logs — texts and seeds as sent — and the public-only call of DEV-01, each
+  3× cold (cache buster before) and 3× warm; snapshots before and after;
+  pass = identical content within each state and normal snapshots. The
+  report also says whether cold and warm agree with each other.
+- Rerun sequence after the wording change: `RUNBOOK.md` §6 (G1, dev pairs,
+  controls × 3, determinism). The G2 calibration is not repeated: nothing in
+  it depends on the wording.
+- Watch in the rerun, besides the G2 criteria: thinking length and
+  `thinking_overflow` (the config's earlier note that exact counts may
+  trigger thinking loops), and the ring / complete regeneration gap.

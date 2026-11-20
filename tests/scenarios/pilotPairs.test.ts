@@ -137,6 +137,29 @@ describe("pilot settlement: the pair runner", () => {
     expect((pair.executions[0]!.runs[0]!.validity as { detail: string }).detail).toMatch(/preload/);
   });
 
+  it("runs a controls pair: the oracle and the public-only call of Operations alone, with the replicate in the run ids", async () => {
+    const outDir = path.join(outRoot, "controls");
+    const pairs = await runPairs(deps(), { ...base(outDir), instances: ["DEV-05"], kind: "controls", replicate: 1 });
+    const pair = pairs[0]!;
+    expect(pair).toMatchObject({ instance: "DEV-05", kind: "controls", replicate: 1, order: ["oracle", "public_only"], outcome: "valid" });
+    const exec = pair.executions[0]!;
+    expect(exec.runs.map((r) => r.runId)).toEqual(["DEV-05-ORACLE-rep1", "DEV-05-PUBLIC_ONLY-rep1"]);
+    for (const run of exec.runs) {
+      const log = JSON.parse(fs.readFileSync(run.logPath, "utf8")) as { condition: string; topology: string; replicate: number; calls: unknown[]; environment_snapshots: unknown[]; validity: { status: string } };
+      expect(log.condition).toBe(run.topology === "oracle" ? "oracle" : "public_only");
+      expect(log.topology).toBe("none");
+      expect(log.replicate).toBe(1);
+      expect(log.calls).toHaveLength(1);
+      expect(log.environment_snapshots).toHaveLength(3);
+      expect(log.validity.status).toBe("valid");
+    }
+    expect(fs.existsSync(path.join(outDir, "pairs", "DEV-05-controls-rep1.json"))).toBe(true);
+    const cfg = pairRunConfig("DEV-05", "public_only", "lab-ollama", MODEL, 2);
+    expect(cfg.agents.map((a) => a.id)).toEqual(["operations"]);
+    expect(cfg.protocol?.control).toBe("public_only");
+    expect(cfg.protocol?.replicate).toBe(2);
+  });
+
   it("stops the pilot on a digest change", async () => {
     const outDir = path.join(outRoot, "stop");
     server.placement.digest = "sha256-other-weights";

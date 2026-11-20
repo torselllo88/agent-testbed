@@ -20,6 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseExperimentConfig, type ExperimentConfig } from "../../experiment/config.js";
+import { decideAlone } from "../../batch/spec.js";
 import type { ExperimentService } from "../../experiment/service.js";
 import type { Db } from "../../persistence/db.js";
 import { EventRepository } from "../../persistence/eventRepository.js";
@@ -31,6 +32,9 @@ import { buildRunLog, writeRunLog, type EnvironmentSnapshot, type SnapshotMoment
 import { AGENT_ID, type RoleName } from "./task.js";
 
 export type Topology = "complete" | "ring";
+/** The two runs of a pair: a discussion pair (Complete and Ring) or a controls pair (oracle and public-only of Operations alone). */
+export type RunKind = Topology | "oracle" | "public_only";
+export type PairKind = "discussion" | "controls";
 
 export interface FreezeRecord {
   model: string;
@@ -101,6 +105,8 @@ export function nvidiaSmiText(): string {
 
 export interface PairRunnerOptions {
   instances: string[];
+  /** Discussion pairs (Complete, Ring — the default) or controls pairs (oracle, public-only; plan §12 step 9, gates G3 / G4). */
+  kind?: PairKind;
   /** The endpoint name of the Ollama server in the provider registry (e.g. "lab-ollama") and its URL for preload and snapshots. */
   endpoint: string;
   baseUrl: string;
@@ -108,7 +114,7 @@ export interface PairRunnerOptions {
   outDir: string;
   record?: FreezeRecord;
   replicate?: number;
-  /** Which topology runs first: alternating per instance (the plan's pilot order), or always the same. */
+  /** Which run comes first: alternating per instance (the plan's pilot order), or always the same (for controls: "complete" = oracle first, "ring" = public-only first). */
   first?: "alternating" | "complete" | "ring";
   /** Re-executions of a deviated pair (default 2, the plan's "at most twice"). */
   maxReexecutions?: number;
@@ -123,7 +129,7 @@ export interface PairRunnerOptions {
 }
 
 export interface PairRun {
-  topology: Topology;
+  topology: RunKind;
   experimentId: string;
   runId: string;
   logPath: string;
@@ -143,25 +149,28 @@ export interface PairExecution {
 
 export interface PairRecord {
   instance: string;
+  kind: PairKind;
   replicate: number;
-  order: [Topology, Topology];
+  order: [RunKind, RunKind];
   executions: PairExecution[];
   outcome: "valid" | "environment_deviation";
 }
 
-/** The pilot config of an instance under a topology on the Ollama endpoint, as the batch specs build it. */
-export function pairRunConfig(instance: string, topology: Topology, endpoint: string, model: string, replicate = 0): ExperimentConfig {
+/** The pilot config of an instance under a topology — or as a control call (`$solo` full / public) — on the Ollama endpoint, as the batch specs build it. */
+export function pairRunConfig(instance: string, run: RunKind, endpoint: string, model: string, replicate = 0): ExperimentConfig {
   const base = pilotSettlementConfig(instance);
   const ring = (base.protocol!.params.ringPositions as RoleName[]).map((r) => AGENT_ID[r]);
-  return parseExperimentConfig({
+  const withModel = {
     ...base,
     protocol: { ...base.protocol!, replicate },
-    communication: topology === "ring" ? { topology: { type: "ring", order: ring } } : { topology: { type: "complete" } },
+    communication: run === "ring" ? { topology: { type: "ring", order: ring } } : { topology: { type: "complete" } },
     agents: base.agents.map((a) => ({
       ...a,
       model: { ...a.model, provider: "openai-compatible", endpoint, model, structuredOutput: "prompt", think: true, contextLength: PILOT_GENERATION.contextLength },
     })),
-  });
+  };
+  if (run === "oracle" || run === "public_only") return parseExperimentConfig(decideAlone(withModel as unknown as Record<string, unknown>, run === "oracle" ? "full" : "public"));
+  return parseExperimentConfig(withModel);
 }
 
 export interface PairRunnerDeps {
@@ -234,7 +243,7 @@ export async function runPairs(deps: PairRunnerDeps, opts: PairRunnerOptions): P
     return { request, response: r.data, status: r.status, ok };
   }
 
-  async function runOne(instance: string, topology: Topology): Promise<{ experimentId: string; outcome: string | null }> {
+  async function runOne(instance: string, topology: RunKind): Promise<{ experimentId: string; outcome: string | null }> {
     const config = pairRunConfig(instance, topology, opts.endpoint, opts.model, replicate);
     const { runner, done } = deps.service.start({ config });
     log(`  run ${instance} ${topology}: experiment ${runner.id}`);
@@ -255,10 +264,13 @@ export async function runPairs(deps: PairRunnerDeps, opts: PairRunnerOptions): P
     }
   }
 
+  const kind: PairKind = opts.kind ?? "discussion";
+  const runs: [RunKind, RunKind] = kind === "controls" ? ["oracle", "public_only"] : ["complete", "ring"];
   const records: PairRecord[] = [];
   opts.instances.forEach((instance, index) => {
-    const firstTopology: Topology = opts.first === "complete" ? "complete" : opts.first === "ring" ? "ring" : index % 2 === 0 ? "complete" : "ring";
-    records.push({ instance, replicate, order: [firstTopology, firstTopology === "complete" ? "ring" : "complete"], executions: [], outcome: "environment_deviation" });
+    const firstIsA = opts.first === "complete" ? true : opts.first === "ring" ? false : index % 2 === 0;
+    const order: [RunKind, RunKind] = firstIsA ? [runs[0], runs[1]] : [runs[1], runs[0]];
+    records.push({ instance, kind, replicate, order, executions: [], outcome: "environment_deviation" });
   });
 
   for (const pair of records) {
@@ -289,7 +301,8 @@ export async function runPairs(deps: PairRunnerDeps, opts: PairRunnerOptions): P
         return { rec, topology: pair.order[i]!, r };
       });
       const deviated = deviation !== null;
-      const dir = deviated && attempt < maxReexecutions ? path.join(opts.outDir, "deviations", `${pair.instance}${replicate ? `-rep${replicate}` : ""}-attempt${attempt}`) : opts.outDir;
+      const pairName = `${pair.instance}${kind === "controls" ? "-controls" : ""}${replicate ? `-rep${replicate}` : ""}`;
+      const dir = deviated && attempt < maxReexecutions ? path.join(opts.outDir, "deviations", `${pairName}-attempt${attempt}`) : opts.outDir;
       for (const { rec, topology, r } of probe) {
         const written = writeRunLog(rec, events.list(r.experimentId), dir, logOptions);
         const validity = written.runLog.validity as { status: string; detail: string };
@@ -303,7 +316,7 @@ export async function runPairs(deps: PairRunnerDeps, opts: PairRunnerOptions): P
       }
       log(`  environment deviation: ${deviation}${attempt < maxReexecutions ? " — both runs will be re-executed" : " — no re-execution left, the pair is excluded"}`);
     }
-    const file = path.join(opts.outDir, "pairs", `${pair.instance}${replicate ? `-rep${replicate}` : ""}.json`);
+    const file = path.join(opts.outDir, "pairs", `${pair.instance}${kind === "controls" ? "-controls" : ""}${replicate ? `-rep${replicate}` : ""}.json`);
     fs.writeFileSync(file, JSON.stringify(pair, null, 1) + "\n");
     log(`pair ${pair.instance}: ${pair.outcome} (${pair.executions.length} execution${pair.executions.length === 1 ? "" : "s"}), record ${file}`);
   }

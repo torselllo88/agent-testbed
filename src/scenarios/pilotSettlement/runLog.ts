@@ -4,6 +4,10 @@ import path from "node:path";
 import type { ExperimentEvent } from "../../experiment/events.js";
 import type { ExperimentRecord } from "../../persistence/experimentRepository.js";
 import { BUNDLE_DIR, PROMPT_COUNT_RULE, promptCountShortfall } from "./adapter.js";
+import { pilotModelRecordPresent, tokenizerCounter } from "./tokenizer.js";
+
+/** The model's tokenizer when its record is present (counts of visible texts in the log); otherwise the counts stay null. */
+const visibleCounter = pilotModelRecordPresent() ? tokenizerCounter() : null;
 import { PilotParamsSchema } from "./evaluator.js";
 import { AGENTS, classify, evaluate, ROLE_OF_ID, stateHash, type Proposal, type RoleName } from "./task.js";
 
@@ -130,6 +134,9 @@ function attemptOf(call: P, index: number): Attempt {
   const thinking = typeof meta.thinking === "string" ? meta.thinking : null;
   const attemptKind = call.attemptKind === "length_regeneration" ? "length_regeneration" : "initial";
   const kind = typeof call.providerAttempt === "number" && call.providerAttempt > 0 ? "technical_retry" : attemptKind;
+  // Plan §3.7: the visible tokens counted with the model's tokenizer; thinking tokens = eval_count − visible tokens (the think markup included).
+  const content = error ? null : ((call.responseText as string | undefined) ?? null);
+  const contentTokens = content !== null && visibleCounter ? visibleCounter.count(content) : null;
   return {
     attempt_index: index,
     kind,
@@ -143,8 +150,8 @@ function attemptOf(call: P, index: number): Attempt {
     prompt_eval_count: usage?.promptTokens ?? null,
     prompt_eval_cached_count: null,
     eval_count: usage?.completionTokens ?? null,
-    content_tokens: null,
-    thinking_tokens: null,
+    content_tokens: contentTokens,
+    thinking_tokens: contentTokens !== null && typeof usage?.completionTokens === "number" ? usage.completionTokens - contentTokens : null,
     total_duration_ns: ms2ns(durations.total),
     load_duration_ns: ms2ns(durations.load),
     accepted: false,

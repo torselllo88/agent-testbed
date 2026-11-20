@@ -33,6 +33,18 @@ function configFor(id: string, topology: "complete" | "ring"): ExperimentConfig 
   return parseExperimentConfig({ ...base, communication: { topology: { type: "ring", order: ring } } });
 }
 
+/**
+ * The server counts were measured on 2026-11-17 with the bundle's v0.3.1 wording of the length
+ * instruction; on 2026-11-20 the instruction was tightened (gate G2, config_version 0.3.2-draft).
+ * The measured text is the rendered one with that single line put back, so the check stays exact.
+ */
+const WORDING_NOW = "Write plain text. Keep each message concise: no more than four sentences and under 100 words.";
+const WORDING_MEASURED = "Write plain text. Keep each message short: a few sentences.";
+const asMeasured = (text: string): string => {
+  if (!text.includes(WORDING_NOW)) throw new Error("the system prompt no longer carries the known length instruction: re-measure the fixture");
+  return text.replace(WORDING_NOW, WORDING_MEASURED);
+};
+
 /** The text behind a fixture id, rendered by the adapter (or stored, for the probes). */
 function textOf(id: string): string {
   const [kind, ...rest] = id.split(":");
@@ -42,7 +54,7 @@ function textOf(id: string): string {
   const { state } = bundleInstances()[instance]!;
   switch (kind) {
     case "sys":
-      return systemPrompt(configFor(instance, rest[1] as "complete" | "ring"), AGENT_ID[rest[2] as RoleName]);
+      return asMeasured(systemPrompt(configFor(instance, rest[1] as "complete" | "ring"), AGENT_ID[rest[2] as RoleName]));
     case "oracle_sys":
       return oracleMessages(state)[0]!.content;
     case "oracle_user":

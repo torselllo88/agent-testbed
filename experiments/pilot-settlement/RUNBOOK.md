@@ -128,12 +128,55 @@ snapshots and the decision per pair. **Bring back** the whole output folder
 outside the repository on the laptop (`scp -r pvgpu1:~/pilot-logs/dev-<date>
 ./pilot-logs/`).
 
-The replicates of the three largest Complete final calls (step 5, second
-half) and the controls come after the dev logs are read:
+## 4. Controls on the dev instances (gates G3, G4)
 
-| Spec | Runs |
-|---|---|
-| `dev-controls.batch.json` | oracle and public-only calls of Operations, replicate 0 (set `protocol.replicate` for 1 and 2) |
+The oracle and the public-only call of Operations alone, as one pair per
+instance (preload, three snapshots, the same deviation rule), three
+replicates (plan: replicate index 0, 1, 2 — `-rep1` / `-rep2` in the run
+ids). About 20 × 3 single calls, roughly 40 minutes of the GPU in all:
+
+```sh
+for r in 0 1 2; do
+  npm run pilot -- pairs --kind controls --instances dev --replicate $r \
+    --endpoint lab-ollama --base-url http://localhost:11434 --model qwen3.8:27b \
+    --out ~/pilot-logs/controls-$(date +%F)
+done
+npm run pilot -- validate ~/pilot-logs/controls-<date>/*.json
+```
+
+Expected: 60 logs `OK` (`DEV-xx-ORACLE[-repN].json`, `DEV-xx-PUBLIC_ONLY[-repN].json`),
+`pairs/DEV-xx-controls[-repN].json`. **Bring back** the folder.
+
+## 5. Determinism (gate G6, hard gate)
+
+After the dev runs: the 3 discussion and 2 final calls with the largest
+prompts in the dev logs, plus the public-only call of DEV-01, each 3 times
+cold (after a cache-busting prompt) and 3 times warm, with the same seed,
+under snapshots before and after. 36 calls, about 20 minutes:
+
+```sh
+npm run pilot -- determinism --logs ~/pilot-logs/dev-<date> \
+  --base-url http://localhost:11434 --model qwen3.8:27b \
+  --out ~/pilot-logs/g6-$(date +%F).json
+```
+
+Exit code 0 and `pass` in the summary: identical content in every repeat
+and both snapshots normal. **Bring back** the JSON. A `FAIL` with
+`DIFFERS` is the hard-gate failure of the plan (§9): no freeze; tell me
+with the report, nothing else is to be run.
+
+## 6. The rerun after the 2026-11-20 prompt change (config_version 0.3.2-draft)
+
+In this order, each after a `git pull` and `npm run build`:
+
+1. §1 — G1 on the new wording (tests, probe batch, validate): no GPU.
+2. §3 — dev pairs, into a new folder (`~/pilot-logs/dev-<date>`); validate; bring back.
+3. §4 — controls, three replicates; validate; bring back.
+4. §5 — determinism on the new dev logs; bring back.
+
+The G2 calibration (§2) need not be repeated: the tokenizer and the
+counting rule do not depend on the wording; the system-prompt count is
+checked by the tests and again by the pairs (budget guard).
 
 ## 4. Bringing logs back
 

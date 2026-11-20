@@ -164,6 +164,24 @@ jsonschema python` by default — a current Python and the schema package from a
 per-user `uv`; `--python <command>` for another interpreter of version ≥ 3.7)
 — the independent check a run must pass to count as structurally valid.
 
+`npm run pilot -- pairs --instances dev|<ids> --endpoint <name> --base-url <url>
+--model <name> --out <dir> [--replicate <n>] [--first alternating|complete|ring]`
+is the **pair runner** (plan §3.2, `src/scenarios/pilotSettlement/pairRunner.ts`):
+per instance a preload (`/api/chat` with `messages: []`, `num_ctx` 8192,
+`keep_alive` 30m, must answer `done_reason: "load"`), a snapshot, the first
+run, a snapshot, the second run, a snapshot. A snapshot holds nvidia-smi,
+`/api/ps` and `/api/version` and is normal when the model is fully in GPU
+memory with context length 8192 and version and digest equal the freeze
+record `experiments/pilot-settlement/model/record.json`. A failed preload, an
+abnormal snapshot or a mid-run reload (`load_duration` > 1 s) is an
+environment deviation: the pair's logs go under `deviations/`, the runner
+waits for a normal snapshot and re-executes both runs with the same seeds, at
+most twice. A version or digest change stops the run (`PilotStopped`, exit 3).
+Each pair's run logs are written as soon as it finishes, with the snapshots,
+the preload and the execution `attempt` in them; `pairs/<instance>.json`
+records the pair. The runs themselves go through the `ExperimentService`
+like any other run.
+
 `npm run pilot -- calibrate --base-url <url> --model <name> --out <file>
 [--worst-case] [--num-predict <n>]` is gate G2 against the real server (plan
 §4): the model record compared with the frozen one, every system prompt
@@ -180,9 +198,9 @@ suspected overflow), `technical_failure` (a provider or runtime failure),
 `environment_deviation` (an abnormal snapshot or a mid-run reload),
 otherwise `valid`; a `prompt_eval_count` short of the counted prompt plus the
 template's tokens by more than 1 % on an Ollama call is a `context_truncation`
-too. Runs served by the stub provider record snapshots that
-say no server was involved; the pair runner with real snapshots is a later
-delivery.
+too, and a pair whose preload did not answer `done_reason: "load"` is an
+`environment_deviation`. Runs served by the stub provider record snapshots
+that say no server was involved; runs of the pair runner carry the real ones.
 
 Run ids: `<instance>-COMPLETE` / `<instance>-RING`, `-ORACLE`,
 `-PUBLIC_ONLY`; replicate *n* > 0 adds `-rep<n>`; a probe run (scripted
@@ -202,9 +220,10 @@ itself is the unit test above.
 | `stubScripts.ts` | the probe |
 | `config.ts` | the built-in config |
 | `runLog.ts` | the run-log export |
-| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate` |
+| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate | pairs` |
 | `tokenizer.ts` | the model's tokenizer from the show record; `tokenizerCounter` |
 | `calibrate.ts` | gate G2 calibration against the server (`npm run pilot -- calibrate`) |
+| `pairRunner.ts` | the pair runner: preload, snapshots, deviation re-execution (`npm run pilot -- pairs`) |
 | `experiments/pilot-settlement/` | the bundle, batch specs, change log, the model record (`model/`) |
 | `tests/fixtures/pilot-tokenizer-counts.json` | the server's token counts the tokenizer is checked against |
 | `tests/fixtures/pilot-settlement-reference.json` | the reference outputs the tests compare with |

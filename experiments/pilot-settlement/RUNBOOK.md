@@ -91,22 +91,49 @@ the same — it says what the server did.
 To rerun step 3 at the plan's output cap instead of 512 tokens:
 `--num-predict 2560` (six full generations, about 10 more minutes).
 
-## 3. Development runs (plan §4 steps 5–6; gates G2, G5, G6)
+## 3. Development runs (plan §4 step 5; gates G2, G5, G6)
 
-**Not before the pair runner is in the testbed** (preload with
-`messages: []`, the three environment snapshots, the deviation rule). When it
-is, this section gets the exact commands; the specs are already there:
+The 10 dev instances, each as one pair (plan §3.2): preload → snapshot →
+first run → snapshot → second run → snapshot. The topology order alternates
+per instance (DEV-01 complete first, DEV-02 ring first, …). An abnormal
+snapshot, a failed preload or a mid-run reload makes the pair an environment
+deviation: both runs are re-executed with the same seeds once the environment
+is normal again (at most twice; the deviated logs are kept under
+`deviations/`). A version or digest change stops the run (exit code 3): tell
+me before anything else is done.
+
+```sh
+mkdir -p ~/pilot-logs
+npm run pilot -- pairs --instances dev --endpoint lab-ollama --base-url http://localhost:11434 \
+  --model qwen3.8:27b --out ~/pilot-logs/dev-$(date +%F)
+```
+
+Progress goes to stderr (pair, preload, snapshots, each run's outcome, each
+log written). Budget: 20 runs × 19 calls with thinking up to 2560 tokens;
+with the ~30 s per call seen at calibration, about 3–4 hours of the GPU.
+`nohup … > ~/pilot-logs/dev.log 2>&1 &` keeps it running after a
+disconnect; `tail -f ~/pilot-logs/dev.log` follows it. The command can be
+re-run for single instances (`--instances DEV-07,DEV-08`): every run is a
+new experiment in the database, the logs are overwritten per run id.
+
+When it is done:
+
+```sh
+npm run pilot -- validate ~/pilot-logs/dev-<date>/*.json
+```
+
+Expected: 20 logs `OK`; `pairs/<instance>.json` next to them with the
+snapshots and the decision per pair. **Bring back** the whole output folder
+(logs, thinking files, `pairs/`, `deviations/` if any) — about 1–2 MB; keep it
+outside the repository on the laptop (`scp -r pvgpu1:~/pilot-logs/dev-<date>
+./pilot-logs/`).
+
+The replicates of the three largest Complete final calls (step 5, second
+half) and the controls come after the dev logs are read:
 
 | Spec | Runs |
 |---|---|
-| `dev-discussion.batch.json` | 10 dev instances × {complete, ring}, one run each |
 | `dev-controls.batch.json` | oracle and public-only calls of Operations, replicate 0 (set `protocol.replicate` for 1 and 2) |
-
-Running them today (without snapshots) is possible —
-`npm run batch -- experiments/pilot-settlement/dev-discussion.batch.json` —
-but every log would export without environment data and could not count as
-`valid` under §11. Budget: about 20 runs × 19 calls with thinking up to 2560
-tokens, several hours of the GPU.
 
 ## 4. Bringing logs back
 

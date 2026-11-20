@@ -5,6 +5,8 @@
  *   npm run pilot -- export   (--batch <id> | --experiment <id>) --out <dir> [--db <dir>]
  *   npm run pilot -- validate <run_log.json>… [--python "<command>"]
  *   npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]
+ *   npm run pilot -- pairs --instances dev|<id,id,…> --endpoint <name> --base-url <url> --model <name> --out <dir>
+ *                        [--replicate <n>] [--first alternating|complete|ring] [--db <dir>]
  *
  * export: one run log per run (schemas/run_log.schema.json of the bundle),
  * from the trace; thinking texts go to <run_id>.thinking.json next to it.
@@ -17,6 +19,9 @@
  * calibrate: gate G2 against the real server (plan §4 steps 1–4, and 6 with
  * --worst-case): model record, system-prompt counts, counting semantics
  * (prompt_count_rule), truncation canary; the report goes to --out.
+ * pairs: the pair runner (plan §3.2): per instance preload, snapshot, first
+ * run, snapshot, second run, snapshot; deviation re-executions; run logs
+ * with the snapshots written to --out as each pair finishes.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -27,6 +32,11 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { BUNDLE_DIR } from "../scenarios/pilotSettlement/adapter.js";
 import { calibrate, writeCalibration } from "../scenarios/pilotSettlement/calibrate.js";
+import { PilotStopped, runPairs } from "../scenarios/pilotSettlement/pairRunner.js";
+import { ExperimentService } from "../experiment/service.js";
+import { createProviderRegistryFromEnv } from "../llm/registry.js";
+import { StubProvider } from "../llm/stubProvider.js";
+import { createEvaluatorRegistry, registerBuiltinStubs } from "../scenarios/index.js";
 import { writeRunLog } from "../scenarios/pilotSettlement/runLog.js";
 
 const { positionals, values } = parseArgs({
@@ -41,6 +51,10 @@ const { positionals, values } = parseArgs({
     model: { type: "string" },
     "worst-case": { type: "boolean", default: false },
     "num-predict": { type: "string" },
+    instances: { type: "string" },
+    endpoint: { type: "string" },
+    replicate: { type: "string" },
+    first: { type: "string", default: "alternating" },
   },
 });
 
@@ -48,12 +62,42 @@ const usage = (): never => {
   console.error(
     "usage:\n  npm run pilot -- export (--batch <id> | --experiment <id>) --out <dir> [--db <dir>]\n" +
       '  npm run pilot -- validate <run_log.json>... [--python "<command>"]\n' +
-      "  npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]"
+      "  npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]\n" +
+      "  npm run pilot -- pairs --instances dev|<id,id,...> --endpoint <name> --base-url <url> --model <name> --out <dir> [--replicate <n>] [--first alternating|complete|ring] [--db <dir>]"
   );
   process.exit(2);
 };
 
 switch (positionals[0]) {
+  case "pairs": {
+    if (!values.instances || !values.endpoint || !values["base-url"] || !values.model || !values.out) usage();
+    const instances = values.instances === "dev" ? Array.from({ length: 10 }, (_, i) => `DEV-${String(i + 1).padStart(2, "0")}`) : values.instances!.split(",").map((s) => s.trim()).filter(Boolean);
+    const replicate = values.replicate !== undefined ? Number(values.replicate) : 0;
+    if (!(Number.isInteger(replicate) && replicate >= 0)) usage();
+    if (!["alternating", "complete", "ring"].includes(values.first!)) usage();
+    const db = openDb(values.db);
+    const providers = createProviderRegistryFromEnv(registerBuiltinStubs(new StubProvider()));
+    const evaluators = createEvaluatorRegistry();
+    const service = new ExperimentService({ db, providers, evaluators });
+    runPairs(
+      { db, service },
+      { instances, endpoint: values.endpoint!, baseUrl: values["base-url"]!, model: values.model!, outDir: path.resolve(values.out!), replicate, first: values.first as "alternating" | "complete" | "ring", log: (line) => console.error(line) }
+    )
+      .then((pairs) => {
+        const valid = pairs.filter((p) => p.outcome === "valid").length;
+        console.log(`${pairs.length} pair(s): ${valid} valid, ${pairs.length - valid} environment deviation(s); logs in ${path.resolve(values.out!)}`);
+        process.exit(valid === pairs.length ? 0 : 1);
+      })
+      .catch((err) => {
+        if (err instanceof PilotStopped) {
+          console.error(`STOP: ${err.message}`);
+          process.exit(3);
+        }
+        console.error(`pairs failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      });
+    break;
+  }
   case "calibrate": {
     if (!values["base-url"] || !values.model || !values.out) usage();
     const numPredict = values["num-predict"] !== undefined ? Number(values["num-predict"]) : undefined;

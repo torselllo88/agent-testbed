@@ -196,3 +196,31 @@ Ollama 0.33.2, `qwen3.8:27b` digest `aaee06c3…7813`, 3.5 minutes).
 - Still open before the freeze: step 5 (the 20 dev runs with environment
   snapshots, replicates of the three largest Complete final calls) — needs
   the pair runner; gates G3–G6.
+
+## 2026-11-20 — the pair runner (plan §3.2, §11, PD13)
+
+- `npm run pilot -- pairs` (`src/scenarios/pilotSettlement/pairRunner.ts`):
+  per instance the preload (`messages: []`, `num_ctx` 8192, `keep_alive`
+  30m, `done_reason` must be `load`), snapshots before, between and after
+  (nvidia-smi, `/api/ps`, `/api/version`), the two runs through the
+  `ExperimentService`, the run logs written with the snapshots and the
+  preload as the pair finishes. Normality as the plan says, against the new
+  freeze record `model/record.json` (model, digest, Ollama version, context
+  length — from the G2 calibration; update only at a freeze).
+- Deviation rule: a failed preload, an abnormal snapshot or a mid-run reload
+  → both runs re-executed with the same seeds after the environment is
+  normal again (polled every 60 s, up to 2 h), at most twice; the deviated
+  logs are kept under `deviations/<instance>-attempt<n>/`, the pair record
+  `pairs/<instance>.json` holds every execution. The decision is taken from
+  the preload, the snapshots and `load_duration` before the outcomes are
+  looked at (PD13). A version or digest change stops the run (exit 3).
+- Run log: a failed preload now makes the run `environment_deviation` (the
+  `preload` block carries `ok`); `attempt` is the execution index.
+- Topology order: alternating per instance (DEV-01 complete first, DEV-02
+  ring first, …) as the plan's pilot order; `--first complete|ring` for a
+  fixed order. The pilot's fixed random instance order (seed 20261121) is
+  not implemented yet: `--instances` takes the explicit list.
+- Scripted-server tests: a normal pair, a deviated pair re-executed after
+  recovery with identical seeds, a failed preload without re-executions
+  left, a digest change (`tests/scenarios/pilotPairs.test.ts`).
+- Dev runs can now be made: `RUNBOOK.md` §3.

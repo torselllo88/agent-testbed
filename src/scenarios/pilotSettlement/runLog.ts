@@ -319,6 +319,8 @@ export function buildRunLog(record: ExperimentRecord, events: ExperimentEvent[],
   });
   const reload = calls.some((c) => (c.attempts as Attempt[]).some((a) => (a.load_duration_ns ?? 0) > 1_000_000_000));
   const abnormal = snapshots.some((s) => !s.normal);
+  // The pair's preload must have answered done_reason "load" (plan §3.2); the pair runner records `ok`.
+  const preloadFailed = options.preload?.ok === false;
   let status: "valid" | "technical_failure" | "environment_deviation" | "context_truncation" | "agent_system_failure";
   let detail: string;
   if (termination.outcome === "CONTEXT_BUDGET_VIOLATION" || shortfall || overflow) {
@@ -333,9 +335,13 @@ export function buildRunLog(record: ExperimentRecord, events: ExperimentEvent[],
     // A budget limit or a run without a proposal cannot happen under the plan's config: the run was not carried out as planned.
     status = "technical_failure";
     detail = `${termination.outcome}: ${termination.reason}`;
-  } else if (abnormal || reload) {
+  } else if (abnormal || reload || preloadFailed) {
     status = "environment_deviation";
-    detail = abnormal ? (snapshots.find((s) => !s.normal)?.deviation ?? "abnormal environment snapshot") : "model reloaded mid-run (load_duration > 1 s)";
+    detail = abnormal
+      ? (snapshots.find((s) => !s.normal)?.deviation ?? "abnormal environment snapshot")
+      : reload
+        ? "model reloaded mid-run (load_duration > 1 s)"
+        : "the pair's preload did not answer done_reason \"load\"";
   } else {
     status = "valid";
     detail = `${termination.outcome ?? "unknown"}: ${termination.reason ?? ""}`.trim();

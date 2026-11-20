@@ -1,0 +1,11 @@
+{
+ "model": "qwen3.8:27b",
+ "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+ "ollama_version": "0.33.2",
+ "context_length": 8192,
+ "taken_at": "2026-11-20T10:18:19.953Z",
+ "source": "calibration/2026-11-20-g2.json",
+ "show_sha256": "e3fe414e56792c46799f7505821053a5d68bc471fae728677834dbe2a0296b5d",
+ "show_verbose_sha256": "8e0dd1ae4692b72eb098757a6a4cdfe74893cd905648e3fffcf80e7aacef07df",
+ "note": "The freeze record the pair runner compares every environment snapshot with: Ollama version and model digest must match, the model must be fully in GPU memory with context length 8192 (plan section 3.2). Update only at a freeze."
+}

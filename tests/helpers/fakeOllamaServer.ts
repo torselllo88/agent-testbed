@@ -35,6 +35,10 @@ export interface FakePlacement {
   psStatus?: number;
   /** Report no model loaded. */
   unloaded?: boolean;
+  /** The digest /api/ps reports (default "sha256-fake-digest"). */
+  digest?: string;
+  /** The version /api/version reports (default "0.33.2"). */
+  version?: string;
 }
 
 export interface FakeOllamaServer {
@@ -60,6 +64,9 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(body));
     };
+    if (req.method === "GET" && req.url === "/api/version") {
+      return send(200, { version: placement.version ?? "0.33.2" });
+    }
     if (req.method === "GET" && req.url === "/api/tags") {
       return send(200, { models: FAKE_OLLAMA_MODELS.map((name) => ({ name, model: name, size: 1 })) });
     }
@@ -76,7 +83,7 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
             size_vram: Math.round(size * placement.gpuFraction),
             context_length: placement.contextLength ?? loaded.options?.num_ctx ?? 4096,
             expires_at: "2000-01-01T00:30:00Z",
-            digest: "sha256-fake-digest",
+            digest: placement.digest ?? "sha256-fake-digest",
           },
         ],
       });
@@ -91,6 +98,8 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
       if (next?.status) return send(next.status, next.body ?? { error: "failure" });
       if (!FAKE_OLLAMA_MODELS.includes(body.model)) return send(404, { error: `model "${body.model}" not found, try pulling it first` });
       loaded = body;
+      // A preload (Ollama: empty messages load the model without generating).
+      if (body.messages.length === 0) return send(200, { model: body.model, created_at: "2000-01-01T00:00:00Z", message: { role: "assistant", content: "" }, done: true, done_reason: "load", ...(next?.extra ?? {}) });
       send(200, {
         model: body.model,
         created_at: "2000-01-01T00:00:00Z",

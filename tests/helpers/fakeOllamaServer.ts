@@ -44,11 +44,14 @@ export interface FakeOllamaServer {
   placement: FakePlacement;
   /** Replaces the next responses: a status and body, or extra fields merged into a normal answer. */
   respondWith(next: { status?: number; body?: unknown; extra?: Record<string, unknown> }): void;
+  /** What prompt_eval_count to report for a request (default: a fixed 900). */
+  promptEvalCount?: (body: OllamaChatBody) => number;
   close(): Promise<void>;
 }
 
 export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promise<FakeOllamaServer> {
   const requests: OllamaChatBody[] = [];
+  let api: FakeOllamaServer;
   const queued: Array<{ status?: number; body?: unknown; extra?: Record<string, unknown> }> = [];
   const placement: FakePlacement = { gpuFraction: 1 };
   let loaded: OllamaChatBody | null = null;
@@ -96,7 +99,7 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
         done_reason: "stop",
         total_duration: 2_500_000_000,
         load_duration: 1_000_000_000,
-        prompt_eval_count: 900,
+        prompt_eval_count: api.promptEvalCount ? api.promptEvalCount(body) : 900,
         prompt_eval_duration: 500_000_000,
         eval_count: 40,
         eval_duration: 1_000_000_000,
@@ -106,13 +109,14 @@ export async function startFakeOllamaServer(port = 0, host = "127.0.0.1"): Promi
   });
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   const address = server.address() as AddressInfo;
-  return {
+  api = {
     url: `http://${host}:${address.port}`,
     requests,
     placement,
     respondWith: (next) => queued.push(next),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
+  return api;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

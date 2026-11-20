@@ -157,3 +157,42 @@ Known gaps of this delivery (next deliveries):
 - The rule found will be recorded here and in the adapter (the bundle's
   `pilot_config.yaml` is frozen by the manifest; the filled value is proposed
   to the authors rather than written into the bundle).
+
+## 2026-11-20 — gate G2 calibration run (plan §4 steps 1–4 and 6): passed
+
+Report: `calibration/2026-11-20-g2.json` (run by the author on the node,
+Ollama 0.33.2, `qwen3.8:27b` digest `aaee06c3…7813`, 3.5 minutes).
+
+- **Step 1** — the server serves the recorded model: no difference from
+  `model/show.json` (capabilities, details, parameters, template, model
+  info); no thinking levels.
+- **Step 2** — largest system prompt 630 tokens (DEV-04, complete,
+  Settlement) over all 50 instances × 2 topologies × 6 roles; cap 1200.
+- **Step 3** — `prompt_count_rule` (written into the adapter as
+  `PROMPT_COUNT_RULE`): **`prompt_eval_count = count of the two messages +
+  15`** (the chat template's tokens: `<|im_start|>`, roles, newlines, the
+  thinking prefix), identical cold and warm for all three prompts;
+  `prompt_eval_cached_count` is not reported by 0.33.2. `eval_count` =
+  thinking tokens + visible tokens + 4 (the think markup and the stop
+  token; 0 when the answer is cut inside the thinking). Also observed: with
+  the same seed the cold and the warm call returned byte-identical thinking
+  and content on all three prompts (a first look at G6; the gate itself is
+  run as the plan says).
+- **Step 4** — canary of 9033 counted tokens at `num_ctx` 8192:
+  `prompt_eval_count` 4098 (the server shifted the context silently, no
+  error) — the shortfall is visible, so the post-call check can be trusted.
+- **Step 6** — worst-case final call (593 + 3909 message tokens = 4502,
+  reported 4517): `done_reason` stop after 442 generated tokens (413 of
+  thinking), the proposal parsed; prompt + eval 4959 ≤ 7992.
+- **Post-call check implemented** (plan §3.7, `postcall_checks`): on every
+  Ollama call counted with the tokenizer, the run-log export compares
+  `prompt_eval_count` with the count + 15; a shortfall of more than 1 %
+  makes the run `context_truncation` and names the call in
+  `validity.detail`. The provider's character heuristic stays as a second
+  net. Tested on the scripted server (exact, within tolerance, 2 % short).
+- Proposed to the authors: `pilot_config.yaml` → `prompt_count_rule:
+  "prompt_eval_count = local_count + 15; cached prefix not subtracted;
+  prompt_eval_cached_count absent"`, `think_level: n/a (no levels listed)`.
+- Still open before the freeze: step 5 (the 20 dev runs with environment
+  snapshots, replicates of the three largest Complete final calls) — needs
+  the pair runner; gates G3–G6.

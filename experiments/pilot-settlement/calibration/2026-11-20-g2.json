@@ -1,0 +1,255 @@
+{
+ "schema": "pilot-settlement/calibration/1",
+ "startedAt": "2026-11-20T10:18:19.953Z",
+ "finishedAt": "2026-11-20T10:21:49.219Z",
+ "baseUrl": "http://localhost:11434",
+ "model": "qwen3.8:27b",
+ "generation": {
+  "temperature": 1,
+  "maxOutputTokens": 2560,
+  "contextLength": 8192,
+  "keepAlive": "30m",
+  "sampling": {
+   "topP": 0.95,
+   "topK": 20,
+   "minP": 0,
+   "presencePenalty": 0,
+   "repeatPenalty": 1
+  }
+ },
+ "step1": {
+  "version": "0.33.2",
+  "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+  "capabilities": [
+   "completion",
+   "vision",
+   "tools",
+   "thinking"
+  ],
+  "details": {
+   "parent_model": "qwen3.8:27b-q4_K_M",
+   "format": "gguf",
+   "family": "qwen35",
+   "families": [
+    "qwen35"
+   ],
+   "parameter_size": "27.3B",
+   "quantization_level": "Q4_K_M"
+  },
+  "modifiedAt": "2026-10-29T20:31:02+01:00",
+  "thinkingLevels": null,
+  "recordDifferences": [],
+  "tokenizerSourceSha256": "8e0dd1ae4692b72eb098757a6a4cdfe74893cd905648e3fffcf80e7aacef07df"
+ },
+ "step2": {
+  "cap": 1200,
+  "maxTokens": 630,
+  "maxAt": "DEV-04 complete Settlement",
+  "devMaxTokens": 630,
+  "over": [],
+  "pass": true
+ },
+ "step3": {
+  "numPredict": 512,
+  "calls": [
+   {
+    "label": "DEV-01 complete, discussion round 1, Operations",
+    "cache": "cold",
+    "seed": 1253767081,
+    "localPromptTokens": 631,
+    "localPerMessage": [
+     593,
+     38
+    ],
+    "promptEvalCount": 646,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 376,
+    "doneReason": "stop",
+    "thinkingTokens": 186,
+    "contentTokens": 186,
+    "evalExtra": 4,
+    "contentSha256": "e861d376a7ec434c3026a02c4fb1b991f7ff1e1d87218320cb0cf8acfc0c1f4c",
+    "thinkingSha256": "1067dde69a1374918309e8b669a97c41f94c54bbd82aeb10a49c567d1ea42fe6",
+    "loadDurationMs": 12,
+    "promptEvalDurationMs": 1844,
+    "evalDurationMs": 18610,
+    "totalDurationMs": 20572
+   },
+   {
+    "label": "DEV-01 complete, discussion round 1, Operations",
+    "cache": "warm",
+    "seed": 1253767081,
+    "localPromptTokens": 631,
+    "localPerMessage": [
+     593,
+     38
+    ],
+    "promptEvalCount": 646,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 376,
+    "doneReason": "stop",
+    "thinkingTokens": 186,
+    "contentTokens": 186,
+    "evalExtra": 4,
+    "contentSha256": "e861d376a7ec434c3026a02c4fb1b991f7ff1e1d87218320cb0cf8acfc0c1f4c",
+    "thinkingSha256": "1067dde69a1374918309e8b669a97c41f94c54bbd82aeb10a49c567d1ea42fe6",
+    "loadDurationMs": 4,
+    "promptEvalDurationMs": 190,
+    "evalDurationMs": 18458,
+    "totalDurationMs": 18658
+   },
+   {
+    "label": "DEV-01 complete, final, empty history",
+    "cache": "cold",
+    "seed": 521097124,
+    "localPromptTokens": 766,
+    "localPerMessage": [
+     593,
+     173
+    ],
+    "promptEvalCount": 781,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 512,
+    "doneReason": "length",
+    "thinkingTokens": 512,
+    "contentTokens": 0,
+    "evalExtra": 0,
+    "contentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "thinkingSha256": "a1df08bebfb9e659e7178c09cc37d92ee0b11279b090e3be2f083a0a8a799fe4",
+    "loadDurationMs": 4,
+    "promptEvalDurationMs": 1910,
+    "evalDurationMs": 26331,
+    "totalDurationMs": 28372
+   },
+   {
+    "label": "DEV-01 complete, final, empty history",
+    "cache": "warm",
+    "seed": 521097124,
+    "localPromptTokens": 766,
+    "localPerMessage": [
+     593,
+     173
+    ],
+    "promptEvalCount": 781,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 512,
+    "doneReason": "length",
+    "thinkingTokens": 512,
+    "contentTokens": 0,
+    "evalExtra": 0,
+    "contentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "thinkingSha256": "a1df08bebfb9e659e7178c09cc37d92ee0b11279b090e3be2f083a0a8a799fe4",
+    "loadDurationMs": 5,
+    "promptEvalDurationMs": 188,
+    "evalDurationMs": 26102,
+    "totalDurationMs": 26302
+   },
+   {
+    "label": "DEV-01 oracle",
+    "cache": "cold",
+    "seed": 1545299569,
+    "localPromptTokens": 693,
+    "localPerMessage": [
+     405,
+     288
+    ],
+    "promptEvalCount": 708,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 331,
+    "doneReason": "stop",
+    "thinkingTokens": 303,
+    "contentTokens": 24,
+    "evalExtra": 4,
+    "contentSha256": "c2210b74d56aac5f0833eab04fad1b0e76cb1a6c926e5f37450790b0d9fda745",
+    "thinkingSha256": "9583521e9920a2d262ed931189bcd448510bf3459bb05cdd484bcecd1fa25184",
+    "loadDurationMs": 5,
+    "promptEvalDurationMs": 1998,
+    "evalDurationMs": 13637,
+    "totalDurationMs": 15733
+   },
+   {
+    "label": "DEV-01 oracle",
+    "cache": "warm",
+    "seed": 1545299569,
+    "localPromptTokens": 693,
+    "localPerMessage": [
+     405,
+     288
+    ],
+    "promptEvalCount": 708,
+    "promptEvalCachedCount": null,
+    "overhead": 15,
+    "evalCount": 331,
+    "doneReason": "stop",
+    "thinkingTokens": 303,
+    "contentTokens": 24,
+    "evalExtra": 4,
+    "contentSha256": "c2210b74d56aac5f0833eab04fad1b0e76cb1a6c926e5f37450790b0d9fda745",
+    "thinkingSha256": "9583521e9920a2d262ed931189bcd448510bf3459bb05cdd484bcecd1fa25184",
+    "loadDurationMs": 4,
+    "promptEvalDurationMs": 185,
+    "evalDurationMs": 13652,
+    "totalDurationMs": 13846
+   }
+  ],
+  "overheads": [
+   15
+  ],
+  "cachedCountReported": false,
+  "promptCountRule": "prompt_eval_count = local_count + 15 (the chat template's tokens), cached or not; prompt_eval_cached_count is not reported by this server version",
+  "evalCountIncludesThinking": true,
+  "warmEqualsCold": true,
+  "pass": true
+ },
+ "step4": {
+  "localPromptTokens": 9033,
+  "contextLength": 8192,
+  "promptEvalCount": 4098,
+  "httpError": null,
+  "doneReason": "length",
+  "detectable": true,
+  "pass": true
+ },
+ "step6": {
+  "numPredict": 2560,
+  "call": {
+   "label": "DEV-01 complete, final, worst case",
+   "cache": "cold",
+   "seed": 521097124,
+   "localPromptTokens": 4502,
+   "localPerMessage": [
+    593,
+    3909
+   ],
+   "promptEvalCount": 4517,
+   "promptEvalCachedCount": null,
+   "overhead": 15,
+   "evalCount": 442,
+   "doneReason": "stop",
+   "thinkingTokens": 413,
+   "contentTokens": 25,
+   "evalExtra": 4,
+   "contentSha256": "f3c16382daee6eb547c8589eb0277e8b0c76c40f57babe612d620726a18156da",
+   "thinkingSha256": "6e4e8315a1fbbffdfec5778f7f612bef35b92df107165277884af9ba66b7b1b5",
+   "loadDurationMs": 5,
+   "promptEvalDurationMs": 11032,
+   "evalDurationMs": 18721,
+   "totalDurationMs": 29913
+  },
+  "proposalParsed": true,
+  "finishedWithinBudget": true,
+  "pass": true
+ },
+ "summary": [
+  "step 1: Ollama 0.33.2, model qwen3.8:27b digest aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813; the server serves the recorded model",
+  "step 2: largest system prompt 630 tokens (DEV-04 complete Settlement), dev max 630, cap 1200: pass",
+  "step 3: prompt_eval_count = local_count + 15 (the chat template's tokens), cached or not; prompt_eval_cached_count is not reported by this server version; eval_count includes thinking + visible tokens (extra [4,0]): pass",
+  "step 4: canary of 9033 local tokens at num_ctx 8192: prompt_eval_count 4098 → truncation detectable: pass",
+  "step 6: worst-case final call: local 4502, prompt_eval_count 4517, eval 442 (stop), thinking 413, proposal parsed: pass"
+ ]
+}

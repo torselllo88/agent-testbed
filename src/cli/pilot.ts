@@ -10,8 +10,10 @@
  * from the trace; thinking texts go to <run_id>.thinking.json next to it.
  * validate: the bundle's own tools/validate_run_log.py on each log, as an
  * independent check (a log that fails it is not structurally valid). The
- * validator is run with `uv run --no-project python` by default; --python
- * names another interpreter command (e.g. "python3").
+ * validator is run with `uv run --no-project --with jsonschema python` by
+ * default (uv in the user's home brings a current Python and the schema
+ * package; the bundle's tools need Python ≥ 3.7); --python names another
+ * interpreter command (e.g. "python3.12").
  * calibrate: gate G2 against the real server (plan §4 steps 1–4, and 6 with
  * --worst-case): model record, system-prompt counts, counting semantics
  * (prompt_count_rule), truncation canary; the report goes to --out.
@@ -34,7 +36,7 @@ const { positionals, values } = parseArgs({
     batch: { type: "string" },
     experiment: { type: "string" },
     out: { type: "string" },
-    python: { type: "string", default: "uv run --no-project python" },
+    python: { type: "string", default: "uv run --no-project --with jsonschema python" },
     "base-url": { type: "string" },
     model: { type: "string" },
     "worst-case": { type: "boolean", default: false },

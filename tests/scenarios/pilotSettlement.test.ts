@@ -24,6 +24,8 @@ import {
   LENGTH_REMINDER,
   oracleMessages,
   PilotSettlementAdapter,
+  PROMPT_COUNT_RULE,
+  promptCountShortfall,
   publicOnlyMessages,
   publicOnlySeed,
   systemPrompt,
@@ -34,6 +36,7 @@ import { pilotSettlementConfig } from "../../src/scenarios/pilotSettlement/confi
 import { bundleInstances } from "../../src/scenarios/pilotSettlement/family.js";
 import { buildRunLog } from "../../src/scenarios/pilotSettlement/runLog.js";
 import { probeScript } from "../../src/scenarios/pilotSettlement/stubScripts.js";
+import { GgufBpeTokenizer } from "../../src/scenarios/pilotSettlement/tokenizer.js";
 import { AGENT_ID, AGENTS, classify, evaluate, metadata, roleCard, ROLE_OF_ID, stateHash, type RoleName } from "../../src/scenarios/pilotSettlement/task.js";
 import { FAKE_OLLAMA_MODELS, startFakeOllamaServer, type FakeOllamaServer } from "../helpers/fakeOllamaServer.js";
 import { createHarness, ofType } from "../helpers/harness.js";
@@ -483,6 +486,44 @@ describe("pilot settlement: calls to an Ollama endpoint", () => {
         model: { ...a.model, provider: "openai-compatible", endpoint: "lab-ollama", model: FAKE_OLLAMA_MODELS[0], structuredOutput: "prompt", think: true, contextLength: 8192 },
       })),
     });
+
+  it("the post-call check: a prompt_eval_count below the counted prompt plus the template's tokens makes the run a context truncation", async () => {
+    const tokenizer = GgufBpeTokenizer.fromShowJson();
+    const counted = (body: { messages: Array<{ content: string }> }) => body.messages.reduce((n, m) => n + tokenizer.count(m.content), 0);
+    const provider = new OllamaProvider({ name: "lab-ollama", baseUrl: server.url });
+    const harness = createHarness({ providers: [provider] });
+    try {
+      // The server reports exactly the rule: the count plus 15 template tokens — a valid run.
+      server.promptEvalCount = (body) => counted(body) + PROMPT_COUNT_RULE.templateTokens;
+      const exact = harness.runner(withOllama(pilotSettlementConfig("DEV-02")));
+      await exact.run();
+      const exactLog = buildRunLog(harness.record(exact.id), harness.events(exact.id)).runLog;
+      expect((exactLog.validity as { status: string }).status).toBe("valid");
+      const call0 = (exactLog.calls as Array<{ prompt_tokens_counted: number; token_counter: string; attempts: Array<{ prompt_eval_count: number }> }>)[0]!;
+      expect(call0.token_counter).toBe("tokenizer");
+      expect(call0.attempts[0]!.prompt_eval_count).toBe(call0.prompt_tokens_counted + 15);
+
+      // Within the tolerance (1%) still valid; 2% short on one call: context truncation, named in the detail.
+      server.promptEvalCount = (body) => Math.ceil((counted(body) + 15) * 0.995);
+      const near = harness.runner(withOllama(pilotSettlementConfig("DEV-02")));
+      await near.run();
+      expect((buildRunLog(harness.record(near.id), harness.events(near.id)).runLog.validity as { status: string }).status).toBe("valid");
+
+      let n = 0;
+      server.promptEvalCount = (body) => (++n === 7 ? Math.floor((counted(body) + 15) * 0.98) : counted(body) + 15);
+      const short = harness.runner(withOllama(pilotSettlementConfig("DEV-02")));
+      await short.run();
+      const shortLog = buildRunLog(harness.record(short.id), harness.events(short.id)).runLog;
+      expect(shortLog.validity).toMatchObject({ status: "context_truncation" });
+      expect((shortLog.validity as { detail: string }).detail).toMatch(/^prompt_eval_count \d+ below the counted prompt \(\d+ \+ 15 template tokens\) on the discussion call at turn 7: context truncation \(prompt_count_rule\)$/);
+      expect(promptCountShortfall(1000, 1015)).toBe(false);
+      expect(promptCountShortfall(1000, 1005)).toBe(false);
+      expect(promptCountShortfall(1000, 990)).toBe(true);
+    } finally {
+      server.promptEvalCount = undefined;
+      server.requests.length = 0;
+    }
+  });
 
   it("sends the pilot's generation settings and the per-call seed; the preflight budget stops a call that cannot fit", async () => {
     const provider = new OllamaProvider({ name: "lab-ollama", baseUrl: server.url });

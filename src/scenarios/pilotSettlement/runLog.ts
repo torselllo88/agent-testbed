@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ExperimentEvent } from "../../experiment/events.js";
 import type { ExperimentRecord } from "../../persistence/experimentRepository.js";
-import { BUNDLE_DIR } from "./adapter.js";
+import { BUNDLE_DIR, PROMPT_COUNT_RULE, promptCountShortfall } from "./adapter.js";
 import { PilotParamsSchema } from "./evaluator.js";
 import { AGENTS, classify, evaluate, ROLE_OF_ID, stateHash, type Proposal, type RoleName } from "./task.js";
 
@@ -311,13 +311,24 @@ export function buildRunLog(record: ExperimentRecord, events: ExperimentEvent[],
   const snapshots = options.snapshots ?? (isStub ? stubSnapshots(record.finishedAt ?? record.startedAt ?? record.createdAt) : []);
   const allCalls = turns.flatMap((t) => t.calls);
   const overflow = allCalls.some((c) => ((c.providerMeta ?? {}) as P).contextOverflowSuspected === true);
+  // The post-call check (§3.7): on an Ollama call counted with the tokenizer, prompt_eval_count must be the count plus the template's tokens, within the tolerance.
+  const shortfall = allCalls.find((c) => {
+    const meta = (c.providerMeta ?? {}) as P;
+    const usage = c.usage as { promptTokens?: number } | null | undefined;
+    return meta.api === "ollama" && c.tokenCounter === "tokenizer" && typeof c.promptTokensCounted === "number" && typeof usage?.promptTokens === "number" && promptCountShortfall(c.promptTokensCounted, usage.promptTokens);
+  });
   const reload = calls.some((c) => (c.attempts as Attempt[]).some((a) => (a.load_duration_ns ?? 0) > 1_000_000_000));
   const abnormal = snapshots.some((s) => !s.normal);
   let status: "valid" | "technical_failure" | "environment_deviation" | "context_truncation" | "agent_system_failure";
   let detail: string;
-  if (termination.outcome === "CONTEXT_BUDGET_VIOLATION" || overflow) {
+  if (termination.outcome === "CONTEXT_BUDGET_VIOLATION" || shortfall || overflow) {
     status = "context_truncation";
-    detail = termination.outcome === "CONTEXT_BUDGET_VIOLATION" ? String(termination.reason) : "context overflow suspected on a call (prompt tokens below the prompt's length)";
+    detail =
+      termination.outcome === "CONTEXT_BUDGET_VIOLATION"
+        ? String(termination.reason)
+        : shortfall
+          ? `prompt_eval_count ${(shortfall.usage as { promptTokens: number }).promptTokens} below the counted prompt (${shortfall.promptTokensCounted as number} + ${PROMPT_COUNT_RULE.templateTokens} template tokens) on the ${String(shortfall.purpose ?? "")} call at turn ${String(shortfall.turn ?? "?")}: context truncation (prompt_count_rule)`
+          : "context overflow suspected on a call (prompt tokens below the prompt's length)";
   } else if (termination.category === "infrastructure" || termination.category === "operator" || termination.category === "budget" || termination.category === "coordination") {
     // A budget limit or a run without a proposal cannot happen under the plan's config: the run was not carried out as planned.
     status = "technical_failure";

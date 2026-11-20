@@ -16,6 +16,21 @@ curl -s localhost:11434/api/version        # the Ollama server answers
 nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv
 ```
 
+Python for the bundle's tools (the validator): the node's system Python is
+3.6 and is not to be used. Once, install `uv` in the home directory and let
+it bring a current Python:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.local/bin/env            # or open a new shell
+uv python install 3.12
+uv run --no-project --with jsonschema python -c "import sys, jsonschema; print(sys.version)"
+```
+
+`npm run pilot -- validate` runs the validator through
+`uv run --no-project --with jsonschema python` by default, so after this no
+`--python` option is needed.
+
 The endpoint the batch specs name is `lab-ollama`; `.env` on the node must
 have:
 
@@ -32,7 +47,7 @@ OPENAI_COMPATIBLE_LAB_OLLAMA_MAX_CONCURRENT=1
 npm test -- tests/scenarios/pilotSettlement.test.ts      # the probe over all 50 instances × 2 topologies
 npm run batch -- experiments/pilot-settlement/pilot-probe.batch.json --out /tmp/probe.json
 npm run pilot -- export --batch <batch id printed above> --out /tmp/probe-logs
-npm run pilot -- validate /tmp/probe-logs/*.json --python python3
+npm run pilot -- validate /tmp/probe-logs/*.json
 ```
 
 Expected: every test green; every exported log passes the validator's
@@ -97,7 +112,7 @@ tokens, several hours of the GPU.
 
 ```sh
 npm run pilot -- export --batch <id> --out ~/pilot-logs/<batch name>
-npm run pilot -- validate ~/pilot-logs/<batch name>/*.json --python python3
+npm run pilot -- validate ~/pilot-logs/<batch name>/*.json
 ```
 
 Then from the laptop: `scp -r pvgpu1:~/pilot-logs ./pilot-logs` (outside the

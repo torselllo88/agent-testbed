@@ -84,9 +84,13 @@ instances in `tests/scenarios/pilotSettlement.test.ts`.
   with the model's tokenizer, summed — `tokenCounter: "tokenizer"` on the
   call); a call whose count plus the output cap would not fit the window is
   not made, and the run ends as `CONTEXT_BUDGET_VIOLATION` (infrastructure,
-  excluded from rates). The count leaves out the chat template's own tokens
-  (role markers, the thinking prefix); their number, and so the relation to
-  Ollama's `prompt_eval_count`, is the plan's `prompt_count_rule` (gate G2).
+  excluded from rates). The count leaves out the chat template's own tokens;
+  the plan's `prompt_count_rule`, measured at gate G2 (`PROMPT_COUNT_RULE` in
+  `adapter.ts`): Ollama 0.33.2 reports the count plus 15 template tokens,
+  cached or not. After a call, the run-log export checks the reported
+  `prompt_eval_count` against it; a shortfall of more than 1 % on any call
+  makes the run `context_truncation` (the server shifts an over-long prompt
+  silently and reports fewer tokens, as the G2 canary showed).
   Without the model record the adapter falls back to the planning estimate
   (4 characters per token, `"approximate"`) and **refuses a real endpoint**.
 
@@ -155,9 +159,10 @@ writes one `<run_id>.json` per finished run in the form of the bundle's
 `done_reason`, durations; the final block; validity and flags), built from
 the trace alone. Thinking texts go to `<run_id>.thinking.json`; the log holds
 their sha256 and length. `npm run pilot -- validate <logs…>` runs the bundle's
-own `tools/validate_run_log.py` on each log (with `uv run --no-project
-python` by default; `--python python3` for another interpreter) — the
-independent check a run must pass to count as structurally valid.
+own `tools/validate_run_log.py` on each log (with `uv run --no-project --with
+jsonschema python` by default — a current Python and the schema package from a
+per-user `uv`; `--python <command>` for another interpreter of version ≥ 3.7)
+— the independent check a run must pass to count as structurally valid.
 
 `npm run pilot -- calibrate --base-url <url> --model <name> --out <file>
 [--worst-case] [--num-predict <n>]` is gate G2 against the real server (plan
@@ -173,7 +178,9 @@ Validity (plan §11) is decided from the trace and the environment data,
 never from the outcome: `context_truncation` (a budget violation or a
 suspected overflow), `technical_failure` (a provider or runtime failure),
 `environment_deviation` (an abnormal snapshot or a mid-run reload),
-otherwise `valid`. Runs served by the stub provider record snapshots that
+otherwise `valid`; a `prompt_eval_count` short of the counted prompt plus the
+template's tokens by more than 1 % on an Ollama call is a `context_truncation`
+too. Runs served by the stub provider record snapshots that
 say no server was involved; the pair runner with real snapshots is a later
 delivery.
 

@@ -35,6 +35,19 @@ export const MASTER_SEED = 20261120;
 export const ADAPTER_ID = "pilot-settlement";
 export const ADAPTER_VERSION = "0.3.1";
 export const VISIBLE_MESSAGE_CAP_TOKENS = 200;
+/**
+ * The plan's prompt_count_rule (§3.7), established at gate G2
+ * (experiments/pilot-settlement/calibration/2026-11-20-g2.json, Ollama 0.33.2): the server reports
+ * the full prompt in prompt_eval_count whether the prefix was cached or not; the chat template adds
+ * 15 tokens to the count of the two messages; prompt_eval_cached_count is not reported. A reported
+ * count below the expected one by more than the tolerance is a context truncation (§3.7 post-call check).
+ */
+export const PROMPT_COUNT_RULE = { templateTokens: 15, tolerance: 0.01, ollamaVersion: "0.33.2", source: "calibration/2026-11-20-g2.json" } as const;
+/** Whether the server's prompt_eval_count falls short of the adapter's count under the rule. */
+export function promptCountShortfall(counted: number, reported: number): boolean {
+  const expected = counted + PROMPT_COUNT_RULE.templateTokens;
+  return reported < expected * (1 - PROMPT_COUNT_RULE.tolerance);
+}
 export const LENGTH_REMINDER = "Your previous draft was too long. Write a shorter message of a few sentences.";
 
 const templates = new Map<string, string>();

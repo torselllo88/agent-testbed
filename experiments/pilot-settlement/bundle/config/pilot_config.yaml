@@ -6,6 +6,11 @@
 meta:
   plan_version: "internal-v0.3.1"
   config_version: "0.3.2-draft"           # 2026-11-20: system_agent.txt length wording (gate G2); see the testbed CHANGELOG
+  changes_0_3_2_draft:                     # development decisions D1-D4, confirmed by the author 2026-11-21 (testbed CHANGELOG)
+    - "D1: visible_message_rules.instruction tightened to 'no more than four sentences and under 100 words' (G2 regeneration rate 2.2 % / 10 % with the v0.3.1 wording; 0 % after); cap unchanged"
+    - "D2: G6 cache states constructed and classified by call order (cache-busting prompt before every cold call): Ollama 0.33.2 reports no prompt_eval_cached_count"
+    - "D3: budget.prompt_count_rule set empirically at G2 (local count + 15); 1 % post-call tolerance"
+    - "D4: run_log.schema.json gains optional top-level 'replicate' and 'testbed' (provenance) properties"
   task_definition: "v1.4"
   exposure_spec: "v1.4"
   frozen: false
@@ -35,13 +40,13 @@ model:
   primary: "qwen3.8:27b"
   fallback: "qwen3:14b"                    # only if the primary fails a runtime gate; never mixed within the pilot
   single_model_per_pilot: true
-  model_digest: FILL_AT_FREEZE             # /api/tags digest of the exact pulled build
-  quantization: FILL_AT_FREEZE
-  api_show_record: FILL_AT_FREEZE          # /api/show: capabilities, supported thinking levels, template, parameters, context length
+  model_digest: "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813"   # /api/tags, 2026-11-20 (calibration)
+  quantization: "Q4_K_M (parent qwen3.8:27b-q4_K_M, 27.3B, GGUF family qwen35, general.version 0814)"
+  api_show_record: "testbed experiments/pilot-settlement/model/show.json (2026-11-17): capabilities completion, vision, tools, thinking; no thinking levels listed; template = Ollama built-in renderer qwen3.8 (Modelfile TEMPLATE {{ .Prompt }}); model defaults temperature 1, top_k 20, top_p 0.95, min_p 0, presence 0, repeat 1; context_length 262144"
 
 runtime:
   engine: "ollama (shared server, not under our control)"
-  ollama_version: FILL_AT_FREEZE           # /api/version; must support qwen3.8; any change during the pilot -> stop
+  ollama_version: "0.33.2"                 # /api/version, 2026-11-20; any change during the pilot -> stop
   endpoint: "/api/chat"                    # native endpoint only: the OpenAI-compatible route can ignore num_ctx
   stream: false
   server_settings: "not set by us (no OLLAMA_* environment, no server log access); everything that matters is set per request or observed via the API"
@@ -62,11 +67,11 @@ runtime:
       - "Ollama version and model digest equal the freeze record"
     mid_run_reload: "load_duration > 1 s on any call of a run (the model was reloaded mid-run) counts as an abnormal observation"
     on_deviation: "environment_deviation: decided from snapshots and load_duration alone, before the pair's outcomes are looked at; wait until normal, preload, then re-execute both runs of the pair from turn 1 with the same seeds (at most 2 re-executions per pair)"
-  hardware_record: FILL_AT_FREEZE          # GPU model, driver, CUDA, host
+  hardware_record: "GPU NVIDIA A30, 24576 MiB, shared with other users' processes (snapshots 2026-11-20/21: model fully in GPU memory, 17.3 GB); driver and CUDA versions and host name: recorded at the freeze"
 
 generation:
   think: true                              # thinking text comes back in message.thinking and is never re-sent
-  think_level: FILL_AT_GATE_G2             # only if /api/show lists levels and the author approves a change from plain true
+  think_level: "n/a: /api/show lists no thinking levels for qwen3.8:27b (G2 calibration); think is on or off"
   options:
     num_ctx: 8192                          # on every request
     temperature: 1.0                       # Qwen3.8 model-card thinking-mode setting
@@ -101,7 +106,7 @@ budget:
   worst_case_final_tokens: "1200 + 250 + 18 * (200 + 16) + 2560 = 7898 <= 8192"
   worst_case_discussion_tokens: "1200 + 80 + 17 * (200 + 16) + 2560 = 7512 <= 8192"
   preflight_guard: "abort the call as context_budget_violation if locally counted prompt tokens + num_predict > num_ctx"
-  prompt_count_rule: FILL_AT_GATE_G2       # how Ollama's prompt_eval_count / prompt_eval_cached_count relate to the full prompt length; established empirically (plan section 4 step 2); never assumed
+  prompt_count_rule: "prompt_eval_count = tokens(system) + tokens(user) + 15 (the chat template's tokens), whether the prefix is cached or not; prompt_eval_cached_count is not reported by Ollama 0.33.2 and is never added. Established at G2 (calibration 2026-11-20: three pilot prompts cold and warm, 179 raw texts, local tokenizer rebuilt from /api/show equal to the server on 179 of 179). Post-call tolerance 1 %"
   postcall_checks:
     - "reported prompt tokens (per prompt_count_rule) == locally counted tokens within 1%; otherwise context_truncation"
     - "done_reason recorded; 'length' with empty or unfinished content = thinking_overflow (model failure)"
@@ -193,6 +198,7 @@ calibration_gates:                         # development data only; none uses Co
   G4_public_only: "evaluated separately for every replicate (never pooled) by tools/public_policy_ceiling.gate_g4: in each replicate <= 0.30 overall AND no class above its public-policy ceiling for the gated set; the gate passes only if every replicate passes; outputs matched to H1-H7. Strict only because public-only seeds depend on the public prompt alone and G6 holds"
   G5_schema: "schema_failure <= 5% in oracle calls and in dev runs of each topology"
   G6_determinism: "hard gate: 3 dev discussion calls, 2 final calls and 1 public-only call, each repeated 3 times with identical input and seed under normal snapshots, in both prompt-cache states, give identical content. Cache state is classified per call from the observed prompt_eval_cached_count (warm > 0, cold = 0), not from the call order; repeats are arranged (same call first for warm, an unrelated request with a different prefix first for cold) until each state has been observed at least once per call. If the server does not report prompt_eval_cached_count, the order-based arrangement is used and this is recorded. If not: no freeze; first fix the environment; if outputs stay non-reproducible, the author chooses between replicate runs per pair and a more stable sampling configuration"
+  G6_as_run: "0.33.2 reports no prompt_eval_cached_count: the order-based arrangement was used (D2), 2026-11-21: 36 of 36 calls identical in both states under normal snapshots"
   G7_detector: "detector freeze criterion met (detector.freeze_criterion)"
   confirmation_on_pilot_set: "oracle and public-only on the 40 pilot instances after the pilot runs; reported, no retuning"
 

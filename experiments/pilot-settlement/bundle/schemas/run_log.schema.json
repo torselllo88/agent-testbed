@@ -322,6 +322,15 @@
     "preload": {
       "type": "object",
       "description": "preload request and response before the pair (num_ctx 8192, keep_alive 30m)"
+    },
+    "replicate": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "replicate index of the run (0 = the primary run; 1, 2 = further replicates); part of every seed key, suffix -rep<n> on the run_id for n > 0"
+    },
+    "testbed": {
+      "type": "object",
+      "description": "provenance written by the testbed: experiment id, batch id, config hash, task-definition hash, protocol fingerprint, testbed outcome — the way back from the log to its trace"
     }
   },
   "$defs": {

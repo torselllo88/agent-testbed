@@ -7,6 +7,10 @@ laptop.
 
 ## 0. Before any gate
 
+Placeholders in commands are written in CAPITALS or as `$(date +%F)`; a
+`<name>` in angle brackets is prose only — typed into bash, `<` is a
+redirection and the shell answers "syntax error near unexpected token".
+
 ```sh
 cd ~/opt/agent-testbed
 git pull
@@ -119,7 +123,7 @@ new experiment in the database, the logs are overwritten per run id.
 When it is done:
 
 ```sh
-npm run pilot -- validate ~/pilot-logs/dev-<date>/*.json
+npm run pilot -- validate ~/pilot-logs/dev-2026-11-20/*.json      # the folder written by the pairs command
 ```
 
 Expected: 20 logs `OK`; `pairs/<instance>.json` next to them with the
@@ -141,7 +145,7 @@ for r in 0 1 2; do
     --endpoint lab-ollama --base-url http://localhost:11434 --model qwen3.8:27b \
     --out ~/pilot-logs/controls-$(date +%F)
 done
-npm run pilot -- validate ~/pilot-logs/controls-<date>/*.json
+npm run pilot -- validate ~/pilot-logs/controls-$(date +%F)/*.json
 ```
 
 Expected: 60 logs `OK` (`DEV-xx-ORACLE[-repN].json`, `DEV-xx-PUBLIC_ONLY[-repN].json`),
@@ -155,7 +159,7 @@ cold (after a cache-busting prompt) and 3 times warm, with the same seed,
 under snapshots before and after. 36 calls, about 20 minutes:
 
 ```sh
-npm run pilot -- determinism --logs ~/pilot-logs/dev-<date> \
+npm run pilot -- determinism --logs ~/pilot-logs/dev-2026-11-20 \
   --base-url http://localhost:11434 --model qwen3.8:27b \
   --out ~/pilot-logs/g6-$(date +%F).json
 ```
@@ -174,9 +178,9 @@ extractions are cached under `<out>/extractions/`, so a second run with
 `--postprocess-only` takes seconds and never touches the model:
 
 ```sh
-npm run pilot -- detect --logs ~/pilot-logs/dev-<date> \
+npm run pilot -- detect --logs ~/pilot-logs/dev-2026-11-20 \
   --base-url http://localhost:11434 --model qwen3.8:27b \
-  --out ~/pilot-logs/detector-<date>
+  --out ~/pilot-logs/detector-$(date +%F)
 ```
 
 Exit code 1 means an extraction failed twice (the message is then treated
@@ -201,8 +205,8 @@ checked by the tests and again by the pairs (budget guard).
 ## 4. Bringing logs back
 
 ```sh
-npm run pilot -- export --batch <id> --out ~/pilot-logs/<batch name>
-npm run pilot -- validate ~/pilot-logs/<batch name>/*.json
+npm run pilot -- export --batch BATCH_ID --out ~/pilot-logs/NAME
+npm run pilot -- validate ~/pilot-logs/NAME/*.json
 ```
 
 Then from the laptop: `scp -r pvgpu1:~/pilot-logs ./pilot-logs` (outside the

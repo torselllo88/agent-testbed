@@ -433,3 +433,62 @@ earlier, so the six outputs reproduced across two separate sessions as well.
   shows which phenomena the dev messages contain.
 - The extraction model is the pilot model (PD7 default); a stronger offline
   extractor stays an option if the held-out metrics fail.
+
+## 2026-11-21 — four decisions confirmed by the author
+
+Put to the co-authors in the gate report; confirmed on the author's side:
+
+- **D1** — the length instruction of 0.3.2-draft ("no more than four
+  sentences and under 100 words") is a comprehension fix under §7.5; the
+  pilot runs on config_version 0.3.2-draft.
+- **D2** — G6 is met with the cache state constructed and classified by
+  call order (cache-busting prompt before every cold call), since the server
+  reports no `prompt_eval_cached_count`.
+- **D3** — `prompt_count_rule`: reported = local count + 15 template tokens,
+  cached prefix never subtracted; post-call tolerance 1 %. To be written
+  into `pilot_config.yaml` at the freeze, with `think_level` not applicable.
+- **D4** — `replicate` and the `testbed` block go **into the run-log schema**
+  rather than being stripped at export: provenance over cosmetic
+  compatibility. Done now: `schemas/run_log.schema.json` gains the two
+  optional top-level properties (additive; every existing log still
+  validates), `MANIFEST.sha256` recomputed. config_version stays
+  0.3.2-draft: the schema change alters no run.
+
+## 2026-11-21 — pilot_config.yaml: the known freeze values filled (still 0.3.2-draft, frozen: false)
+
+For the approval document to a colleague: `model_digest`, `quantization`,
+`api_show_record`, `ollama_version`, `hardware_record` (GPU and memory;
+driver, CUDA and host at the freeze), `think_level` (n/a), `prompt_count_rule`
+(D3) and a `changes_0_3_2_draft` list of D1–D4; `G6_as_run` records D2 next
+to the gate's own text, which already allowed the order-based arrangement
+when the server does not report `prompt_eval_cached_count`. Left for the
+freeze: `freeze_record`, `detector.version`, `frozen`. Manifest recomputed.
+
+## 2026-11-21 — research demo (web UI `#/research`): the dev runs as a replay
+
+For the demo to a colleague in agent-based energy systems (communication
+topology effects on distributed heuristics): the pilot's own instrument,
+shown on its own data, dry.
+
+- `experiments/pilot-settlement/demo/`: derived copies of the 20 dev run
+  logs of the 0.3.2-draft rerun (thinking files left out) and the pair
+  records; `detector/` for the detector outputs when they come. The copies
+  carry `config_version` 0.3.2-draft (the originals say "unknown", the
+  defect recorded above); the folder's README says so. Deletable without
+  side effects.
+- `demoData.ts` + `GET /api/pilot-demo`, `/instances/<id>`: the paired runs
+  with turns, recipients, token counts and verdicts; what an agent had
+  received before a turn (immediate delivery, own messages included); per
+  fact, from the detector output, the chain of claims (turn, sender,
+  recipients, source, support, hedged), the exposure turn and where
+  propagation stopped (never stated / received by X and not passed on /
+  reached as incorrect); the batch summary (pair transitions, per class,
+  per-graph technical context, categories when the detector ran).
+- Page `#/research`: instance picker; compare tab with both runs and the
+  "what it had received" panel; information-flow tab (ten facts, status per
+  graph, a fact's path in both graphs); batch tab; methods tab (frozen
+  configuration, the six gates). No live run and no graph editor (decided
+  against: a new edge is a new condition and needs a model; n = 1 proves
+  nothing). Checked in headless Chrome (`tests/e2e/suites/research.mjs`).
+- Not in this delivery: the live run via OpenRouter in exploratory mode and
+  the detector through OpenRouter — the next step once the replay is agreed.

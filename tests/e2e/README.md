@@ -36,6 +36,7 @@ and no real provider is called. Screenshots (named shots and failures) go to
 | `self-hosted` | a self-hosted OpenAI-compatible endpoint (a fake one the runner starts): Overview, provider choice with the served models, a run on it |
 | `watch-external` | the viewer of an externally bound experiment is read-only until the binding closes |
 | `auth` | `OPERATOR_TOKEN`: 401 without it, `/healthz` open, one browser challenge, then the SPA works |
+| `research` | the Research demo: paired Complete/Ring view, what an agent had received, information-flow, batch and methods tabs |
 
 ## Writing a suite
 

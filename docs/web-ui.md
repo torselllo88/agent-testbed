@@ -18,6 +18,26 @@ checks, languages, …) is read from its configuration. When the run is over, **
 the viewer's header leads to the experiment page. The text, scenario and
 models are defined in [src/scenarios/demo.ts](../src/scenarios/demo.ts).
 
+## Research demo
+
+`#/research` (second in the sidebar): the pilot's development runs as a
+replay, for a reader who wants to see the instrument rather than a story.
+Three actions: pick a dev instance, compare its Complete and Ring runs side
+by side (18 turns each, same seeds, the proposal and the evaluator's verdict
+under each), open the information flow. On the compare tab, an agent's name
+on a turn opens what that agent had received before speaking in that graph,
+next to the count in the other graph. The information-flow tab lists the ten
+private facts with Operations' exposure state per graph (not exposed /
+exposed at turn N / incorrect / conflicting); a fact's row shows its path in
+both graphs — who stated it, who relayed it, supported or not, hedged — and
+where it stopped. A batch tab gives the pair outcomes, the per-class table and
+the technical context per graph; a methods tab the frozen configuration and
+the development gates. Data: `experiments/pilot-settlement/demo/` (see its
+README); the detector files are optional. Served by `GET /api/pilot-demo` and
+`GET /api/pilot-demo/instances/<id>` from
+[src/scenarios/pilotSettlement/demoData.ts](../src/scenarios/pilotSettlement/demoData.ts);
+page [src/gui/public/pages/research.js](../src/gui/public/pages/research.js).
+
 ## Scenario library
 
 Built-in scenarios come first, then your own. Each card has **Run**, **Edit**

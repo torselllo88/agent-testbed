@@ -1,0 +1,162 @@
+{
+ "instance": "DEV-04",
+ "kind": "discussion",
+ "replicate": 0,
+ "order": [
+  "ring",
+  "complete"
+ ],
+ "executions": [
+  {
+   "attempt": 0,
+   "startedAt": "2026-11-20T19:09:39.887Z",
+   "finishedAt": "2026-11-20T19:37:33.304Z",
+   "preload": {
+    "request": {
+     "model": "qwen3.8:27b",
+     "messages": [],
+     "stream": false,
+     "keep_alive": "30m",
+     "options": {
+      "num_ctx": 8192
+     }
+    },
+    "response": {
+     "model": "qwen3.8:27b",
+     "created_at": "2026-11-20T19:09:39.892281707Z",
+     "message": {
+      "role": "assistant",
+      "content": ""
+     },
+     "done": true,
+     "done_reason": "load"
+    },
+    "status": 200,
+    "ok": true
+   },
+   "snapshots": [
+    {
+     "when": "before_pair",
+     "taken_at": "2026-11-20T19:09:39.936Z",
+     "ollama_version": "0.33.2",
+     "ollama_ps": {
+      "models": [
+       {
+        "name": "qwen3.8:27b",
+        "model": "qwen3.8:27b",
+        "size": 17299071302,
+        "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+        "details": {
+         "parent_model": "",
+         "format": "gguf",
+         "family": "qwen35",
+         "families": [
+          "qwen35"
+         ],
+         "parameter_size": "27.3B",
+         "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-11-20T20:39:39.892402763+01:00",
+        "size_vram": 17299071302,
+        "context_length": 8192
+       }
+      ]
+     },
+     "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+     "normal": true,
+     "deviation": null
+    },
+    {
+     "when": "between_runs",
+     "taken_at": "2026-11-20T19:28:26.955Z",
+     "ollama_version": "0.33.2",
+     "ollama_ps": {
+      "models": [
+       {
+        "name": "qwen3.8:27b",
+        "model": "qwen3.8:27b",
+        "size": 17299071302,
+        "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+        "details": {
+         "parent_model": "",
+         "format": "gguf",
+         "family": "qwen35",
+         "families": [
+          "qwen35"
+         ],
+         "parameter_size": "27.3B",
+         "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-11-20T20:58:26.947910259+01:00",
+        "size_vram": 17299071302,
+        "context_length": 8192
+       }
+      ]
+     },
+     "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+     "normal": true,
+     "deviation": null
+    },
+    {
+     "when": "after_pair",
+     "taken_at": "2026-11-20T19:37:33.182Z",
+     "ollama_version": "0.33.2",
+     "ollama_ps": {
+      "models": [
+       {
+        "name": "qwen3.8:27b",
+        "model": "qwen3.8:27b",
+        "size": 17299071302,
+        "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+        "details": {
+         "parent_model": "",
+         "format": "gguf",
+         "family": "qwen35",
+         "families": [
+          "qwen35"
+         ],
+         "parameter_size": "27.3B",
+         "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-11-20T21:07:33.175182748+01:00",
+        "size_vram": 17299071302,
+        "context_length": 8192
+       }
+      ]
+     },
+     "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+     "normal": true,
+     "deviation": null
+    }
+   ],
+   "runs": [
+    {
+     "topology": "ring",
+     "experimentId": "9ae9fb87-c92a-4e0b-9fa7-f879066088b5",
+     "runId": "DEV-04-RING",
+     "logPath": "/home/nikita/pilot-logs/dev-2026-11-20/DEV-04-RING.json",
+     "outcome": "SUCCESS",
+     "validity": {
+      "status": "valid",
+      "detail": "SUCCESS: Committed proposal passed every evaluator check",
+      "flags": []
+     }
+    },
+    {
+     "topology": "complete",
+     "experimentId": "97bb63bc-5844-45b2-8782-a2afd20a213d",
+     "runId": "DEV-04-COMPLETE",
+     "logPath": "/home/nikita/pilot-logs/dev-2026-11-20/DEV-04-COMPLETE.json",
+     "outcome": "SUCCESS",
+     "validity": {
+      "status": "valid",
+      "detail": "SUCCESS: Committed proposal passed every evaluator check",
+      "flags": []
+     }
+    }
+   ],
+   "deviation": null
+  }
+ ],
+ "outcome": "valid"
+}

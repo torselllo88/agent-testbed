@@ -5,6 +5,7 @@ import { iconBatch, iconDashboard, iconExperiment, iconInfo, iconMoon, iconScena
 
 const NAV_ITEMS = [
   { route: "demo", href: "#/demo", icon: iconInfo, label: "About &amp; demo" },
+  { route: "research", href: "#/research", icon: iconBatch, label: "Research demo" },
   { route: "home", href: "#/", icon: iconDashboard, label: "Overview" },
   { route: "scenarios", href: "#/scenarios", icon: iconScenario, label: "Scenarios" },
   { route: "experiments", href: "#/experiments", icon: iconExperiment, label: "Experiments" },

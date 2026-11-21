@@ -28,7 +28,7 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { ExposureRepository } from "../persistence/exposureRepository.js";
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
-import { BUILTIN_SCENARIOS, DEMO, demoFacts } from "../scenarios/index.js";
+import { BUILTIN_SCENARIOS, DEMO, demoFacts, loadPilotDemoDataset, PILOT_DEMO_METHODS, pilotDemoBatchSummary, pilotDemoInstances, pilotDemoInstanceView } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
 import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson, serveStatic } from "./http.js";
 
@@ -55,6 +55,8 @@ export interface AppDeps {
   specLibrary?: SpecLibrary;
   /** Exposure labeling jobs, summaries and manual labeling (created from db/providers/evaluators when omitted). */
   exposure?: ExposureService;
+  /** The research demo's replay dataset directory (default: experiments/pilot-settlement/demo). */
+  pilotDemoDir?: string;
 }
 
 interface RouteContext {
@@ -329,6 +331,26 @@ const ROUTES: Route[] = [
       if (!scenario) throw new HttpError(404, `Demo scenario "${DEMO.scenario}" is not in the library`);
       const overrides: RunOverrides = { language: DEMO.language, ...(demoLive(ctx.deps) ? { models: DEMO.liveModels } : {}) };
       startExperiment(ctx, scenario.config, scenario, overrides);
+    },
+  },
+
+  // ------------------------------------------------------------ research demo (the pilot's dev runs as a replay; docs/scenarios/pilot-settlement.md)
+  {
+    method: "GET",
+    pattern: /^\/api\/pilot-demo$/,
+    handle: ({ res, deps }) => {
+      const ds = loadPilotDemoDataset(deps.pilotDemoDir);
+      if (!ds.instances.length) return sendJson(res, 200, { available: false, instances: [], batch: null, methods: PILOT_DEMO_METHODS });
+      sendJson(res, 200, { available: true, instances: pilotDemoInstances(ds), batch: pilotDemoBatchSummary(ds), methods: PILOT_DEMO_METHODS });
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/pilot-demo/instances/${ID}$`),
+    handle: ({ res, params, deps }) => {
+      const view = pilotDemoInstanceView(loadPilotDemoDataset(deps.pilotDemoDir), decodeRouteParam(params[0]!));
+      if (!view) throw new HttpError(404, "No paired runs for that instance in the replay dataset");
+      sendJson(res, 200, view);
     },
   },
 

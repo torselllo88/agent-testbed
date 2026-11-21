@@ -196,6 +196,13 @@ repeat, within each cache state, and normal snapshots pass; the cache state
 is classified by call order because the server does not report
 `prompt_eval_cached_count`.
 
+## The research demo
+
+The dev runs replayed in the web UI (`#/research`, [web-ui.md](../web-ui.md#research-demo)):
+paired Complete / Ring runs, what every agent had received before a turn, the
+detector's view of every fact's path. Data in `experiments/pilot-settlement/demo/`
+(`demoData.ts` derives the views).
+
 ## The exposure detector (gate G7)
 
 `npm run pilot -- detect --logs <dir> --base-url <url> --model <name> --out <dir>

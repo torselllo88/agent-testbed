@@ -1,0 +1,1165 @@
+{
+ "run_id": "DEV-08-RING",
+ "instance_id": "DEV-08",
+ "state_hash": "sha256:f8de82c1de7a6bd8119200656816bb5a06a724e25ca0eb911a265a0de0935bb3",
+ "class": "R-ELIG",
+ "subtype": null,
+ "condition": "discussion",
+ "topology": "ring",
+ "config_version": "0.3.2-draft",
+ "replicate": 0,
+ "software": {
+  "testbed_commit": "536ed8a9fe25b204591130483c94b7857eb88efc-dirty",
+  "file_hashes": {
+   "config/pilot_config.yaml": "3f9a3207031ebfae74dbc33cdd5cdb95aa0e2bc467293b55ece57da63ee704b1",
+   "tools/render_prompts.py": "bb496da031ae3894014f4cb4acf1eaec8b4edfea405da32e55c2a93a474eb41d",
+   "tools/settlement_task.py": "42825c6de47fb3171ff39e8bc5d5c39a8b2711b6ce13bdb47837a048441ef274",
+   "tools/seeds.py": "9db6495668f2ace25070da491d1f9855a55aaa489d0e0f06c26c9a9e77d2992a",
+   "prompts/detector_extraction.txt": "3f68acd3d2b01a5e44da879fbd3086994053b106cb05ee5463be90e9083b5062",
+   "prompts/final_user.txt": "d636018cec884f61bddd8e9ab0e5e29524a9b2f47adc38536734ddc17ff4e309",
+   "prompts/oracle_user.txt": "377c650c7b84f7e9225ede9d0cd8b935f83449131f564343213bc362fbc69da2",
+   "prompts/public_only_user.txt": "7934841009b8c7564b838cbcb610c762a693877b8ed0ce6410a9575bf66d99e6",
+   "prompts/public_rules.txt": "ad5797a5788b5426b45f076e97b1aba949bfca41936f3cee01a700ae2a25a7fa",
+   "prompts/system_agent.txt": "e65e97a130ef3bdab849bb9b0c232f90cf84ebdefe1ba060e5cead50874f018b",
+   "prompts/system_operations_solo.txt": "52a000cb9eff1aab40dcf7bb57e89d46eb95397d7f0044f3f1554e179faa3122",
+   "prompts/turn_user.txt": "79a547ff69de85c7f52c7abb3f0867e9cd9f64ce4137254d259f8a08b28bfc0e"
+  },
+  "ollama_version": "0.33.2"
+ },
+ "model": {
+  "name": "qwen3.8:27b",
+  "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813"
+ },
+ "generation": {
+  "think": true,
+  "options": {
+   "num_ctx": 8192,
+   "temperature": 1,
+   "top_p": 0.95,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 0,
+   "repeat_penalty": 1,
+   "seed": "per call (tools/seeds.py)"
+  },
+  "num_predict": {
+   "discussion": 2560,
+   "final": 2560
+  },
+  "keep_alive": "30m"
+ },
+ "K": 3,
+ "discussion_rounds": 3,
+ "speaking_order": [
+  "Settlement",
+  "Treasury",
+  "Contract",
+  "Operations",
+  "Compliance",
+  "Verification"
+ ],
+ "ring_positions": [
+  "Operations",
+  "Treasury",
+  "Verification",
+  "Settlement",
+  "Contract",
+  "Compliance"
+ ],
+ "attempt": 0,
+ "started_at": "2026-11-20T20:47:28.317Z",
+ "finished_at": "2026-11-20T21:00:05.347Z",
+ "calls": [
+  {
+   "call_index": 0,
+   "speaker": "Settlement",
+   "system_text": "You are Settlement, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Settlement):\nSettlement supports D1 / Rail A.\nSettlement supports D2 / Rail A.\nSettlement does not support D1 / Rail B.\nSettlement does not support D2 / Rail B.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Contract, Verification.\nYou receive messages from: Contract, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n(no messages yet)\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 663,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 372421352,
+     "user_text_sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+     "error": null,
+     "content": "Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.",
+     "thinking_sha256": "d093fa8f981bcc36534db58ffa1d852b438520f8c7039746a2a05598a3549d33",
+     "thinking_chars": 673,
+     "done_reason": "stop",
+     "prompt_eval_count": 678,
+     "prompt_eval_cached_count": null,
+     "eval_count": 265,
+     "content_tokens": 71,
+     "thinking_tokens": 194,
+     "total_duration_ns": 32205000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 372421352,
+   "call_type": "discussion",
+   "turn": 1,
+   "round": 1,
+   "position_in_round": 1,
+   "recipients": [
+    "Verification",
+    "Contract"
+   ],
+   "visible_history_turns": [],
+   "accepted_text": "Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.",
+   "visible_tokens": 71,
+   "flags": []
+  },
+  {
+   "call_index": 1,
+   "speaker": "Treasury",
+   "system_text": "You are Treasury, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Treasury):\nTreasury approval: approved.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Verification.\nYou receive messages from: Operations, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n(no messages yet)\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 620,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 8662112,
+     "user_text_sha256": "2a08f28632bf2560a1809cc789850e8af1e472ee24d9db2e3b2b4611773b3568",
+     "error": null,
+     "content": "Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.",
+     "thinking_sha256": "bbcc3ba18aef95c4481609464bbe0653930229b840f33dcb6086e353bf5be20d",
+     "thinking_chars": 656,
+     "done_reason": "stop",
+     "prompt_eval_count": 635,
+     "prompt_eval_cached_count": null,
+     "eval_count": 241,
+     "content_tokens": 74,
+     "thinking_tokens": 167,
+     "total_duration_ns": 29113000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 8662112,
+   "call_type": "discussion",
+   "turn": 2,
+   "round": 1,
+   "position_in_round": 2,
+   "recipients": [
+    "Operations",
+    "Verification"
+   ],
+   "visible_history_turns": [],
+   "accepted_text": "Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.",
+   "visible_tokens": 74,
+   "flags": []
+  },
+  {
+   "call_index": 2,
+   "speaker": "Contract",
+   "system_text": "You are Contract, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Contract):\nContract permits D1.\nContract does not permit D2.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Settlement.\nYou receive messages from: Compliance, Settlement.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 705,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 2111368000,
+     "user_text_sha256": "d10c904ba2114be095eb01653d5c104ab5c727600a0f8a56629b5a7ed3ea2da2",
+     "error": null,
+     "content": "Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.",
+     "thinking_sha256": "bc3495c055cac85d48bb0f8913460bd0de479d7c1b4573e18c324bfeda0af1af",
+     "thinking_chars": 545,
+     "done_reason": "stop",
+     "prompt_eval_count": 720,
+     "prompt_eval_cached_count": null,
+     "eval_count": 196,
+     "content_tokens": 69,
+     "thinking_tokens": 127,
+     "total_duration_ns": 27196000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 2111368000,
+   "call_type": "discussion",
+   "turn": 3,
+   "round": 1,
+   "position_in_round": 3,
+   "recipients": [
+    "Settlement",
+    "Compliance"
+   ],
+   "visible_history_turns": [
+    1
+   ],
+   "accepted_text": "Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.",
+   "visible_tokens": 69,
+   "flags": []
+  },
+  {
+   "call_index": 3,
+   "speaker": "Operations",
+   "system_text": "You are Operations, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYou hold no private task information.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Treasury.\nYou receive messages from: Compliance, Treasury.\nAfter round 3 you alone will be asked for the final proposal.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 704,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 153090061,
+     "user_text_sha256": "d425970c8aa66b6493cf3883a751da3dafe92d25ff799160b672ff52ecc33fd3",
+     "error": null,
+     "content": "Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.",
+     "thinking_sha256": "9bb332d45db4d07b5bc5df1d63a22ce19e8f0ec37dc98c74414e42d26763dfab",
+     "thinking_chars": 415,
+     "done_reason": "stop",
+     "prompt_eval_count": 719,
+     "prompt_eval_cached_count": null,
+     "eval_count": 176,
+     "content_tokens": 96,
+     "thinking_tokens": 80,
+     "total_duration_ns": 23137000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 153090061,
+   "call_type": "discussion",
+   "turn": 4,
+   "round": 1,
+   "position_in_round": 4,
+   "recipients": [
+    "Compliance",
+    "Treasury"
+   ],
+   "visible_history_turns": [
+    2
+   ],
+   "accepted_text": "Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.",
+   "visible_tokens": 96,
+   "flags": []
+  },
+  {
+   "call_index": 4,
+   "speaker": "Compliance",
+   "system_text": "You are Compliance, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Compliance):\nCompliance authorizes D2.\nCompliance does not authorize D1.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Contract.\nYou receive messages from: Operations, Contract.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Contract: Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Operations: Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 812,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 837798876,
+     "user_text_sha256": "f0975bd23130a7e69af3f079a193b1b15fd3a10a6c0f1c1825b86083e58d339f",
+     "error": null,
+     "content": "Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.",
+     "thinking_sha256": "3d0e5342f8ac455775947b7a5d7f62bbe96863cf18c8ac0d2ecafbf1ccf6e9c1",
+     "thinking_chars": 823,
+     "done_reason": "stop",
+     "prompt_eval_count": 827,
+     "prompt_eval_cached_count": null,
+     "eval_count": 304,
+     "content_tokens": 91,
+     "thinking_tokens": 213,
+     "total_duration_ns": 32884000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 837798876,
+   "call_type": "discussion",
+   "turn": 5,
+   "round": 1,
+   "position_in_round": 5,
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "visible_history_turns": [
+    3,
+    4
+   ],
+   "accepted_text": "Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.",
+   "visible_tokens": 91,
+   "flags": []
+  },
+  {
+   "call_index": 5,
+   "speaker": "Verification",
+   "system_text": "You are Verification, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Verification):\nVerification of M-204: accepted.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Settlement, Treasury.\nYou receive messages from: Settlement, Treasury.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n\nRound 1 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 777,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 349369275,
+     "user_text_sha256": "e773253c79bd4c64c8a5e8bec6d62ca82c1ddc64ea11b4c6e7fdcb43be2ccdf8",
+     "error": null,
+     "content": "Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.",
+     "thinking_sha256": "32cca8cbd0670dab8f7f943376666f64c36b66bfe9c4a28d295ab38d0ced6a49",
+     "thinking_chars": 374,
+     "done_reason": "stop",
+     "prompt_eval_count": 792,
+     "prompt_eval_cached_count": null,
+     "eval_count": 158,
+     "content_tokens": 66,
+     "thinking_tokens": 92,
+     "total_duration_ns": 20755000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 349369275,
+   "call_type": "discussion",
+   "turn": 6,
+   "round": 1,
+   "position_in_round": 6,
+   "recipients": [
+    "Treasury",
+    "Settlement"
+   ],
+   "visible_history_turns": [
+    1,
+    2
+   ],
+   "accepted_text": "Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.",
+   "visible_tokens": 66,
+   "flags": []
+  },
+  {
+   "call_index": 6,
+   "speaker": "Settlement",
+   "system_text": "You are Settlement, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Settlement):\nSettlement supports D1 / Rail A.\nSettlement supports D2 / Rail A.\nSettlement does not support D1 / Rail B.\nSettlement does not support D2 / Rail B.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Contract, Verification.\nYou receive messages from: Contract, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] You (Settlement): Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] Contract: Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Verification: Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 890,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 318591120,
+     "user_text_sha256": "0d461d3f30b3cc2865882f1ef0b76bffe700368733ed5335353687ce61e52e72",
+     "error": null,
+     "content": "Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.",
+     "thinking_sha256": "7b445c9fda987cdd3d64f5d55ec472c8437b3f54176fb87dccd902197ca414e9",
+     "thinking_chars": 2327,
+     "done_reason": "stop",
+     "prompt_eval_count": 905,
+     "prompt_eval_cached_count": null,
+     "eval_count": 678,
+     "content_tokens": 89,
+     "thinking_tokens": 589,
+     "total_duration_ns": 74288000000,
+     "load_duration_ns": 3000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 318591120,
+   "call_type": "discussion",
+   "turn": 7,
+   "round": 2,
+   "position_in_round": 1,
+   "recipients": [
+    "Verification",
+    "Contract"
+   ],
+   "visible_history_turns": [
+    1,
+    3,
+    6
+   ],
+   "accepted_text": "Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.",
+   "visible_tokens": 89,
+   "flags": []
+  },
+  {
+   "call_index": 7,
+   "speaker": "Treasury",
+   "system_text": "You are Treasury, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Treasury):\nTreasury approval: approved.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Verification.\nYou receive messages from: Operations, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] You (Treasury): Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] Operations: Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] Verification: Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 877,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1736952588,
+     "user_text_sha256": "9729fc0483b0e14b269d60511e5027dc842a54772558a83d2cfb6a853c5034e5",
+     "error": null,
+     "content": "Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.",
+     "thinking_sha256": "93ceab04073dd6a30796745439a15f7e4d37cd0997975989951e8f3203a758ef",
+     "thinking_chars": 1084,
+     "done_reason": "stop",
+     "prompt_eval_count": 892,
+     "prompt_eval_cached_count": null,
+     "eval_count": 352,
+     "content_tokens": 109,
+     "thinking_tokens": 243,
+     "total_duration_ns": 42304000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1736952588,
+   "call_type": "discussion",
+   "turn": 8,
+   "round": 2,
+   "position_in_round": 2,
+   "recipients": [
+    "Operations",
+    "Verification"
+   ],
+   "visible_history_turns": [
+    2,
+    4,
+    6
+   ],
+   "accepted_text": "Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.",
+   "visible_tokens": 109,
+   "flags": []
+  },
+  {
+   "call_index": 8,
+   "speaker": "Contract",
+   "system_text": "You are Contract, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Contract):\nContract permits D1.\nContract does not permit D2.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Settlement.\nYou receive messages from: Compliance, Settlement.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] You (Contract): Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Compliance: Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Settlement: Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 979,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1956595091,
+     "user_text_sha256": "68fa8e8e9a85e06dc083472ad32bb0a10b5910e612884b5dc8cd72b6adbd6d00",
+     "error": null,
+     "content": "Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.",
+     "thinking_sha256": "f1f326457a46cb3bfcc3ec1e4d28afb9efc9bc72be03f18e8db58cf7ed13886a",
+     "thinking_chars": 918,
+     "done_reason": "stop",
+     "prompt_eval_count": 994,
+     "prompt_eval_cached_count": null,
+     "eval_count": 315,
+     "content_tokens": 90,
+     "thinking_tokens": 225,
+     "total_duration_ns": 37968000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1956595091,
+   "call_type": "discussion",
+   "turn": 9,
+   "round": 2,
+   "position_in_round": 3,
+   "recipients": [
+    "Settlement",
+    "Compliance"
+   ],
+   "visible_history_turns": [
+    1,
+    3,
+    5,
+    7
+   ],
+   "accepted_text": "Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.",
+   "visible_tokens": 90,
+   "flags": []
+  },
+  {
+   "call_index": 9,
+   "speaker": "Operations",
+   "system_text": "You are Operations, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYou hold no private task information.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Treasury.\nYou receive messages from: Compliance, Treasury.\nAfter round 3 you alone will be asked for the final proposal.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] You (Operations): Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] Compliance: Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Treasury: Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1024,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 942380885,
+     "user_text_sha256": "b35508258eba2837499a96962115b5e2bc8c826a35f7727a301e216813a0a926",
+     "error": null,
+     "content": "Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.",
+     "thinking_sha256": "b572892f76aacff8852f2508d3473b0ea9f5cb93ec4b2fd31caffc86077b3765",
+     "thinking_chars": 2016,
+     "done_reason": "stop",
+     "prompt_eval_count": 1039,
+     "prompt_eval_cached_count": null,
+     "eval_count": 581,
+     "content_tokens": 111,
+     "thinking_tokens": 470,
+     "total_duration_ns": 68159000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 942380885,
+   "call_type": "discussion",
+   "turn": 10,
+   "round": 2,
+   "position_in_round": 4,
+   "recipients": [
+    "Compliance",
+    "Treasury"
+   ],
+   "visible_history_turns": [
+    2,
+    4,
+    5,
+    8
+   ],
+   "accepted_text": "Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.",
+   "visible_tokens": 111,
+   "flags": []
+  },
+  {
+   "call_index": 10,
+   "speaker": "Compliance",
+   "system_text": "You are Compliance, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Compliance):\nCompliance authorizes D2.\nCompliance does not authorize D1.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Contract.\nYou receive messages from: Operations, Contract.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Contract: Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Operations: Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] You (Compliance): Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Contract: Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.\n[Round 2] Operations: Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1130,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1025620327,
+     "user_text_sha256": "173bcfb98b27efc0be11b86bf3314a285a04e4c447ed989fad3e218c51f8bc32",
+     "error": null,
+     "content": "Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.",
+     "thinking_sha256": "bf3143ff31fbe3c5f4ab77776ff3424187c6fa1f3b3c016d501e4afe95d9127a",
+     "thinking_chars": 666,
+     "done_reason": "stop",
+     "prompt_eval_count": 1145,
+     "prompt_eval_cached_count": null,
+     "eval_count": 235,
+     "content_tokens": 64,
+     "thinking_tokens": 171,
+     "total_duration_ns": 32088000000,
+     "load_duration_ns": 3000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1025620327,
+   "call_type": "discussion",
+   "turn": 11,
+   "round": 2,
+   "position_in_round": 5,
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "visible_history_turns": [
+    3,
+    4,
+    5,
+    9,
+    10
+   ],
+   "accepted_text": "Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.",
+   "visible_tokens": 64,
+   "flags": []
+  },
+  {
+   "call_index": 11,
+   "speaker": "Verification",
+   "system_text": "You are Verification, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Verification):\nVerification of M-204: accepted.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Settlement, Treasury.\nYou receive messages from: Settlement, Treasury.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] You (Verification): Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n[Round 2] Settlement: Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.\n[Round 2] Treasury: Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n\nRound 2 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1066,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1490181086,
+     "user_text_sha256": "f2a65b252f9513e5b3f3ec91cb690eb6c8631cf412eebcd6550740c55f502788",
+     "error": null,
+     "content": "Reconfirming: M-204 verification is **accepted**, so rule 3 is clear. Combined with Treasury's approved status, neither hold rule can fire. Per Settlement's relay, Contract does not permit D2, making it ineligible under rule 1. The decision now hinges entirely on whether Compliance authorizes D1: if yes, D1 is eligible, Settlement supports D1/Rail A, and we execute D1/Rail A. If Compliance does not authorize D1, no destination is eligible and we reject with NO_ELIGIBLE_DESTINATION. Awaiting Compliance's position to finalize.",
+     "thinking_sha256": "3e218ce2a7b07e7e3ca6b39d8ae89d3f68a0cbd7a4a66f8ec6f173f1ce3092de",
+     "thinking_chars": 2353,
+     "done_reason": "stop",
+     "prompt_eval_count": 1081,
+     "prompt_eval_cached_count": null,
+     "eval_count": 736,
+     "content_tokens": 123,
+     "thinking_tokens": 613,
+     "total_duration_ns": 83675000000,
+     "load_duration_ns": 5000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1490181086,
+   "call_type": "discussion",
+   "turn": 12,
+   "round": 2,
+   "position_in_round": 6,
+   "recipients": [
+    "Treasury",
+    "Settlement"
+   ],
+   "visible_history_turns": [
+    1,
+    2,
+    6,
+    7,
+    8
+   ],
+   "accepted_text": "Reconfirming: M-204 verification is **accepted**, so rule 3 is clear. Combined with Treasury's approved status, neither hold rule can fire. Per Settlement's relay, Contract does not permit D2, making it ineligible under rule 1. The decision now hinges entirely on whether Compliance authorizes D1: if yes, D1 is eligible, Settlement supports D1/Rail A, and we execute D1/Rail A. If Compliance does not authorize D1, no destination is eligible and we reject with NO_ELIGIBLE_DESTINATION. Awaiting Compliance's position to finalize.",
+   "visible_tokens": 123,
+   "flags": []
+  },
+  {
+   "call_index": 12,
+   "speaker": "Settlement",
+   "system_text": "You are Settlement, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Settlement):\nSettlement supports D1 / Rail A.\nSettlement supports D2 / Rail A.\nSettlement does not support D1 / Rail B.\nSettlement does not support D2 / Rail B.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Contract, Verification.\nYou receive messages from: Contract, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] You (Settlement): Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] Contract: Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Verification: Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n[Round 2] You (Settlement): Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.\n[Round 2] Contract: Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.\n[Round 2] Verification: Reconfirming: M-204 verification is **accepted**, so rule 3 is clear. Combined with Treasury's approved status, neither hold rule can fire. Per Settlement's relay, Contract does not permit D2, making it ineligible under rule 1. The decision now hinges entirely on whether Compliance authorizes D1: if yes, D1 is eligible, Settlement supports D1/Rail A, and we execute D1/Rail A. If Compliance does not authorize D1, no destination is eligible and we reject with NO_ELIGIBLE_DESTINATION. Awaiting Compliance's position to finalize.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1219,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1745004762,
+     "user_text_sha256": "34049a6d76426b23156bb99c81422e8914c07c8765a7674a27685e4c958cff5b",
+     "error": null,
+     "content": "Acknowledging Contract's relay: Compliance does not authorize D1. I accept this as the basis for eligibility. With D2 lacking Contract permission and D1 lacking Compliance authorization, no destination satisfies Rule 1. My route support for D1/Rail A becomes moot. I concur: reject / NO_ELIGIBLE_DESTINATION.",
+     "thinking_sha256": "8cde2f7e0a4da6f7e5729eb6636ef60fe2adb42d2e45bed028a6bfb8b21d4b1d",
+     "thinking_chars": 2221,
+     "done_reason": "stop",
+     "prompt_eval_count": 1234,
+     "prompt_eval_cached_count": null,
+     "eval_count": 558,
+     "content_tokens": 67,
+     "thinking_tokens": 491,
+     "total_duration_ns": 71239000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1745004762,
+   "call_type": "discussion",
+   "turn": 13,
+   "round": 3,
+   "position_in_round": 1,
+   "recipients": [
+    "Verification",
+    "Contract"
+   ],
+   "visible_history_turns": [
+    1,
+    3,
+    6,
+    7,
+    9,
+    12
+   ],
+   "accepted_text": "Acknowledging Contract's relay: Compliance does not authorize D1. I accept this as the basis for eligibility. With D2 lacking Contract permission and D1 lacking Compliance authorization, no destination satisfies Rule 1. My route support for D1/Rail A becomes moot. I concur: reject / NO_ELIGIBLE_DESTINATION.",
+   "visible_tokens": 67,
+   "flags": []
+  },
+  {
+   "call_index": 13,
+   "speaker": "Treasury",
+   "system_text": "You are Treasury, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Treasury):\nTreasury approval: approved.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Verification.\nYou receive messages from: Operations, Verification.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] You (Treasury): Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] Operations: Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] Verification: Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n[Round 2] You (Treasury): Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n[Round 2] Operations: Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.\n[Round 2] Verification: Reconfirming: M-204 verification is **accepted**, so rule 3 is clear. Combined with Treasury's approved status, neither hold rule can fire. Per Settlement's relay, Contract does not permit D2, making it ineligible under rule 1. The decision now hinges entirely on whether Compliance authorizes D1: if yes, D1 is eligible, Settlement supports D1/Rail A, and we execute D1/Rail A. If Compliance does not authorize D1, no destination is eligible and we reject with NO_ELIGIBLE_DESTINATION. Awaiting Compliance's position to finalize.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1246,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 1894474646,
+     "user_text_sha256": "7bfd8120fe0ed62af8f688061dcbf8e1edaf6c1d151b853b9cbd816fa648ce47",
+     "error": null,
+     "content": "Treasury final confirmation: approval for M-204 is **approved**, rule 4 cleared. Based on the evidence in the thread — Contract permits D1 only, Compliance authorizes D2 only — no destination satisfies both conditions, so Rule 1 fires first. The correct outcome is **reject / NO_ELIGIBLE_DESTINATION**. Rules 3–5 are unreachable. I fully support Operations issuing that final proposal. No further information from Treasury.",
+     "thinking_sha256": "357fbb785b0d523b1238c33d8aeab091d503dfc246cdfca70d79484513e64733",
+     "thinking_chars": 1531,
+     "done_reason": "stop",
+     "prompt_eval_count": 1261,
+     "prompt_eval_cached_count": null,
+     "eval_count": 498,
+     "content_tokens": 92,
+     "thinking_tokens": 406,
+     "total_duration_ns": 52335000000,
+     "load_duration_ns": 5000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 1894474646,
+   "call_type": "discussion",
+   "turn": 14,
+   "round": 3,
+   "position_in_round": 2,
+   "recipients": [
+    "Operations",
+    "Verification"
+   ],
+   "visible_history_turns": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    12
+   ],
+   "accepted_text": "Treasury final confirmation: approval for M-204 is **approved**, rule 4 cleared. Based on the evidence in the thread — Contract permits D1 only, Compliance authorizes D2 only — no destination satisfies both conditions, so Rule 1 fires first. The correct outcome is **reject / NO_ELIGIBLE_DESTINATION**. Rules 3–5 are unreachable. I fully support Operations issuing that final proposal. No further information from Treasury.",
+   "visible_tokens": 92,
+   "flags": []
+  },
+  {
+   "call_index": 14,
+   "speaker": "Contract",
+   "system_text": "You are Contract, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Contract):\nContract permits D1.\nContract does not permit D2.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Settlement.\nYou receive messages from: Compliance, Settlement.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] You (Contract): Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Compliance: Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Settlement: Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.\n[Round 2] You (Contract): Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.\n[Round 2] Compliance: Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.\n[Round 3] Settlement: Acknowledging Contract's relay: Compliance does not authorize D1. I accept this as the basis for eligibility. With D2 lacking Contract permission and D1 lacking Compliance authorization, no destination satisfies Rule 1. My route support for D1/Rail A becomes moot. I concur: reject / NO_ELIGIBLE_DESTINATION.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1226,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 203502139,
+     "user_text_sha256": "30d1bb851281c58032dca098472184ea33c2b596d47119e29d463b8de2f87c0f",
+     "error": null,
+     "content": "Contract final: I permit D1 only, not D2. Compliance authorizes D2 only, not D1. No destination satisfies Rule 1. All agents are aligned on reject / NO_ELIGIBLE_DESTINATION. No further discussion needed.",
+     "thinking_sha256": "9e60cca122da9a1cee8be7a4b9eb5c42a58ca2c31fe256f4754130e54b4150c7",
+     "thinking_chars": 561,
+     "done_reason": "stop",
+     "prompt_eval_count": 1241,
+     "prompt_eval_cached_count": null,
+     "eval_count": 184,
+     "content_tokens": 50,
+     "thinking_tokens": 134,
+     "total_duration_ns": 22703000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 203502139,
+   "call_type": "discussion",
+   "turn": 15,
+   "round": 3,
+   "position_in_round": 3,
+   "recipients": [
+    "Settlement",
+    "Compliance"
+   ],
+   "visible_history_turns": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13
+   ],
+   "accepted_text": "Contract final: I permit D1 only, not D2. Compliance authorizes D2 only, not D1. No destination satisfies Rule 1. All agents are aligned on reject / NO_ELIGIBLE_DESTINATION. No further discussion needed.",
+   "visible_tokens": 50,
+   "flags": []
+  },
+  {
+   "call_index": 15,
+   "speaker": "Operations",
+   "system_text": "You are Operations, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYou hold no private task information.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Treasury.\nYou receive messages from: Compliance, Treasury.\nAfter round 3 you alone will be asked for the final proposal.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] You (Operations): Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] Compliance: Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Treasury: Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n[Round 2] You (Operations): Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.\n[Round 2] Compliance: Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.\n[Round 3] Treasury: Treasury final confirmation: approval for M-204 is **approved**, rule 4 cleared. Based on the evidence in the thread — Contract permits D1 only, Compliance authorizes D2 only — no destination satisfies both conditions, so Rule 1 fires first. The correct outcome is **reject / NO_ELIGIBLE_DESTINATION**. Rules 3–5 are unreachable. I fully support Operations issuing that final proposal. No further information from Treasury.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1315,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 830789952,
+     "user_text_sha256": "0dc432402491218500d723aaf31098fe5b671339cf83b8102805273bbf88618c",
+     "error": null,
+     "content": "All inputs confirmed. Rule 1 fires decisively: D1 is permitted but not authorized; D2 is authorized but not permitted. No eligible destination exists, so the decision is **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. Treasury's approval and Verification's acceptance are noted but moot. I will issue this as the final proposal immediately after this round closes. Thank you all for clear confirmations.",
+     "thinking_sha256": "99fd290a3eb443dee46dc0320faede1fee33e372238930c1d4e51d0b6555bb5e",
+     "thinking_chars": 753,
+     "done_reason": "stop",
+     "prompt_eval_count": 1330,
+     "prompt_eval_cached_count": null,
+     "eval_count": 265,
+     "content_tokens": 88,
+     "thinking_tokens": 177,
+     "total_duration_ns": 31044000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 830789952,
+   "call_type": "discussion",
+   "turn": 16,
+   "round": 3,
+   "position_in_round": 4,
+   "recipients": [
+    "Compliance",
+    "Treasury"
+   ],
+   "visible_history_turns": [
+    2,
+    4,
+    5,
+    8,
+    10,
+    11,
+    14
+   ],
+   "accepted_text": "All inputs confirmed. Rule 1 fires decisively: D1 is permitted but not authorized; D2 is authorized but not permitted. No eligible destination exists, so the decision is **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. Treasury's approval and Verification's acceptance are noted but moot. I will issue this as the final proposal immediately after this round closes. Thank you all for clear confirmations.",
+   "visible_tokens": 88,
+   "flags": []
+  },
+  {
+   "call_index": 16,
+   "speaker": "Compliance",
+   "system_text": "You are Compliance, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Compliance):\nCompliance authorizes D2.\nCompliance does not authorize D1.\nThis list is complete.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Operations, Contract.\nYou receive messages from: Operations, Contract.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Contract: Contract here. I permit D1 only; I do not permit D2. So per Rule 1, D2 is not eligible regardless of Compliance's authorization. D1 is permitted on my side and will be eligible only if Compliance also authorizes it. I'll wait for Compliance to confirm before we can proceed to route or verification checks.\n[Round 1] Operations: Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] You (Compliance): Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Contract: Contract confirming: I permit D1 only, not D2. Compliance already stated in Round 1 that they do not authorize D1. Therefore D1 fails Rule 1 (lacks Compliance authorization) and D2 fails Rule 1 (lacks my permission). No destination is eligible, so the decision is settled: reject / NO_ELIGIBLE_DESTINATION. No route, verification, or approval checks apply. Please align on this outcome.\n[Round 2] Operations: Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.\n[Round 2] You (Compliance): Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.\n[Round 3] Contract: Contract final: I permit D1 only, not D2. Compliance authorizes D2 only, not D1. No destination satisfies Rule 1. All agents are aligned on reject / NO_ELIGIBLE_DESTINATION. No further discussion needed.\n[Round 3] Operations: All inputs confirmed. Rule 1 fires decisively: D1 is permitted but not authorized; D2 is authorized but not permitted. No eligible destination exists, so the decision is **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. Treasury's approval and Verification's acceptance are noted but moot. I will issue this as the final proposal immediately after this round closes. Thank you all for clear confirmations.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1358,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 2090961945,
+     "user_text_sha256": "14be50db1bb61133206b268a1885887d719225d5ce2392919af5694ee101f3cb",
+     "error": null,
+     "content": "Compliance final: my position is unchanged — D2 authorized, D1 not. Combined with Contract's confirmed list (D1 only), Rule 1 fires and the outcome is reject / NO_ELIGIBLE_DESTINATION. I concur with Operations and all other agents. No further information is needed from me.",
+     "thinking_sha256": "7252a84f8a29e7949262ec7b22cdc6e58bd8ce6ad0570639c1f88eca5a96688c",
+     "thinking_chars": 327,
+     "done_reason": "stop",
+     "prompt_eval_count": 1373,
+     "prompt_eval_cached_count": null,
+     "eval_count": 138,
+     "content_tokens": 63,
+     "thinking_tokens": 75,
+     "total_duration_ns": 20759000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 2090961945,
+   "call_type": "discussion",
+   "turn": 17,
+   "round": 3,
+   "position_in_round": 5,
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "visible_history_turns": [
+    3,
+    4,
+    5,
+    9,
+    10,
+    11,
+    15,
+    16
+   ],
+   "accepted_text": "Compliance final: my position is unchanged — D2 authorized, D1 not. Combined with Contract's confirmed list (D1 only), Rule 1 fires and the outcome is reject / NO_ELIGIBLE_DESTINATION. I concur with Operations and all other agents. No further information is needed from me.",
+   "visible_tokens": 63,
+   "flags": []
+  },
+  {
+   "call_index": 17,
+   "speaker": "Verification",
+   "system_text": "You are Verification, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYour private information (Verification):\nVerification of M-204: accepted.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Settlement, Treasury.\nYou receive messages from: Settlement, Treasury.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION SO FAR (messages you sent or received, oldest first):\n[Round 1] Settlement: Settlement here. I support D1/Rail A and D2/Rail A. I do not support either destination on Rail B. So for the requested D2, I can execute on Rail A. If D2 were not eligible, I could also execute D1 on Rail A. I'm ready for Contract and Compliance input to determine eligibility.\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] You (Verification): Verification here. My status for milestone M-204 is **accepted** — so rule 3 (VERIFICATION_PENDING) will not trigger. Combined with Treasury's confirmed approval, both hold conditions are cleared. I'm awaiting Contract and Compliance input on destination eligibility to confirm the final decision. No further information from my side.\n[Round 2] Settlement: Noted on Contract: D2 is not permitted, so the requested destination is not eligible. The only possible path is D1, which I can execute on Rail A. Verification is accepted and Treasury approval is confirmed per Verification's relay, so neither hold rule triggers. The sole remaining question is whether Compliance authorizes D1; if yes, we execute D1/Rail A. I'm ready to finalize once Compliance's position is confirmed.\n[Round 2] Treasury: Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n[Round 2] You (Verification): Reconfirming: M-204 verification is **accepted**, so rule 3 is clear. Combined with Treasury's approved status, neither hold rule can fire. Per Settlement's relay, Contract does not permit D2, making it ineligible under rule 1. The decision now hinges entirely on whether Compliance authorizes D1: if yes, D1 is eligible, Settlement supports D1/Rail A, and we execute D1/Rail A. If Compliance does not authorize D1, no destination is eligible and we reject with NO_ELIGIBLE_DESTINATION. Awaiting Compliance's position to finalize.\n[Round 3] Settlement: Acknowledging Contract's relay: Compliance does not authorize D1. I accept this as the basis for eligibility. With D2 lacking Contract permission and D1 lacking Compliance authorization, no destination satisfies Rule 1. My route support for D1/Rail A becomes moot. I concur: reject / NO_ELIGIBLE_DESTINATION.\n[Round 3] Treasury: Treasury final confirmation: approval for M-204 is **approved**, rule 4 cleared. Based on the evidence in the thread — Contract permits D1 only, Compliance authorizes D2 only — no destination satisfies both conditions, so Rule 1 fires first. The correct outcome is **reject / NO_ELIGIBLE_DESTINATION**. Rules 3–5 are unreachable. I fully support Operations issuing that final proposal. No further information from Treasury.\n\nRound 3 of 3. It is your turn. Write your next message.",
+   "prompt_tokens_counted": 1374,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 2055328811,
+     "user_text_sha256": "9c21b18c73d75002c2857fd520be386ec93285b45440437531330b40bf0abd1b",
+     "error": null,
+     "content": "Final confirmation: M-204 verification is **accepted**, rule 3 cleared. With no destination satisfying both Contract permission and Compliance authorization (D1 lacks Compliance, D2 lacks Contract), Rule 1 fires decisively. I fully concur with the outcome: **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. No further input from Verification.",
+     "thinking_sha256": "05b176db8ff330cc5405ba495a892ba821a0e28cb94845b318c101a6878d4ad4",
+     "thinking_chars": 857,
+     "done_reason": "stop",
+     "prompt_eval_count": 1389,
+     "prompt_eval_cached_count": null,
+     "eval_count": 296,
+     "content_tokens": 78,
+     "thinking_tokens": 218,
+     "total_duration_ns": 34027000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 2055328811,
+   "call_type": "discussion",
+   "turn": 18,
+   "round": 3,
+   "position_in_round": 6,
+   "recipients": [
+    "Treasury",
+    "Settlement"
+   ],
+   "visible_history_turns": [
+    1,
+    2,
+    6,
+    7,
+    8,
+    12,
+    13,
+    14
+   ],
+   "accepted_text": "Final confirmation: M-204 verification is **accepted**, rule 3 cleared. With no destination satisfying both Contract permission and Compliance authorization (D1 lacks Compliance, D2 lacks Contract), Rule 1 fires decisively. I fully concur with the outcome: **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. No further input from Verification.",
+   "visible_tokens": 78,
+   "flags": []
+  },
+  {
+   "call_index": 18,
+   "speaker": "Operations",
+   "system_text": "You are Operations, one of six agents preparing a settlement decision.\n\nPUBLIC TASK RULES\n\nRequest: settle amount 12000 for milestone M-204 to destination D2.\nThe amount and the milestone are fixed context and do not affect the decision.\n\nDestinations: D1, D2. Rails: A, B.\n\nPrivate information. Each item is known to exactly one agent:\n- Contract knows which destinations it permits (any subset of D1, D2).\n- Compliance knows which destinations it authorizes (any subset of D1, D2).\n- Settlement knows which destination/rail routes it supports (any subset of D1/A, D1/B, D2/A, D2/B).\n- Verification knows whether verification of milestone M-204 is accepted or pending.\n- Treasury knows whether approval is approved or pending.\nEach private list is complete: a destination or route that is not listed is not permitted, not authorized or not supported.\n\nDecision rules. They apply in this order; the first rule that fires decides.\n1. A destination is eligible iff Contract permits it and Compliance authorizes it. If no destination is eligible: reject / NO_ELIGIBLE_DESTINATION.\n2. An eligible destination is executable iff Settlement supports at least one rail for it. If eligible destinations exist but none is executable: reject / NO_ROUTE.\n3. If verification is pending: hold / VERIFICATION_PENDING.\n4. Otherwise, if approval is pending: hold / APPROVAL_PENDING.\n5. Otherwise execute: use the requested destination if it is executable, otherwise the other executable destination. For the selected destination, prefer Rail A over Rail B.\nOnly one settlement is executed.\n\nFinal proposal. Exactly one of: execute (with a destination and a rail), hold (with its reason) or reject (with its reason). There is no \"insufficient information\" outcome.\n\nYou hold no private task information.\n\nCOMMUNICATION\nSix agents take part: Operations, Contract, Compliance, Settlement, Verification, Treasury.\nThe discussion has exactly 3 rounds. In every round each agent speaks once, always in the same order.\nAfter round 3, Operations alone returns the final proposal.\nYour messages are delivered immediately to: Compliance, Treasury.\nYou receive messages from: Compliance, Treasury.\nAfter round 3 you alone will be asked for the final proposal.\n\nYOUR TASK IN THE DISCUSSION\n- Help the group reach the correct settlement decision.\n- Share information you consider useful.\n- Distinguish known information from inference.\n- Do not invent missing facts.\nYou may relay information or conclusions received from others. Only Operations produces the final structured proposal.\n\nMESSAGE FORMAT\nWrite plain text. Keep each message concise: no more than four sentences and under 100 words.",
+   "user_text": "DISCUSSION (messages you sent or received, oldest first):\n[Round 1] Treasury: Treasury here. My approval status for milestone M-204 is **approved** — so rule 4 (APPROVAL_PENDING) will not trigger. I have no other private information to share. I'm available to confirm the final proposal if needed. Awaiting input from Contract, Compliance, Settlement, and Verification on eligibility, routing, and verification status.\n[Round 1] You (Operations): Thanks, Treasury — approval confirmed as approved, so rule 4 is clear. I hold no private information myself. To proceed, I need: (1) Contract — which destinations are permitted? (2) Compliance — which destinations are authorized? (3) Settlement — which destination/rail routes are supported? (4) Verification — is M-204 accepted or pending? Once I have these, I can apply the decision rules in order and produce the final proposal.\n[Round 1] Compliance: Compliance here. I authorize D2 and do not authorize D1; that list is complete. Combining with Contract's position (permits D1 only, not D2), neither destination satisfies Rule 1: D1 fails on my authorization, D2 fails on Contract's permission. The correct outcome is reject / NO_ELIGIBLE_DESTINATION. No further checks on routes, verification, or approval are needed since Rule 1 already fires.\n[Round 2] Treasury: Treasury confirming: approval for M-204 is **approved**, unchanged. With Verification also confirming **accepted**, both hold rules (3 and 4) are definitively cleared. The outcome now depends entirely on rules 1–2: I need Contract, Compliance, and Settlement to share their private lists so the group can determine eligibility and executability. If D2 is eligible and has a supported rail, we execute there; otherwise we fall back to the other executable destination, preferring Rail A. Standing by for those three inputs.\n[Round 2] You (Operations): Thanks, Treasury. Based on Compliance's direct statement (D2 authorized, D1 not) and Compliance's relay of Contract's position (D1 permitted, D2 not), Rule 1 fires: no destination is both permitted and authorized → reject / NO_ELIGIBLE_DESTINATION. I'd still like Contract to confirm its own list directly before I finalize, but the evidence points clearly to rejection. Verification (accepted) and Approval (approved) are moot since we never reach Rules 3–5. Awaiting Contract's Round 2 confirmation.\n[Round 2] Compliance: Compliance confirming my position: I authorize D2 only; D1 is not authorized. Combined with Contract's confirmed permission list (D1 only), neither destination passes Rule 1. The decision is settled: reject / NO_ELIGIBLE_DESTINATION. No further information is needed from any agent to finalize this outcome.\n[Round 3] Treasury: Treasury final confirmation: approval for M-204 is **approved**, rule 4 cleared. Based on the evidence in the thread — Contract permits D1 only, Compliance authorizes D2 only — no destination satisfies both conditions, so Rule 1 fires first. The correct outcome is **reject / NO_ELIGIBLE_DESTINATION**. Rules 3–5 are unreachable. I fully support Operations issuing that final proposal. No further information from Treasury.\n[Round 3] You (Operations): All inputs confirmed. Rule 1 fires decisively: D1 is permitted but not authorized; D2 is authorized but not permitted. No eligible destination exists, so the decision is **reject / NO_ELIGIBLE_DESTINATION**. Rules 2–5 are unreachable. Treasury's approval and Verification's acceptance are noted but moot. I will issue this as the final proposal immediately after this round closes. Thank you all for clear confirmations.\n[Round 3] Compliance: Compliance final: my position is unchanged — D2 authorized, D1 not. Combined with Contract's confirmed list (D1 only), Rule 1 fires and the outcome is reject / NO_ELIGIBLE_DESTINATION. I concur with Operations and all other agents. No further information is needed from me.\n\nThe discussion is over. Return the final proposal now.\nSome information may not have reached you; you must still return exactly one proposal, based on the messages above and the public rules.\nReturn only one JSON object with exactly these fields:\n{\"action\": \"execute\" | \"hold\" | \"reject\", \"destination\": \"D1\" | \"D2\" | null, \"rail\": \"A\" | \"B\" | null, \"reason\": \"NO_ELIGIBLE_DESTINATION\" | \"NO_ROUTE\" | \"VERIFICATION_PENDING\" | \"APPROVAL_PENDING\" | null}\nFor execute: destination and rail are set and reason is null.\nFor hold and reject: destination and rail are null and reason is set.",
+   "prompt_tokens_counted": 1618,
+   "token_counter": "tokenizer",
+   "budget_ok": true,
+   "attempts": [
+    {
+     "attempt_index": 0,
+     "kind": "initial",
+     "seed": 563485868,
+     "user_text_sha256": "10902ed02165cf7f121c40504a1be3c828ecea39fa6229ece464afd2e1ff8f81",
+     "error": null,
+     "content": "{\"action\": \"reject\", \"destination\": null, \"rail\": null, \"reason\": \"NO_ELIGIBLE_DESTINATION\"}",
+     "thinking_sha256": "8aea1cb1cba9dc25df74d031741b08b1fa11981df6a58c3984bbbd0e072e823a",
+     "thinking_chars": 582,
+     "done_reason": "stop",
+     "prompt_eval_count": 1633,
+     "prompt_eval_cached_count": null,
+     "eval_count": 167,
+     "content_tokens": 27,
+     "thinking_tokens": 140,
+     "total_duration_ns": 21068000000,
+     "load_duration_ns": 4000000,
+     "accepted": true,
+     "model_failure": false
+    }
+   ],
+   "seed": 563485868,
+   "call_type": "final",
+   "turn": null,
+   "round": null,
+   "position_in_round": null,
+   "recipients": [],
+   "visible_history_turns": [
+    2,
+    4,
+    5,
+    8,
+    10,
+    11,
+    14,
+    16,
+    17
+   ],
+   "accepted_text": null,
+   "visible_tokens": null,
+   "flags": []
+  }
+ ],
+ "final": {
+  "raw_content": "{\"action\": \"reject\", \"destination\": null, \"rail\": null, \"reason\": \"NO_ELIGIBLE_DESTINATION\"}",
+  "parsed": {
+   "action": "reject",
+   "destination": null,
+   "rail": null,
+   "reason": "NO_ELIGIBLE_DESTINATION"
+  },
+  "schema_valid": true,
+  "extra_text": false,
+  "canonical": {
+   "action": "reject",
+   "destination": null,
+   "rail": null,
+   "reason": "NO_ELIGIBLE_DESTINATION"
+  },
+  "correct_exact": true,
+  "field_correct": {
+   "action": true,
+   "destination": true,
+   "rail": true,
+   "reason": true
+  },
+  "final_model_failure": false
+ },
+ "validity": {
+  "status": "valid",
+  "detail": "SUCCESS: Committed proposal passed every evaluator check",
+  "flags": []
+ },
+ "thinking_log": "DEV-08-RING.thinking.json",
+ "environment_snapshots": [
+  {
+   "when": "before_pair",
+   "taken_at": "2026-11-20T20:47:28.237Z",
+   "ollama_version": "0.33.2",
+   "ollama_ps": {
+    "models": [
+     {
+      "name": "qwen3.8:27b",
+      "model": "qwen3.8:27b",
+      "size": 17299071302,
+      "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+      "details": {
+       "parent_model": "",
+       "format": "gguf",
+       "family": "qwen35",
+       "families": [
+        "qwen35"
+       ],
+       "parameter_size": "27.3B",
+       "quantization_level": "Q4_K_M"
+      },
+      "expires_at": "2026-11-20T22:17:28.23684741+01:00",
+      "size_vram": 17299071302,
+      "context_length": 8192
+     }
+    ]
+   },
+   "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+   "normal": true,
+   "deviation": null
+  },
+  {
+   "when": "between_runs",
+   "taken_at": "2026-11-20T21:00:05.351Z",
+   "ollama_version": "0.33.2",
+   "ollama_ps": {
+    "models": [
+     {
+      "name": "qwen3.8:27b",
+      "model": "qwen3.8:27b",
+      "size": 17299071302,
+      "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+      "details": {
+       "parent_model": "",
+       "format": "gguf",
+       "family": "qwen35",
+       "families": [
+        "qwen35"
+       ],
+       "parameter_size": "27.3B",
+       "quantization_level": "Q4_K_M"
+      },
+      "expires_at": "2026-11-20T22:30:05.344944407+01:00",
+      "size_vram": 17299071302,
+      "context_length": 8192
+     }
+    ]
+   },
+   "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+   "normal": true,
+   "deviation": null
+  },
+  {
+   "when": "after_pair",
+   "taken_at": "2026-11-20T21:08:14.113Z",
+   "ollama_version": "0.33.2",
+   "ollama_ps": {
+    "models": [
+     {
+      "name": "qwen3.8:27b",
+      "model": "qwen3.8:27b",
+      "size": 17299071302,
+      "digest": "aaee06c39dcf2437cde036998d960e1fc1494b8191be7cc9657d01e509097813",
+      "details": {
+       "parent_model": "",
+       "format": "gguf",
+       "family": "qwen35",
+       "families": [
+        "qwen35"
+       ],
+       "parameter_size": "27.3B",
+       "quantization_level": "Q4_K_M"
+      },
+      "expires_at": "2026-11-20T22:38:14.107009373+01:00",
+      "size_vram": 17299071302,
+      "context_length": 8192
+     }
+    ]
+   },
+   "nvidia_smi": "index, name, memory.used [MiB], memory.total [MiB], utilization.gpu [%]\n0, NVIDIA A30, 20331 MiB, 24576 MiB, 99 %\npid, process_name, used_gpu_memory [MiB]\n3032025, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3032896, /home/darja/.pyenv/versions/python-3.12/bin/python, 320 MiB\n3034117, /home/darja/.pyenv/versions/python-3.12/bin/python, 322 MiB\n3034422, /home/darja/.pyenv/versions/python-3.12/bin/python, 324 MiB\n3036510, /home/darja/.pyenv/versions/python-3.12/bin/python, 328 MiB\n3036757, /home/darja/.pyenv/versions/python-3.12/bin/python, 340 MiB\n3047622, /home/atomasevic/.local/lib/ollama/llama-server, 18334 MiB",
+   "normal": true,
+   "deviation": null
+  }
+ ],
+ "preload": {
+  "request": {
+   "model": "qwen3.8:27b",
+   "messages": [],
+   "stream": false,
+   "keep_alive": "30m",
+   "options": {
+    "num_ctx": 8192
+   }
+  },
+  "response": {
+   "model": "qwen3.8:27b",
+   "created_at": "2026-11-20T20:47:28.236760727Z",
+   "message": {
+    "role": "assistant",
+    "content": ""
+   },
+   "done": true,
+   "done_reason": "load"
+  },
+  "http_status": 200,
+  "ok": true
+ },
+ "testbed": {
+  "experiment_id": "17a86e27-cb96-44c4-a80c-9b8a2fe790bb",
+  "batch_id": null,
+  "condition_key": null,
+  "repetition": null,
+  "config_hash": "a141045c8a568fbe8ff937f0b55c3f1b33bbbb1019baa3f8e55fe789261c24d5",
+  "task_definition_hash": "d18614d8abe01124976ae598e8c6e3e64c0baca4fa1a99a8005c7f5fcb2aa803",
+  "protocol_fingerprint": "a216314465bc0563",
+  "outcome": "SUCCESS",
+  "status": "SUCCESS"
+ }
+}

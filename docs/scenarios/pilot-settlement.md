@@ -196,6 +196,29 @@ repeat, within each cache state, and normal snapshots pass; the cache state
 is classified by call order because the server does not report
 `prompt_eval_cached_count`.
 
+## The exposure detector (gate G7)
+
+`npm run pilot -- detect --logs <dir> --base-url <url> --model <name> --out <dir>
+[--runs <ids>] [--postprocess-only]` is the plan's §8 detector
+(`src/scenarios/pilotSettlement/detector/`): for every accepted discussion
+message of every discussion log in the directory, the LLM extraction into the
+bundle's closed schema (`prompts/detector_extraction.txt`,
+`schemas/detector_extraction.schema.json`; the message and its sender's role
+only — never the topology, class or outcome) with the pilot model, thinking
+off, temperature 0, seed 20261122 and Ollama's structured output bound to the
+schema (`detect.ts`); then the deterministic post-processing of
+`tools/exposure_postprocess.py`, ported one to one in `postprocess.ts`:
+attribution (E3), expansion (E4), truth, source, grounding and support by
+enumeration over the 1024 public states (E5), Operations' exposure states
+(E6) and the information levels and support category of plan §9. One
+`<run_id>.detector.json` per run (`schemas/detector_output.schema.json`),
+the extractions cached under `extractions/` (a rerun with
+`--postprocess-only` never calls the model), and `summary.json` with the
+hedged share of fact items (§8.3, spec issue S1 above 10 %), the categories
+per topology and the claim counts. The port is checked against the bundle's
+own tests and, when a Python ≥ 3.7 is on the path, against the reference
+implementation itself on synthetic runs (`tests/scenarios/pilotDetector.test.ts`).
+
 `npm run pilot -- calibrate --base-url <url> --model <name> --out <file>
 [--worst-case] [--num-predict <n>]` is gate G2 against the real server (plan
 §4): the model record compared with the frozen one, every system prompt
@@ -234,11 +257,13 @@ itself is the unit test above.
 | `stubScripts.ts` | the probe |
 | `config.ts` | the built-in config |
 | `runLog.ts` | the run-log export |
-| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate | pairs | determinism` |
+| `src/cli/pilot.ts` | `npm run pilot -- export | validate | calibrate | pairs | determinism | detect` |
 | `tokenizer.ts` | the model's tokenizer from the show record; `tokenizerCounter` |
 | `calibrate.ts` | gate G2 calibration against the server (`npm run pilot -- calibrate`) |
 | `pairRunner.ts` | the pair runner: preload, snapshots, deviation re-execution (`npm run pilot -- pairs`), discussion and controls pairs |
 | `determinism.ts` | gate G6 (`npm run pilot -- determinism`) |
+| `detector/postprocess.ts` | the port of `tools/exposure_postprocess.py` (E3–E6, plan §9) |
+| `detector/detect.ts` | the extraction (plan §8.2) and the detector runner (`npm run pilot -- detect`) |
 | `experiments/pilot-settlement/` | the bundle, batch specs, change log, the model record (`model/`) |
 | `tests/fixtures/pilot-tokenizer-counts.json` | the server's token counts the tokenizer is checked against |
 | `tests/fixtures/pilot-settlement-reference.json` | the reference outputs the tests compare with |

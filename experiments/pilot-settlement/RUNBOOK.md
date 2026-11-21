@@ -165,6 +165,26 @@ and both snapshots normal. **Bring back** the JSON. A `FAIL` with
 `DIFFERS` is the hard-gate failure of the plan (§9): no freeze; tell me
 with the report, nothing else is to be run.
 
+## 7. The exposure detector (gate G7, plan §8)
+
+Extraction of every accepted discussion message of the dev logs with the
+pilot model (thinking off, temperature 0, seed 20261122, structured output),
+then the post-processing. 360 short calls, about 30–40 minutes; the
+extractions are cached under `<out>/extractions/`, so a second run with
+`--postprocess-only` takes seconds and never touches the model:
+
+```sh
+npm run pilot -- detect --logs ~/pilot-logs/dev-<date> \
+  --base-url http://localhost:11434 --model qwen3.8:27b \
+  --out ~/pilot-logs/detector-<date>
+```
+
+Exit code 1 means an extraction failed twice (the message is then treated
+as having no items; its raw answer is in the cache file). **Bring back** the
+whole output folder (`*.detector.json`, `extractions/`, `summary.json`). The
+summary prints the hedged share of fact items: above 10 % is spec issue S1
+(§8.3), to be raised, not fixed.
+
 ## 6. The rerun after the 2026-11-20 prompt change (config_version 0.3.2-draft)
 
 In this order, each after a `git pull` and `npm run build`:

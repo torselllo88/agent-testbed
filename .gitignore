@@ -19,3 +19,6 @@ data/*
 
 # Browser end-to-end checks: screenshots
 .e2e-out/
+
+# Python bytecode of the bundle's tools (written when the tests run them).
+__pycache__/

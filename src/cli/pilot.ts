@@ -8,6 +8,7 @@
  *   npm run pilot -- pairs --instances dev|<id,id,…> --endpoint <name> --base-url <url> --model <name> --out <dir>
  *                        [--kind discussion|controls] [--replicate <n>] [--first alternating|complete|ring] [--db <dir>]
  *   npm run pilot -- determinism --logs <dev logs dir> --base-url <url> --model <name> --out <file> [--instance <id>]
+ *   npm run pilot -- detect --logs <logs dir> --base-url <url> --model <name> --out <dir> [--runs <id,id,…>] [--postprocess-only]
  *
  * export: one run log per run (schemas/run_log.schema.json of the bundle),
  * from the trace; thinking texts go to <run_id>.thinking.json next to it.
@@ -26,6 +27,10 @@
  * determinism: gate G6 — 3 discussion and 2 final calls from the dev logs
  * and one public-only call, each 3× cold and 3× warm with the same seed
  * under snapshots; identical content passes.
+ * detect: the exposure detector (plan §8) over the discussion logs of a
+ * directory — the LLM extraction (cached per run under <out>/extractions/)
+ * and the deterministic post-processing; one <run_id>.detector.json per run
+ * and a summary.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -38,6 +43,7 @@ import { BUNDLE_DIR } from "../scenarios/pilotSettlement/adapter.js";
 import { calibrate, writeCalibration } from "../scenarios/pilotSettlement/calibrate.js";
 import { PilotStopped, runPairs } from "../scenarios/pilotSettlement/pairRunner.js";
 import { determinism, writeDeterminism } from "../scenarios/pilotSettlement/determinism.js";
+import { detect } from "../scenarios/pilotSettlement/detector/detect.js";
 import { ExperimentService } from "../experiment/service.js";
 import { createProviderRegistryFromEnv } from "../llm/registry.js";
 import { StubProvider } from "../llm/stubProvider.js";
@@ -63,6 +69,8 @@ const { positionals, values } = parseArgs({
     kind: { type: "string", default: "discussion" },
     logs: { type: "string" },
     instance: { type: "string" },
+    runs: { type: "string" },
+    "postprocess-only": { type: "boolean", default: false },
   },
 });
 
@@ -72,12 +80,31 @@ const usage = (): never => {
       '  npm run pilot -- validate <run_log.json>... [--python "<command>"]\n' +
       "  npm run pilot -- calibrate --base-url <url> --model <name> --out <file> [--worst-case] [--num-predict <n>]\n" +
       "  npm run pilot -- pairs --instances dev|<id,id,...> --endpoint <name> --base-url <url> --model <name> --out <dir> [--kind discussion|controls] [--replicate <n>] [--first alternating|complete|ring] [--db <dir>]\n" +
-      "  npm run pilot -- determinism --logs <dev logs dir> --base-url <url> --model <name> --out <file> [--instance <id>]"
+      "  npm run pilot -- determinism --logs <dev logs dir> --base-url <url> --model <name> --out <file> [--instance <id>]\n" +
+      "  npm run pilot -- detect --logs <logs dir> --base-url <url> --model <name> --out <dir> [--runs <id,id,...>] [--postprocess-only]"
   );
   process.exit(2);
 };
 
 switch (positionals[0]) {
+  case "detect": {
+    if (!values.logs || !values["base-url"] || !values.model || !values.out) usage();
+    const runs = values.runs ? values.runs.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    detect({ logsDir: path.resolve(values.logs!), outDir: path.resolve(values.out!), baseUrl: values["base-url"]!, model: values.model!, runs, postprocessOnly: values["postprocess-only"], log: (line) => console.error(line) })
+      .then((summary) => {
+        console.log(`detector: ${summary.runs} run(s), ${summary.messages} messages, ${summary.extracted} extracted (${summary.cached} run(s) from cache), ${summary.extraction_failures} failure(s)`);
+        console.log(`hedged share of fact items: ${summary.hedged_share === null ? "n/a" : (100 * summary.hedged_share).toFixed(1) + " %"} (spec issue S1 above 10 %)`);
+        console.log(`categories: ${JSON.stringify(summary.categories)}`);
+        console.log(`claim types: ${JSON.stringify(summary.claim_types)}; sources: ${JSON.stringify(summary.sources)}; support: ${JSON.stringify(summary.supports)}`);
+        console.log(`outputs in ${path.resolve(values.out!)}`);
+        process.exit(summary.extraction_failures ? 1 : 0);
+      })
+      .catch((err) => {
+        console.error(`detect failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      });
+    break;
+  }
   case "determinism": {
     if (!values.logs || !values["base-url"] || !values.model || !values.out) usage();
     determinism({ logsDir: path.resolve(values.logs!), baseUrl: values["base-url"]!, model: values.model!, publicOnlyInstance: values.instance, log: (line) => console.error(line) })

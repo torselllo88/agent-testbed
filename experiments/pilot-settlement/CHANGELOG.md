@@ -395,3 +395,41 @@ normal, no mid-run reload.
 - Shared GPU during G6: another user's processes held the GPU at 99 %
   utilisation; the pilot model stayed fully in GPU memory and the contents
   were identical all the same.
+
+## 2026-11-21 — G6 repeated with the preload: passed
+
+Run by the author 09:37–09:52 (report `g6-2026-11-21-2.json`, kept by the
+author with the logs): preload `load`; both snapshots normal (model fully in
+GPU memory, 17.3 GB, context length 8192, digest and version as recorded;
+another user's processes at 99 % GPU utilisation throughout). All 36 calls
+— 3 discussion, 2 final, 1 public-only, each 3× cold and 3× warm with the
+same seed — returned byte-identical content and thinking within each cache
+state and across the states; `load_duration` ≤ 6 ms on every call. The
+content and thinking digests equal those of the first G6 run 40 minutes
+earlier, so the six outputs reproduced across two separate sessions as well.
+**G6 passes.** With G1–G5 (previous entry) every development gate but G7
+(detector) is passed on config_version 0.3.2-draft.
+
+## 2026-11-21 — the exposure detector (plan §8), first delivery for G7
+
+- `src/scenarios/pilotSettlement/detector/postprocess.ts`: the port of
+  `tools/exposure_postprocess.py` — E3 attribution, E4 expansion, E5 truth /
+  source / grounding / support by enumeration over the 1024 public states,
+  E6 exposure, plan §9 levels and categories. The bundle's 15 unit tests are
+  ported one to one, and a cross-check runs the reference Python itself on
+  synthetic runs over nine dev instances (about 1 000 claims) and compares
+  every label and the decision support JSON for JSON — identical.
+- `detector/detect.ts`, `npm run pilot -- detect`: the extraction with the
+  pilot model as §8.2 says (thinking off, temperature 0, seed 20261122,
+  Ollama `format` bound to `detector_extraction.schema.json`, the message
+  and the sender's role only), validated against the schema (one retry on a
+  malformed answer, then recorded as a failure with the raw text), cached
+  per run with the prompt and schema digests; the post-processing output per
+  run as `detector_output.schema.json`, plus `summary.json` with the §8.3
+  hedged share and the categories per topology.
+- Not yet: the validation set of §8.4 (the draw of ≥ 60 messages with the
+  12 phenomena, the annotation format for the two annotators, the §8.5
+  metrics). It comes after the first detector pass over the dev logs, which
+  shows which phenomena the dev messages contain.
+- The extraction model is the pilot model (PD7 default); a stronger offline
+  extractor stays an option if the held-out metrics fail.

@@ -341,3 +341,57 @@ comprehension fix to the prompt wording, the visible cap stays 200 tokens.
 - Watch in the rerun, besides the G2 criteria: thinking length and
   `thinking_overflow` (the config's earlier note that exact counts may
   trigger thinking loops), and the ring / complete regeneration gap.
+
+## 2026-11-21 — the rerun with the 0.3.2-draft wording: G1–G5 pass, G6 to repeat
+
+Run by the author (dev pairs 2026-11-20 17:54–22:04; controls replicates
+0–1 on 2026-11-20, replicate 2 on 2026-11-21; determinism 2026-11-21
+08:59–09:15). All 80 logs pass `validate_run_log.py` and the schema; all
+40 pairs valid in one execution, every preload `load`, 120 of 120 snapshots
+normal, no mid-run reload.
+
+| | Complete | Ring |
+|---|---|---|
+| runs valid / correct / schema-valid | 10 / 10 / 10 | 10 / 10 / 10 |
+| over_length_regenerated / truncated; silent turns; thinking overflow | 0 / 0; 0; 0 | 0 / 0; 0; 0 |
+| peak prompt + eval (cap 7992) | 2781 | 3039 |
+| accepted message tokens median / p90 / max | 72 / 93 / 128 | 86 / 109 / 143 |
+| thinking tokens, discussion, median / p90 / max | 143 / 296 / 661 | 297 / 665 / 1674 |
+| call duration median / max; total | 25 s / 71 s; 89 min | 44 s / 187 s; 162 min |
+
+- **G2 passes** in both topologies: 0 regenerations of 180 (was 4 and 18),
+  no truncation, no overflow, peak well under the cap. Messages shortened
+  (median 93 → 72 and 114 → 86 tokens, max 143 < 200). Thinking did not
+  loop: the longest discussion thinking rose from 1216 to 1674 tokens under
+  the ring, still 900 under `num_predict`; `done_reason: length` never
+  occurred. The ring / complete technical-rate gap of the first run is gone
+  (both 0 %); the thinking-length difference remains and is reported, not a
+  rate.
+- **G3 passes**: oracle exact correctness 30 / 30 (every class 1.00, every
+  replicate 10 / 10).
+- **G4 passes**: public-only 3 / 30 = 0.10 overall (≤ 0.30), 0.10 in every
+  replicate; per class A 0, B 0, C 0, Reject 0.5 (R-ELIG 1.0, R-ROUTE 0)
+  against the ceilings of `public_policy_ceiling.py` on the dev set (A 1.0,
+  B 0.67, C 0.67, Reject 1.0). Operations without the private facts
+  rejects everything; the one class it gets right is the instance whose
+  canonical answer is a reject for no eligible destination.
+- **G5 passes**: 0 schema failures in 60 control calls and 20 dev runs.
+- **G6**: all 36 calls (3 discussion, 2 final, 1 public-only; 3× cold, 3×
+  warm, same seed) returned byte-identical content and thinking — within
+  each cache state and across the two. The gate is nevertheless recorded
+  as **not passed**: the "before" snapshot was abnormal ("model not
+  loaded") because the determinism command took it before anything had
+  loaded the model — a defect of the command, not of the environment (the
+  first cache buster loaded the model with the pilot's window; the "after"
+  snapshot is normal, fully on GPU, digest and version as recorded). Fixed:
+  the command now preloads (`messages: []`, done_reason `load`) before the
+  first snapshot and records it. The plan's hard gate wants a clean record:
+  **repeat G6** (about 20 minutes).
+- Defect in these 80 logs: `config_version` is `"unknown"` — the testbed's
+  reader of `pilot_config.yaml` did not accept the comment appended to the
+  `config_version` line on 2026-11-20. The value in the bundle was
+  `0.3.2-draft` throughout (manifest). Fixed (the reader tolerates a
+  trailing comment, with a test); the logs are left as written.
+- Shared GPU during G6: another user's processes held the GPU at 99 %
+  utilisation; the pilot model stayed fully in GPU memory and the contents
+  were identical all the same.

@@ -83,7 +83,8 @@ let configVersion: string | null = null;
 export function bundleConfigVersion(): string {
   if (configVersion === null) {
     const yaml = fs.readFileSync(path.join(BUNDLE_DIR, "config", "pilot_config.yaml"), "utf8");
-    configVersion = /^\s*config_version:\s*"?([^"\n]+)"?\s*$/m.exec(yaml)?.[1]?.trim() ?? "unknown";
+    // The value, quoted or not, with or without a trailing comment (0.3.2-draft carries one).
+    configVersion = /^\s*config_version:\s*"?([^"#\n]+?)"?\s*(?:#.*)?$/m.exec(yaml)?.[1]?.trim() ?? "unknown";
   }
   return configVersion;
 }

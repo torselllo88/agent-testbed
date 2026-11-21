@@ -41,6 +41,7 @@ function scripted(opts: { drift?: (seed: number, n: number) => boolean; gpuFract
     if (url.endsWith("/api/ps")) return json(200, { models: [{ name: MODEL, size: 100, size_vram: Math.round(100 * (opts.gpuFraction ?? 1)), context_length: 8192, digest: "d" }] });
     if (url.endsWith("/api/generate")) return json(200, { done: true, done_reason: "length", prompt_eval_count: 5, eval_count: 1 });
     if (url.endsWith("/api/chat")) {
+      if ((body!.messages as unknown[]).length === 0) return json(200, { message: { role: "assistant", content: "" }, done: true, done_reason: "load" });
       const seed = (body!.options as { seed: number }).seed;
       const n = (counts.get(seed) ?? 0) + 1;
       counts.set(seed, n);
@@ -89,10 +90,12 @@ describe("pilot settlement: gate G6 determinism", () => {
     expect(report.calls.map((c) => c.kind)).toEqual(["discussion", "discussion", "discussion", "final", "final", "public_only"]);
     expect(report.calls.every((c) => c.results.length === 6 && c.identical.cold && c.identical.warm && c.identical.acrossStates)).toBe(true);
     expect(report.snapshots.map((s) => s.when)).toEqual(["before_pair", "after_pair"]);
+    expect(report.preload.ok).toBe(true);
+    expect(report.preload.request).toMatchObject({ messages: [], keep_alive: "30m", options: { num_ctx: 8192 } });
     // Call order sets the cache state: a buster before every cold call, none before the warm ones.
     const routes = server.seen.map((s) => s.route).filter((r) => r === "/api/generate" || r === "/api/chat");
-    expect(routes.slice(0, 7)).toEqual(["/api/generate", "/api/chat", "/api/generate", "/api/chat", "/api/generate", "/api/chat", "/api/chat"]);
-    const chats = server.seen.filter((s) => s.route === "/api/chat");
+    expect(routes.slice(0, 8)).toEqual(["/api/chat", "/api/generate", "/api/chat", "/api/generate", "/api/chat", "/api/generate", "/api/chat", "/api/chat"]); // preload, then buster + cold ×3, then warm
+    const chats = server.seen.filter((s) => s.route === "/api/chat" && (s.body!.messages as unknown[]).length > 0);
     expect(chats).toHaveLength(36);
     expect(chats.every((c) => (c.body!.options as { num_predict: number; seed: number }).num_predict === 2560 && c.body!.think === true)).toBe(true);
     // The public-only call carries the pilot's public-only seed and the rendered messages.

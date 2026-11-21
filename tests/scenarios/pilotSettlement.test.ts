@@ -499,6 +499,7 @@ describe("pilot settlement: calls to an Ollama endpoint", () => {
       await exact.run();
       const exactLog = buildRunLog(harness.record(exact.id), harness.events(exact.id)).runLog;
       expect((exactLog.validity as { status: string }).status).toBe("valid");
+      expect(exactLog.config_version).toBe("0.3.2-draft"); // read from the bundle's pilot_config.yaml, comment on the line included
       const call0 = (exactLog.calls as Array<{ prompt_tokens_counted: number; token_counter: string; attempts: Array<{ prompt_eval_count: number }> }>)[0]!;
       expect(call0.token_counter).toBe("tokenizer");
       expect(call0.attempts[0]!.prompt_eval_count).toBe(call0.prompt_tokens_counted + 15);

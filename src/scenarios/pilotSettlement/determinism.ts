@@ -55,6 +55,8 @@ export interface DeterminismReport {
   baseUrl: string;
   model: string;
   classification: "by call order (cache buster before every cold call; a warm call repeats the previous prompt)";
+  /** The preload before the first snapshot (plan §3.2: `messages: []`, num_ctx 8192, keep_alive 30m, must answer done_reason "load"). */
+  preload: { request: Record<string, unknown>; response: Record<string, unknown> | null; status: number; ok: boolean };
   snapshots: EnvironmentSnapshot[];
   snapshotsNormal: boolean;
   calls: DeterminismCall[];
@@ -170,6 +172,11 @@ export async function determinism(opts: DeterminismOptions): Promise<Determinism
   items.push({ id: `public_only:${instanceId}`, kind: "public_only", source: `${instanceId} public-only, replicate 0`, seed: publicOnlySeed(pub, 0), messages: pub, promptTokensReported: null });
   if (picked.length < (opts.discussionCalls ?? 3) + (opts.finalCalls ?? 2)) log(`WARNING: only ${picked.length} discussion / final calls found in ${opts.logsDir}`);
 
+  // Preload first (as every pair does), so the "before" snapshot sees the model loaded with the pilot's window.
+  const preloadRequest = { model: opts.model, messages: [], stream: false, keep_alive: gen.keepAlive, options: { num_ctx: gen.contextLength } };
+  const pre = await api<Record<string, unknown>>("POST", "/api/chat", preloadRequest);
+  const preload = { request: preloadRequest, response: pre.data, status: pre.status, ok: pre.ok && pre.data?.done_reason === "load" };
+  log(`preload: ${preload.ok ? "loaded" : `FAILED (HTTP ${pre.status}, done_reason ${String(pre.data?.done_reason ?? "none")})`}`);
   const snapshots: EnvironmentSnapshot[] = [await snapshot("before_pair")];
   const calls: DeterminismCall[] = [];
   for (const item of items) {
@@ -197,13 +204,13 @@ export async function determinism(opts: DeterminismOptions): Promise<Determinism
   snapshots.push(await snapshot("after_pair"));
   const snapshotsNormal = snapshots.every((s) => s.normal);
   const allIdentical = calls.every((c) => c.identical.cold && c.identical.warm);
-  const pass = snapshotsNormal && allIdentical && calls.length === items.length;
+  const pass = preload.ok && snapshotsNormal && allIdentical && calls.length === items.length;
   const summary = [
-    `G6 determinism: ${calls.length} calls × ${repeats} cold + ${repeats} warm; content identical within state: ${calls.filter((c) => c.identical.cold && c.identical.warm).length}/${calls.length}; across states: ${calls.filter((c) => c.identical.acrossStates).length}/${calls.length}; snapshots ${snapshotsNormal ? "normal" : "ABNORMAL"}: ${pass ? "pass" : "FAIL"}`,
+    `G6 determinism: ${calls.length} calls × ${repeats} cold + ${repeats} warm; content identical within state: ${calls.filter((c) => c.identical.cold && c.identical.warm).length}/${calls.length}; across states: ${calls.filter((c) => c.identical.acrossStates).length}/${calls.length}; preload ${preload.ok ? "ok" : "FAILED"}, snapshots ${snapshotsNormal ? "normal" : "ABNORMAL"}: ${pass ? "pass" : "FAIL"}`,
     ...calls.map((c) => `  ${c.id}: cold ${c.identical.cold ? "same" : "DIFFERS"}, warm ${c.identical.warm ? "same" : "DIFFERS"}, across ${c.identical.acrossStates ? "same" : "differs"}; eval ${c.results.map((r) => r.evalCount).join("/")}`),
   ];
   for (const line of summary) log(line);
-  return { schema: "pilot-settlement/determinism/1", startedAt, finishedAt: new Date().toISOString(), baseUrl: opts.baseUrl, model: opts.model, classification: "by call order (cache buster before every cold call; a warm call repeats the previous prompt)", snapshots, snapshotsNormal, calls, pass, summary };
+  return { schema: "pilot-settlement/determinism/1", startedAt, finishedAt: new Date().toISOString(), baseUrl: opts.baseUrl, model: opts.model, classification: "by call order (cache buster before every cold call; a warm call repeats the previous prompt)", preload, snapshots, snapshotsNormal, calls, pass, summary };
 }
 
 export function writeDeterminism(report: DeterminismReport, file: string): string {

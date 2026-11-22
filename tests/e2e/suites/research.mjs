@@ -20,6 +20,8 @@ await step("sidebar entry and the paired view of the first instance", async () =
   if (!head.includes("Proposal:") || !head.includes("ring:")) throw new Error(`ring head: ${head}`);
   const options = await js(`document.querySelectorAll("#research-instance option").length`);
   if (options !== 10) throw new Error(`options: ${options}`);
+  const liveLine = await text("#research-live-line");
+  if (!liveLine.includes("not offered here")) throw new Error(`live line: ${liveLine}`);
   await shot("research-compare");
 });
 

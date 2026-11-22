@@ -238,6 +238,12 @@ export const PilotProtocolParamsSchema = z
     /** Role names in speaking order, from the instance file. */
     speakingOrder: z.array(z.enum(AGENTS)).length(6).optional(),
     visibleMessageCapTokens: z.number().int().positive().default(VISIBLE_MESSAGE_CAP_TOKENS),
+    /**
+     * An exploratory run outside the plan (the research demo's live run on another provider): the
+     * plan's endpoint settings are not enforced, the counts are the pilot tokenizer's approximation,
+     * and the run log says so in its testbed block. Never for a pilot or development run.
+     */
+    exploratory: z.boolean().default(false),
   })
   .strict();
 
@@ -285,12 +291,13 @@ export class PilotSettlementAdapter implements ProtocolAdapter {
     }
     // The plan's generation settings (§3.3) on a real endpoint; the stub ignores them. Change here when the plan changes.
     // A real endpoint also needs the model's tokenizer: the budget guard and the visible cap count with it (§3.4, §3.7).
-    if (this.counter.kind !== "tokenizer" && config.agents.some((a) => a.model.provider !== "stub")) {
+    const exploratory = params.success && params.data.exploratory === true;
+    if (!exploratory && this.counter.kind !== "tokenizer" && config.agents.some((a) => a.model.provider !== "stub")) {
       problems.push("pilot-settlement: a run on a model needs the model's tokenizer (experiments/pilot-settlement/model/show-verbose.json); the adapter only has the approximate counter");
     }
     for (const a of config.agents) {
       const m = a.model;
-      if (m.provider === "stub") continue;
+      if (m.provider === "stub" || exploratory) continue;
       const want = PILOT_GENERATION;
       const wrong: string[] = [];
       if (m.think !== true) wrong.push("think true");

@@ -524,3 +524,28 @@ seed 20261122): 360 messages, 359 extracted, 1 failure (DEV-02-COMPLETE turn
 - Research demo: the information-flow tab now carries a note that the
   detector is pre-validation and what a conflicting state on an exact run
   usually means.
+
+## 2026-11-22 — research demo: the live run (OpenRouter, exploratory)
+
+- `protocol.params.exploratory` on the pilot adapter: lifts the plan's
+  endpoint-settings check and the tokenizer requirement for a run outside
+  the plan; the run log's `testbed` block then carries `exploratory: true`
+  with a note. Pilot and development runs never set it (the batch specs and
+  the pair runner do not).
+- `liveDemo.ts`: one dev instance, Complete then Ring through the
+  `ExperimentService` on the demo's OpenRouter model (temperature 1.0,
+  2560 output tokens, per-call seeds as always; thinking and the Ollama-only
+  options have no meaning there), then the detector with the same provider
+  (`createExtractor` now takes any provider; a fenced JSON answer is
+  unwrapped), then the replay's own view with validity `exploratory`.
+  Sessions in memory, one at a time. Routes `POST /api/pilot-demo/live`,
+  `GET /api/pilot-demo/live/<id>`; the page shows progress (turn of 18 per
+  run, detector messages) and a toggle between the live view and the replay,
+  with a banner that one run proves nothing.
+- Tests on the stub provider: the exploratory config passes the adapter's
+  check where the strict one is refused; a session runs both topologies and
+  the detector (every stub extraction fails and is recorded); the API offers,
+  starts, reports and refuses as it should. The keyless e2e server shows
+  "not offered".
+- The demo for the colleague is complete: replay with the detector's view,
+  batch, methods, and the live run where an OpenRouter key is set (Railway).

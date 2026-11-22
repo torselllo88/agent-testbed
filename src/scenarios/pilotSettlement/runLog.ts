@@ -421,6 +421,8 @@ export function buildRunLog(record: ExperimentRecord, events: ExperimentEvent[],
       task_definition_hash: record.taskDefinitionHash,
       protocol_fingerprint: (started.protocolFingerprint as string | undefined) ?? null,
       outcome: record.outcome,
+      // Plan §3.3 settings not enforced, counts approximate: a demo run on another provider, never a pilot run.
+      ...((config.protocol.params as { exploratory?: boolean }).exploratory ? { exploratory: true, exploratory_note: "run outside the plan: the endpoint's settings are not the plan's and the token counts are the pilot tokenizer's approximation" } : {}),
       status: record.status,
     },
   };

@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { OllamaProvider } from "../../../llm/ollamaProvider.js";
-import type { ChatMessage } from "../../../llm/provider.js";
+import type { ChatMessage, LlmProvider } from "../../../llm/provider.js";
 import { BUNDLE_DIR, PILOT_GENERATION } from "../adapter.js";
 import { bundleInstances } from "../family.js";
 import { AGENTS, type RoleName } from "../task.js";
@@ -112,7 +112,7 @@ export interface DetectorOutput {
   extraction_failures: number[];
 }
 
-interface RunLogLike {
+export interface RunLogLike {
   run_id: string;
   instance_id: string;
   condition: string;
@@ -127,6 +127,107 @@ export function messagesOfLog(log: RunLogLike): RunMessage[] {
     .filter((c) => c.call_type === "discussion" && typeof c.turn === "number" && typeof c.accepted_text === "string" && c.accepted_text.length > 0)
     .map((c) => ({ turn: c.turn as number, speaker: c.speaker as RoleName, recipients: (c.recipients ?? []) as RoleName[], text: c.accepted_text as string }))
     .sort((a, b) => a.turn - b.turn);
+}
+
+export type ExtractedAnswer = Omit<ExtractedMessage, "turn" | "speaker" | "recipients" | "text">;
+
+/**
+ * One message's extraction with the plan's settings (thinking off, temperature 0, the seed, the
+ * schema as the provider's structured output), validated against the schema; one retry on a
+ * malformed answer, then a failure with the raw text. Over any provider: the pilot's Ollama by
+ * default, another provider for an exploratory run.
+ */
+export function createExtractor(provider: LlmProvider, model: string, options: { structured?: boolean } = {}): (sender: RoleName, text: string) => Promise<ExtractedAnswer> {
+  const template = fs.readFileSync(PROMPT_FILE, "utf8");
+  const schema = JSON.parse(fs.readFileSync(EXTRACTION_SCHEMA_FILE, "utf8")) as Record<string, unknown>;
+  const structured = options.structured ?? true;
+  // A provider that rejects the schema as a response format (some OpenRouter routes) gets it in the prompt instead.
+  let useFormat = structured;
+  const withSchema = (prompt: string) => `${prompt}
+
+Return only a JSON object with this schema (no prose):
+${JSON.stringify(schema)}`;
+  return async (sender, text) => {
+    const prompt = renderExtractionPrompt(sender, text, template);
+    let lastError = "";
+    let raw: string | null = null;
+    let doneReason: string | null = null;
+    let evalCount: number | null = null;
+    let promptEval: number | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const messages: ChatMessage[] = [{ role: "user", content: useFormat ? prompt : withSchema(prompt) }];
+      let r;
+      try {
+        r = await provider.complete({
+          model,
+          messages,
+          temperature: 0,
+          seed: EXTRACTION_SEED,
+          maxOutputTokens: EXTRACTION_MAX_TOKENS,
+          ...(provider.id.startsWith("openai-compatible") ? { contextLength: PILOT_GENERATION.contextLength, keepAlive: PILOT_GENERATION.keepAlive, think: false } : {}),
+          ...(useFormat ? { responseFormat: { name: "detector_extraction", schema } } : {}),
+        });
+      } catch (err) {
+        if (useFormat && provider.id !== "stub" && !provider.id.startsWith("openai-compatible")) {
+          // The route refused the response format: from now on the schema travels in the prompt.
+          useFormat = false;
+          lastError = `provider refused the response format: ${err instanceof Error ? err.message : String(err)}`;
+          continue;
+        }
+        throw err;
+      }
+      raw = r.text;
+      doneReason = r.finishReason ?? null;
+      evalCount = r.usage?.completionTokens ?? null;
+      promptEval = r.usage?.promptTokens ?? null;
+      try {
+        const parsed = ExtractionSchema.safeParse(JSON.parse(stripFence(r.text)));
+        if (parsed.success) return { extraction: parsed.data as Extraction, error: null, raw: null, done_reason: doneReason, eval_count: evalCount, prompt_eval_count: promptEval, attempts: attempt };
+        lastError = `schema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ").slice(0, 500)}`;
+      } catch (err) {
+        lastError = `parse: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    return { extraction: null, error: lastError, raw, done_reason: doneReason, eval_count: evalCount, prompt_eval_count: promptEval, attempts: 2 };
+  };
+}
+
+/** A provider without native structured output may wrap the JSON in a code fence; one fence is stripped. */
+function stripFence(text: string): string {
+  const t = text.trim();
+  const m = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(t);
+  return m ? m[1]! : t;
+}
+
+/** The detector over one run's messages: extraction with the given extractor, then the post-processing. */
+export async function detectRun(log: RunLogLike, extractor: (sender: RoleName, text: string) => Promise<ExtractedAnswer>, meta: { extractionModel: string; log?: (line: string) => void }): Promise<{ record: ExtractionRecord; output: DetectorOutput }> {
+  const instance = bundleInstances()[log.instance_id];
+  if (!instance) throw new Error(`${log.run_id}: unknown instance ${log.instance_id}`);
+  const messages = messagesOfLog(log);
+  const extracted: ExtractedMessage[] = [];
+  for (const m of messages) {
+    const r = await extractor(m.speaker, m.text);
+    extracted.push({ turn: m.turn, speaker: m.speaker, recipients: m.recipients, text: m.text, ...r });
+    meta.log?.(`  turn ${m.turn} ${m.speaker}: ${r.extraction ? `${r.extraction.items.length} items` : `FAILED (${r.error})`}${r.attempts > 1 ? ` after ${r.attempts} attempts` : ""}`);
+  }
+  const record: ExtractionRecord = { run_id: log.run_id, instance_id: log.instance_id, detector_version: DETECTOR_VERSION, extraction_model: meta.extractionModel, seed: EXTRACTION_SEED, prompt_sha256: sha256File(PROMPT_FILE), schema_sha256: sha256File(EXTRACTION_SCHEMA_FILE), extracted_at: new Date().toISOString(), messages: extracted };
+  return { record, output: postprocessRecord(log, record) };
+}
+
+/** The post-processing of a cached or fresh extraction record into the detector output. */
+export function postprocessRecord(log: RunLogLike, rec: ExtractionRecord): DetectorOutput {
+  const instance = bundleInstances()[log.instance_id]!;
+  const messages = messagesOfLog(log);
+  const extractions: Record<number, Extraction> = {};
+  const failures: number[] = [];
+  for (const m of rec.messages) {
+    if (m.extraction) extractions[m.turn] = m.extraction;
+    else failures.push(m.turn);
+  }
+  const claims = labelRun(instance.state, messages, extractions);
+  const mfs = ((instance as unknown as { metadata?: { minimal_fact_sets?: string[][] } }).metadata?.minimal_fact_sets ?? []) as string[][];
+  const operations = decisionSupport(instance.state, mfs, claims, log.final?.correct_exact === true);
+  return { run_id: log.run_id, detector_version: DETECTOR_VERSION, extraction_model: rec.extraction_model, topology: log.topology, instance_id: log.instance_id, claims, operations, extraction_failures: failures };
 }
 
 export interface DetectOptions {
@@ -163,12 +264,10 @@ const inc = (m: Record<string, number>, k: string) => (m[k] = (m[k] ?? 0) + 1);
 
 export async function detect(opts: DetectOptions): Promise<DetectSummary> {
   const log = opts.log ?? (() => {});
-  const template = fs.readFileSync(PROMPT_FILE, "utf8");
-  const schema = JSON.parse(fs.readFileSync(EXTRACTION_SCHEMA_FILE, "utf8")) as Record<string, unknown>;
   const promptSha = sha256File(PROMPT_FILE);
   const schemaSha = sha256File(EXTRACTION_SCHEMA_FILE);
   const provider = new OllamaProvider({ name: "detector", baseUrl: opts.baseUrl, fetch: opts.fetch });
-  const instances = bundleInstances();
+  const extractor = createExtractor(provider, opts.model);
   const extractionsDir = path.join(opts.outDir, "extractions");
   fs.mkdirSync(extractionsDir, { recursive: true });
 
@@ -178,71 +277,30 @@ export async function detect(opts: DetectOptions): Promise<DetectSummary> {
     .sort();
   const summary: DetectSummary = { runs: 0, messages: 0, extracted: 0, extraction_failures: 0, cached: 0, fact_items: 0, hedged_fact_items: 0, hedged_share: null, categories: {}, claim_types: {}, sources: {}, supports: {} };
 
-  async function extractOne(sender: RoleName, text: string): Promise<Omit<ExtractedMessage, "turn" | "speaker" | "recipients" | "text">> {
-    const messages: ChatMessage[] = [{ role: "user", content: renderExtractionPrompt(sender, text, template) }];
-    let lastError = "";
-    let raw: string | null = null;
-    let doneReason: string | null = null;
-    let evalCount: number | null = null;
-    let promptEval: number | null = null;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      const r = await provider.complete({
-        model: opts.model,
-        messages,
-        temperature: 0,
-        seed: EXTRACTION_SEED,
-        maxOutputTokens: EXTRACTION_MAX_TOKENS,
-        contextLength: PILOT_GENERATION.contextLength,
-        keepAlive: PILOT_GENERATION.keepAlive,
-        think: false,
-        responseFormat: { name: "detector_extraction", schema },
-      });
-      raw = r.text;
-      doneReason = r.finishReason ?? null;
-      evalCount = r.usage?.completionTokens ?? null;
-      promptEval = r.usage?.promptTokens ?? null;
-      try {
-        const parsed = ExtractionSchema.safeParse(JSON.parse(r.text));
-        if (parsed.success) return { extraction: parsed.data as Extraction, error: null, raw: null, done_reason: doneReason, eval_count: evalCount, prompt_eval_count: promptEval, attempts: attempt };
-        lastError = `schema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ").slice(0, 500)}`;
-      } catch (err) {
-        lastError = `parse: ${err instanceof Error ? err.message : String(err)}`;
-      }
-    }
-    return { extraction: null, error: lastError, raw, done_reason: doneReason, eval_count: evalCount, prompt_eval_count: promptEval, attempts: 2 };
-  }
-
   for (const f of files) {
     const runLog = JSON.parse(fs.readFileSync(path.join(opts.logsDir, f), "utf8")) as RunLogLike;
     if (runLog.condition !== "discussion") continue;
     if (opts.runs && !opts.runs.includes(runLog.run_id)) continue;
-    const instance = instances[runLog.instance_id];
-    if (!instance) throw new Error(`${f}: unknown instance ${runLog.instance_id}`);
+    if (!bundleInstances()[runLog.instance_id]) throw new Error(`${f}: unknown instance ${runLog.instance_id}`);
     const messages = messagesOfLog(runLog);
     const cacheFile = path.join(extractionsDir, `${runLog.run_id}.json`);
     let record: ExtractionRecord | null = fs.existsSync(cacheFile) ? (JSON.parse(fs.readFileSync(cacheFile, "utf8")) as ExtractionRecord) : null;
     const cacheValid = record !== null && record.extraction_model === opts.model && record.seed === EXTRACTION_SEED && record.prompt_sha256 === promptSha && record.schema_sha256 === schemaSha && record.messages.length === messages.length && record.messages.every((m, i) => m.turn === messages[i]!.turn && m.text === messages[i]!.text);
+    let output: DetectorOutput;
     if (!cacheValid) {
       if (opts.postprocessOnly) throw new Error(`${runLog.run_id}: no valid cached extraction in ${extractionsDir} (postprocess-only)`);
       log(`${runLog.run_id}: extracting ${messages.length} messages`);
-      const extracted: ExtractedMessage[] = [];
-      for (const m of messages) {
-        const r = await extractOne(m.speaker, m.text);
-        extracted.push({ turn: m.turn, speaker: m.speaker, recipients: m.recipients, text: m.text, ...r });
-        log(`  turn ${m.turn} ${m.speaker}: ${r.extraction ? `${r.extraction.items.length} items` : `FAILED (${r.error})`}${r.attempts > 1 ? ` after ${r.attempts} attempts` : ""}`);
-      }
-      record = { run_id: runLog.run_id, instance_id: runLog.instance_id, detector_version: DETECTOR_VERSION, extraction_model: opts.model, seed: EXTRACTION_SEED, prompt_sha256: promptSha, schema_sha256: schemaSha, extracted_at: new Date().toISOString(), messages: extracted };
+      const r = await detectRun(runLog, extractor, { extractionModel: opts.model, log });
+      record = r.record;
+      output = r.output;
       fs.writeFileSync(cacheFile, JSON.stringify(record, null, 1) + "\n");
     } else {
       summary.cached += 1;
       log(`${runLog.run_id}: cached extraction`);
+      output = postprocessRecord(runLog, record as ExtractionRecord);
     }
     const rec = record as ExtractionRecord;
-    const extractions: Record<number, Extraction> = {};
-    const failures: number[] = [];
     for (const m of rec.messages) {
-      if (m.extraction) extractions[m.turn] = m.extraction;
-      else failures.push(m.turn);
       for (const item of m.extraction?.items ?? []) {
         if (item.kind === "fact") {
           summary.fact_items += 1;
@@ -250,23 +308,19 @@ export async function detect(opts: DetectOptions): Promise<DetectSummary> {
         }
       }
     }
-    const claims = labelRun(instance.state, messages, extractions);
-    const mfs = ((instance as unknown as { metadata?: { minimal_fact_sets?: string[][] } }).metadata?.minimal_fact_sets ?? []) as string[][];
-    const operations = decisionSupport(instance.state, mfs, claims, runLog.final?.correct_exact === true);
-    const output: DetectorOutput = { run_id: runLog.run_id, detector_version: DETECTOR_VERSION, extraction_model: opts.model, topology: runLog.topology, instance_id: runLog.instance_id, claims, operations, extraction_failures: failures };
     fs.writeFileSync(path.join(opts.outDir, `${runLog.run_id}.detector.json`), JSON.stringify(output, null, 1) + "\n");
     summary.runs += 1;
     summary.messages += messages.length;
     summary.extracted += rec.messages.filter((m) => m.extraction).length;
-    summary.extraction_failures += failures.length;
+    summary.extraction_failures += output.extraction_failures.length;
     summary.categories[runLog.topology] ??= {};
-    inc(summary.categories[runLog.topology]!, operations.category);
-    for (const c of claims) {
+    inc(summary.categories[runLog.topology]!, output.operations.category);
+    for (const c of output.claims) {
       inc(summary.claim_types, c.type);
       if (c.source) inc(summary.sources, c.source);
       if (c.support) inc(summary.supports, c.support);
     }
-    log(`${runLog.run_id}: ${claims.length} claims, category ${operations.category}, minimal fact set exposed ${operations.minimal_fact_set_exposed}${failures.length ? `, ${failures.length} extraction failure(s)` : ""}`);
+    log(`${runLog.run_id}: ${output.claims.length} claims, category ${output.operations.category}, minimal fact set exposed ${output.operations.minimal_fact_set_exposed}${output.extraction_failures.length ? `, ${output.extraction_failures.length} extraction failure(s)` : ""}`);
   }
   summary.hedged_share = summary.fact_items ? summary.hedged_fact_items / summary.fact_items : null;
   fs.writeFileSync(path.join(opts.outDir, "summary.json"), JSON.stringify(summary, null, 1) + "\n");

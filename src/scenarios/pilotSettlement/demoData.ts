@@ -358,13 +358,17 @@ export interface InstanceView {
 }
 
 export function instanceView(ds: DemoDataset, id: string): InstanceView | null {
-  const inst = bundleInstances()[id];
   const complete = ds.runs.get(`${id}-COMPLETE`);
   const ring = ds.runs.get(`${id}-RING`);
-  if (!inst || !complete || !ring) return null;
+  if (!bundleInstances()[id] || !complete || !ring) return null;
+  return instanceViewFromLogs(id, complete, ring, ds.detector.get(complete.run_id) ?? null, ds.detector.get(ring.run_id) ?? null);
+}
+
+/** The page's view of one instance from two run logs and their detector outputs (the replay dataset or a live run). */
+export function instanceViewFromLogs(id: string, complete: RunLogFile, ring: RunLogFile, dc: DetectorFile | null, dr: DetectorFile | null): InstanceView {
+  const inst = bundleInstances()[id];
+  if (!inst) throw new Error(`unknown instance ${id}`);
   const truth = baseFacts(inst.state);
-  const dc = ds.detector.get(complete.run_id);
-  const dr = ds.detector.get(ring.run_id);
   return {
     id,
     class: (inst as unknown as { class: string }).class,

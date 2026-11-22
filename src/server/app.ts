@@ -28,7 +28,7 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { ExposureRepository } from "../persistence/exposureRepository.js";
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
-import { BUILTIN_SCENARIOS, DEMO, demoFacts, loadPilotDemoDataset, PILOT_DEMO_METHODS, pilotDemoBatchSummary, pilotDemoInstances, pilotDemoInstanceView } from "../scenarios/index.js";
+import { BUILTIN_SCENARIOS, DEMO, demoFacts, loadPilotDemoDataset, PILOT_DEMO_METHODS, pilotDemoBatchSummary, pilotDemoInstances, pilotDemoInstanceView, PilotLiveDemoService, type PilotLiveModels } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
 import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson, serveStatic } from "./http.js";
 
@@ -57,6 +57,10 @@ export interface AppDeps {
   exposure?: ExposureService;
   /** The research demo's replay dataset directory (default: experiments/pilot-settlement/demo). */
   pilotDemoDir?: string;
+  /** The research demo's live run: the agents' and the extraction model (default: the demo's OpenRouter models when OpenRouter is configured; null = no live run offered). */
+  pilotDemoLive?: PilotLiveModels | null;
+  /** The live-run sessions (created from db/service/providers when omitted). */
+  pilotLive?: PilotLiveDemoService;
 }
 
 interface RouteContext {
@@ -169,6 +173,14 @@ function experimentSummary(e: ExperimentRecord, running: boolean) {
 function demoLive(deps: AppDeps): boolean {
   return deps.providers.status().some((p) => p.id === "openrouter" && p.configured);
 }
+
+/** The research demo's live models: given, or the demo's OpenRouter models when OpenRouter is configured. */
+function pilotLiveModels(deps: AppDeps): PilotLiveModels | null {
+  if (deps.pilotDemoLive !== undefined) return deps.pilotDemoLive;
+  if (!demoLive(deps)) return null;
+  return { agents: { ...DEMO.liveModels.agents, structuredOutput: "prompt" }, extraction: { ...DEMO.liveModels.agents, structuredOutput: "native" } };
+}
+const LiveBody = z.object({ instance: z.string().min(1) });
 
 /** Starting a run and validating a config report the same problems in the same shape. */
 function startExperiment(ctx: RouteContext, config: unknown, scenario?: ScenarioRecord, overrides?: RunOverrides) {
@@ -340,8 +352,36 @@ const ROUTES: Route[] = [
     pattern: /^\/api\/pilot-demo$/,
     handle: ({ res, deps }) => {
       const ds = loadPilotDemoDataset(deps.pilotDemoDir);
-      if (!ds.instances.length) return sendJson(res, 200, { available: false, instances: [], batch: null, methods: PILOT_DEMO_METHODS });
-      sendJson(res, 200, { available: true, instances: pilotDemoInstances(ds), batch: pilotDemoBatchSummary(ds), methods: PILOT_DEMO_METHODS });
+      const models = pilotLiveModels(deps);
+      const live = models ? { available: true, agents: models.agents.model, extraction: models.extraction.model, sessions: deps.pilotLive!.list().map(({ view: _view, ...s }) => s) } : { available: false, agents: null, extraction: null, sessions: [] };
+      if (!ds.instances.length) return sendJson(res, 200, { available: false, instances: [], batch: null, methods: PILOT_DEMO_METHODS, live });
+      sendJson(res, 200, { available: true, instances: pilotDemoInstances(ds), batch: pilotDemoBatchSummary(ds), methods: PILOT_DEMO_METHODS, live });
+    },
+  },
+  {
+    // A live run of one instance (Complete, then Ring, then the detector) on the demo's models; exploratory, n = 1.
+    method: "POST",
+    pattern: /^\/api\/pilot-demo\/live$/,
+    handle: async ({ req, res, deps }) => {
+      const models = pilotLiveModels(deps);
+      if (!models) throw new HttpError(409, "No live run here: OpenRouter is not configured");
+      const { instance } = await body(req, LiveBody);
+      if (!loadPilotDemoDataset(deps.pilotDemoDir).instances.includes(instance)) throw new HttpError(404, "Not a replay instance");
+      try {
+        const { view: _view, ...session } = deps.pilotLive!.start(instance, models);
+        sendJson(res, 202, session);
+      } catch (err) {
+        throw new HttpError(409, err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  {
+    method: "GET",
+    pattern: new RegExp(`^/api/pilot-demo/live/${ID}$`),
+    handle: ({ res, params, deps }) => {
+      const session = deps.pilotLive?.get(decodeRouteParam(params[0]!));
+      if (!session) throw new HttpError(404, "No such live run");
+      sendJson(res, 200, deps.pilotLive!.refresh(session));
     },
   },
   {
@@ -727,7 +767,8 @@ export function hostAllowed(hostHeader: string | undefined, extraHosts: readonly
 }
 
 export function createApp(appDeps: AppDeps): http.Server {
-  const deps: AppDeps = appDeps.exposure ? appDeps : { ...appDeps, exposure: new ExposureService(appDeps) };
+  const withExposure: AppDeps = appDeps.exposure ? appDeps : { ...appDeps, exposure: new ExposureService(appDeps) };
+  const deps: AppDeps = withExposure.pilotLive ? withExposure : { ...withExposure, pilotLive: new PilotLiveDemoService({ db: appDeps.db, service: appDeps.service, providers: appDeps.providers }) };
   const repos = {
     scenarios: new ScenarioRepository(deps.db),
     experiments: new ExperimentRepository(deps.db),

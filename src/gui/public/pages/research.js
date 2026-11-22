@@ -17,7 +17,7 @@ const fmtValue = (v) => (typeof v === "boolean" ? (v ? "true" : "false") : Strin
 const n = (v) => (v === null || v === undefined ? "—" : typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(1)) : String(v));
 
 /** Page state kept across re-renders of the tabs. */
-const state = { overview: null, instance: null, view: null, tab: "compare", focus: null, fact: null };
+const state = { overview: null, instance: null, view: null, tab: "compare", focus: null, fact: null, replayView: null, live: null, poll: null };
 
 export async function renderResearch(instanceId) {
   app.innerHTML = `<div class="loading">Loading…</div>`;
@@ -40,12 +40,90 @@ async function selectInstance(id, first = false) {
   if (!id) return;
   if (state.instance !== id || !state.view) {
     state.view = await api(`/api/pilot-demo/instances/${encodeURIComponent(id)}`);
+    state.replayView = state.view;
     state.instance = id;
     state.focus = null;
     state.fact = null;
     if (!first) history.replaceState(null, "", `#/research/${encodeURIComponent(id)}`);
   }
   renderPage();
+}
+
+/** Whether the page currently shows a live run's view instead of the replay. */
+const showingLive = () => state.live?.stage === "done" && state.view === state.live.view;
+
+async function startLive() {
+  try {
+    const session = await api("/api/pilot-demo/live", { method: "POST", body: JSON.stringify({ instance: state.instance }) });
+    state.live = session;
+    renderPage();
+    pollLive();
+  } catch (err) {
+    state.live = { stage: "failed", error: err.message, instance: state.instance, runs: {} };
+    renderPage();
+  }
+}
+
+function pollLive() {
+  clearTimeout(state.poll);
+  state.poll = setTimeout(async () => {
+    if (!state.live?.id) return;
+    try {
+      const s = await api(`/api/pilot-demo/live/${encodeURIComponent(state.live.id)}`);
+      state.live = s;
+      if (s.stage === "done" && s.view) {
+        state.view = s.view;
+        state.focus = null;
+        state.fact = null;
+        state.tab = "compare";
+        renderPage();
+        return;
+      }
+      renderLiveLine();
+      if (s.stage !== "failed") pollLive();
+      else renderPage();
+    } catch (err) {
+      state.live.error = err.message;
+      renderPage();
+    }
+  }, 3000);
+}
+
+function liveLineHtml() {
+  const o = state.overview;
+  const l = state.live;
+  if (!o.live?.available) return `<span class="muted small">Live run: not offered here (no OpenRouter key).</span>`;
+  if (!l || l.instance !== state.instance) {
+    return `<button type="button" class="button-like" id="research-live">Run this instance live</button> <span class="muted small">${escapeHtml(o.live.agents)} via OpenRouter · Complete, then Ring, then the detector · about 10–15 minutes · exploratory, n = 1</span>`;
+  }
+  const run = (r) => `${r.topology}: ${r.status === "pending" ? "waiting" : r.status === "running" ? `turn ${r.turn} of 18` : r.outcome ?? r.status}`;
+  if (l.stage === "failed") return `<span class="badge bad">live run failed</span> <span class="small">${escapeHtml(l.error ?? "")}</span> <button type="button" class="button-like" id="research-live">Try again</button>`;
+  if (l.stage === "done") {
+    return showingLive()
+      ? `<span class="badge warn">showing the live run</span> <span class="small">exploratory, n = 1, ${escapeHtml(l.models.agents)}; not the pilot instrument</span> <button type="button" class="button-like" id="research-replay">Back to the replay</button>`
+      : `<span class="badge ok">live run finished</span> <button type="button" class="button-like" id="research-show-live">Show the live run</button> <button type="button" class="button-like" id="research-live">Run again</button>`;
+  }
+  const det = l.detector ? ` · detector ${l.detector.done} of ${l.detector.messages} messages${l.detector.failures ? `, ${l.detector.failures} failed` : ""}` : "";
+  return `<span class="badge info">live run in progress</span> <span class="small">${run(l.runs.complete)} · ${run(l.runs.ring)}${det}</span>`;
+}
+
+function renderLiveLine() {
+  const box = document.getElementById("research-live-line");
+  if (!box) return;
+  box.innerHTML = liveLineHtml();
+  document.getElementById("research-live")?.addEventListener("click", () => void startLive());
+  document.getElementById("research-show-live")?.addEventListener("click", () => {
+    state.view = state.live.view;
+    state.focus = null;
+    state.fact = null;
+    renderPage();
+  });
+  document.getElementById("research-replay")?.addEventListener("click", () => {
+    state.view = state.replayView;
+    state.focus = null;
+    state.fact = null;
+    renderPage();
+  });
 }
 
 function renderPage() {
@@ -73,10 +151,13 @@ function renderPage() {
         </label>
         <span class="muted">${inst ? `requested ${escapeHtml(inst.requested)} · canonical <strong>${escapeHtml(fmtProposal(inst.canonical))}</strong>` : ""}</span>
       </div>
+      <div class="research-bar" id="research-live-line"></div>
+      ${showingLive() ? `<div class="warning-banner small">Live run on ${escapeHtml(state.live.models.agents)} via OpenRouter, started ${escapeHtml(state.live.startedAt.slice(0, 16).replace("T", " "))} UTC: exploratory — the plan's endpoint settings are not enforced, token counts are the pilot tokenizer's approximation, there is no environment record, and one run proves nothing. The replay above the tabs is the validated instrument.</div>` : ""}
       <div class="tabs">${tabs.map(([k, label]) => `<button type="button" class="tab ${state.tab === k ? "active" : ""}" data-tab="${k}">${label}</button>`).join("")}</div>
       <div id="research-body"></div>
     </div>`;
   document.getElementById("research-instance").addEventListener("change", (e) => void selectInstance(e.target.value));
+  renderLiveLine();
   for (const b of app.querySelectorAll(".tab")) b.addEventListener("click", () => { state.tab = b.dataset.tab; renderPage(); });
   const body = document.getElementById("research-body");
   if (state.tab === "compare") renderCompare(body, v);

@@ -65,6 +65,33 @@ function scripted() {
   return { fetch: fetchFn, seen };
 }
 
+describe("pilot settlement detector: the extractor over a provider", () => {
+  it("falls back to the schema in the prompt when the provider refuses the response format", async () => {
+    const { createExtractor } = await import("../../src/scenarios/pilotSettlement/detector/detect.js");
+    const seen: Array<{ format: boolean; prompt: string }> = [];
+    const provider = {
+      id: "openrouter" as const,
+      async complete(req: { messages: Array<{ content: string }>; responseFormat?: unknown }) {
+        seen.push({ format: !!req.responseFormat, prompt: req.messages[0]!.content });
+        if (req.responseFormat) throw new Error("HTTP 400: response_format not supported by this route");
+        return { text: '```json\n{"items": [{"span": "x", "kind": "other", "hedged": false}]}\n```', requestedModel: "m", servedModel: "m", usage: null, finishReason: "stop", providerMeta: {} };
+      },
+    };
+    const extract = createExtractor(provider as unknown as Parameters<typeof createExtractor>[0], "m");
+    const first = await extract("Contract", "Hello.");
+    expect(first.extraction?.items[0]).toMatchObject({ kind: "other" });
+    expect(first.attempts).toBe(2);
+    expect(seen.map((s) => s.format)).toEqual([true, false]);
+    expect(seen[1]!.prompt).toContain("Return only a JSON object with this schema");
+    expect(seen[1]!.prompt).toContain('"items"');
+    // The next message goes straight to the prompt form.
+    const second = await extract("Treasury", "Again.");
+    expect(second.attempts).toBe(1);
+    expect(seen).toHaveLength(3);
+    expect(seen[2]!.format).toBe(false);
+  });
+});
+
 describe("pilot settlement detector: extraction and post-processing of run logs", () => {
   let dir: string;
   let out: string;

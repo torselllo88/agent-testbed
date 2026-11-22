@@ -38,6 +38,21 @@ README); the detector files are optional. Served by `GET /api/pilot-demo` and
 [src/scenarios/pilotSettlement/demoData.ts](../src/scenarios/pilotSettlement/demoData.ts);
 page [src/gui/public/pages/research.js](../src/gui/public/pages/research.js).
 
+**Live run.** With OpenRouter configured, **Run this instance live** runs the
+chosen instance once more — Complete, then Ring, then the detector — on the
+demo's OpenRouter model (the one `#/demo` uses), and shows the result in the
+same tabs with a toggle back to the replay. The run is *exploratory* and
+says so everywhere: the adapter's `exploratory` flag lifts the plan's
+endpoint-settings check (think, num_ctx, keep_alive and the sampling options
+have no meaning on OpenRouter; temperature 1.0 and the 2560-token cap are
+sent), the visible-message cap and the budget are counted with the pilot
+tokenizer as an approximation, there is no environment record, and the
+run-log's testbed block carries `exploratory: true`. One session at a time;
+sessions live in memory (`POST /api/pilot-demo/live`, `GET
+/api/pilot-demo/live/<id>`;
+[src/scenarios/pilotSettlement/liveDemo.ts](../src/scenarios/pilotSettlement/liveDemo.ts)).
+Without OpenRouter the page says the live run is not offered.
+
 ## Scenario library
 
 Built-in scenarios come first, then your own. Each card has **Run**, **Edit**

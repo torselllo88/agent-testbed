@@ -113,6 +113,7 @@ export const TASK_FAMILIES: ReadonlyMap<string, TaskFamily> = new Map([
 
 /** The research demo (web UI #/research): the pilot's dev runs as a replay, served by the app through this registry. */
 export { batchSummary as pilotDemoBatchSummary, instanceOverviews as pilotDemoInstances, instanceView as pilotDemoInstanceView, loadDemoDataset as loadPilotDemoDataset, PILOT_DEMO_METHODS } from "./pilotSettlement/demoData.js";
+export { LiveDemoService as PilotLiveDemoService, type LiveModels as PilotLiveModels, type LiveSession as PilotLiveSession } from "./pilotSettlement/liveDemo.js";
 
 export function createEvaluatorRegistry(): EvaluatorRegistry {
   return new EvaluatorRegistry()

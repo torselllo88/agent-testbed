@@ -198,6 +198,7 @@ function renderFlow(body, v) {
     </div>`;
   body.innerHTML = `
     <p class="muted small">Ten private facts; for each, whether a supported claim of its true value reached Operations before the final call, and at which turn. Click a fact to follow its path through both graphs: who stated it, who relayed it, where it stopped. Hedged statements ("I think", "probably") never count as exposure; unsupported claims are shown but excluded.</p>
+    <p class="warning-banner small">Detector ${escapeHtml(d.complete.detector_version)}, extraction by ${escapeHtml(d.complete.extraction_model)}: a first pass, before the detector's own validation gate (G7: a held-out set of annotated messages). A "conflicting" or "incorrect" state on a run whose proposal was exact usually marks an extraction error — a mis-read rail in a route list, a double negation, a "must permit" taken as a statement; these are what the validation set is for.</p>
     <div class="card overflow-x">
       <table class="research-facts">
         <thead><tr><th>Holder</th><th>Fact (true value)</th><th>Complete</th><th>Ring</th></tr></thead>

@@ -1,0 +1,40 @@
+{
+ "runs": 20,
+ "messages": 360,
+ "extracted": 359,
+ "extraction_failures": 1,
+ "cached": 0,
+ "fact_items": 1020,
+ "hedged_fact_items": 3,
+ "hedged_share": 0.0029411764705882353,
+ "categories": {
+  "complete": {
+   "inconsistent": 2,
+   "base_sufficient": 8
+  },
+  "ring": {
+   "inconsistent": 2,
+   "solution_sufficient": 1,
+   "base_sufficient": 4,
+   "derived_sufficient": 1,
+   "insufficient": 2
+  }
+ },
+ "claim_types": {
+  "base": 1267,
+  "non_claim": 807,
+  "derived": 664,
+  "unattributed": 120,
+  "solution": 157
+ },
+ "sources": {
+  "own": 644,
+  "relayed": 599,
+  "unsourced": 24
+ },
+ "supports": {
+  "supported": 1366,
+  "undefined": 138,
+  "unsupported": 584
+ }
+}

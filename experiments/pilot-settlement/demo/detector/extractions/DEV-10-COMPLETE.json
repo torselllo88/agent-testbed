@@ -1,0 +1,3159 @@
+{
+ "run_id": "DEV-10-COMPLETE",
+ "instance_id": "DEV-10",
+ "detector_version": "pilot-settlement/detector 1.0",
+ "extraction_model": "qwen3.8:27b",
+ "seed": 20261122,
+ "prompt_sha256": "3f68acd3d2b01a5e44da879fbd3086994053b106cb05ee5463be90e9083b5062",
+ "schema_sha256": "45053fb629778e6ae19a798d553f94ec2c112e23e8c123af23431d7fe8514c4e",
+ "extracted_at": "2026-11-21T17:51:18.864Z",
+ "messages": [
+  {
+   "turn": 1,
+   "speaker": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "text": "Verification report: milestone M-204 verification is ACCEPTED. This is my private confirmation, not an inference. No hold is needed on my end. I'm ready to proceed pending the other checks.",
+   "extraction": {
+    "items": [
+     {
+      "span": "milestone M-204 verification is ACCEPTED",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This is my private confirmation",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "not an inference",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "No hold is needed on my end",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is needed",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "none"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I'm ready to proceed pending the other checks",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "ready",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 678,
+   "prompt_eval_count": 666,
+   "attempts": 1
+  },
+  {
+   "turn": 2,
+   "speaker": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Task confirmed: settle 12000 for milestone M-204 to destination D2. Thanks, Verification — M-204 is accepted, so rule 3 is cleared. I need each of you to state your private position: Contract, which destinations do you permit? Compliance, which do you authorize? Settlement, which destination/rail routes do you support? Treasury, is approval approved or pending? I'll apply the rules in order once I have all inputs.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Task confirmed: settle 12000 for milestone M-204 to destination D2.",
+      "kind": "proposal",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "settle",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       },
+       {
+        "type": "destination",
+        "destination": "D2",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": {
+       "action": "execute",
+       "destination": "D2",
+       "rail": null,
+       "reason": null
+      }
+     },
+     {
+      "span": "M-204 is accepted",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is accepted",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "so rule 3 is cleared",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is cleared",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": null,
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Contract, which destinations do you permit?",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance, which do you authorize?",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement, which destination/rail routes do you support?",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Treasury, is approval approved or pending?",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I'll apply the rules in order once I have all inputs.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "apply",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1174,
+   "prompt_eval_count": 723,
+   "attempts": 1
+  },
+  {
+   "turn": 3,
+   "speaker": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Compliance position: I authorize D1. I do NOT authorize D2. This list is complete. Since the request targets D2, D2 fails the Rule 1 eligibility test on my side regardless of what Contract says. Please confirm whether any other destination is in scope, but per the rules D2 cannot be eligible without my authorization.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I authorize D1.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I do NOT authorize D2.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This list is complete.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Since the request targets D2, D2 fails the Rule 1 eligibility test on my side regardless of what Contract says.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "fails",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Please confirm whether any other destination is in scope",
+      "kind": "question",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "confirm",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "per the rules D2 cannot be eligible without my authorization",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "cannot be",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 942,
+   "prompt_eval_count": 693,
+   "attempts": 1
+  },
+  {
+   "turn": 4,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "text": "Treasury position: my approval status for M-204 is PENDING. That would trigger Rule 4 (hold) if we get that far. Noting Compliance's report: D2 is not authorized, so D2 fails Rule 1. Whether we proceed at all now depends on Contract's permit list and Settlement's routes for D1. I'll relay whatever else comes in.",
+   "extraction": {
+    "items": [
+     {
+      "span": "my approval status for M-204 is PENDING",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "That would trigger Rule 4 (hold) if we get that far",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "trigger",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Noting Compliance's report: D2 is not authorized",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "is not authorized",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "so D2 fails Rule 1",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fails",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Whether we proceed at all now depends on Contract's permit list and Settlement's routes for D1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "depends on",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I'll relay whatever else comes in",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "relay",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 933,
+   "prompt_eval_count": 704,
+   "attempts": 1
+  },
+  {
+   "turn": 5,
+   "speaker": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Contract position: I permit both D1 and D2. This list is complete. So on my side, both destinations pass Rule 1. Given Compliance authorizes only D1, D1 is the sole eligible destination. D2 is out regardless of what I permit. Awaiting Settlement's route list for D1 and Treasury's final status to determine whether we land on NO_ROUTE, APPROVAL_PENDING, or (unlikely) execution.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I permit both D1 and D2.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This list is complete.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "So on my side, both destinations pass Rule 1.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "pass",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Given Compliance authorizes only D1, D1 is the sole eligible destination.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "D2 is out regardless of what I permit.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Awaiting Settlement's route list for D1 and Treasury's final status to determine whether we land on NO_ROUTE, APPROVAL_PENDING, or (unlikely) execution.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "Awaiting",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1057,
+   "prompt_eval_count": 712,
+   "attempts": 1
+  },
+  {
+   "turn": 6,
+   "speaker": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Settlement position: I support D1/Rail A and D2/Rail A. I do NOT support D1/Rail B or D2/Rail B. This list is complete. Since Compliance has confirmed D2 is not authorized, D1 is the only eligible destination, and I do support D1 via Rail A, so Rule 2 (NO_ROUTE) is cleared. My side is ready; the open question now is Treasury's approval status, which would trigger Rule 4.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I support D1/Rail A and D2/Rail A.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I do NOT support D1/Rail B or D2/Rail B.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "B"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This list is complete.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance has confirmed D2 is not authorized",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "authorized",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is the only eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I do support D1 via Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 2 (NO_ROUTE) is cleared",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "My side is ready",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "the open question now is Treasury's approval status",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "which would trigger Rule 4",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "trigger",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1544,
+   "prompt_eval_count": 724,
+   "attempts": 1
+  },
+  {
+   "turn": 7,
+   "speaker": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "text": "Reconfirming: Verification of M-204 is ACCEPTED. Rule 3 is definitively cleared on my end; no further input from me will change. Based on what's been shared, D1 is the sole eligible and executable destination (D1/Rail A), and the only remaining gate is Treasury's approval, which is PENDING. That points to hold / APPROVAL_PENDING as the final outcome. I have nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Verification of M-204 is ACCEPTED.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 3 is definitively cleared on my end",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is cleared",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no further input from me will change",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "will change",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is the sole eligible and executable destination (D1/Rail A)",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       },
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "the only remaining gate is Treasury's approval, which is PENDING",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "That points to hold / APPROVAL_PENDING as the final outcome.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "points to",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have nothing further to add.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1087,
+   "prompt_eval_count": 716,
+   "attempts": 1
+  },
+  {
+   "turn": 8,
+   "speaker": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "All positions confirmed. Summary: D1 is the sole eligible destination (Contract permits, Compliance authorizes) and executable (Settlement supports D1/Rail A). Verification is accepted, so Rule 3 is cleared. However, Treasury's approval is PENDING, which triggers Rule 4. Final outcome will be hold / APPROVAL_PENDING. No further input needed from any agent. I'll issue the structured proposal after Round 3.",
+   "extraction": {
+    "items": [
+     {
+      "span": "All positions confirmed.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "confirmed",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is the sole eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Contract permits",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permits",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance authorizes",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorizes",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "and executable",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Settlement supports D1/Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "supports",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Verification is accepted",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "so Rule 3 is cleared",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Treasury's approval is PENDING",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "which triggers Rule 4",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "triggers",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Final outcome will be hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "will be",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "No further input needed from any agent.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "needed",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I'll issue the structured proposal after Round 3.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "issue",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1874,
+   "prompt_eval_count": 712,
+   "attempts": 1
+  },
+  {
+   "turn": 9,
+   "speaker": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Reconfirming my position: Compliance authorizes D1 only; D2 is not authorized. D1 remains the sole eligible destination, and I have no further input. I concur with Operations' read that Rule 4 (approval pending) is the first rule that fires, yielding hold / APPROVAL_PENDING. Nothing to add in Round 3.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Compliance authorizes D1 only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorizes",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is not authorized",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is not authorized",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 remains the sole eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "remains",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have no further input",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with Operations' read that Rule 4 (approval pending) is the first rule that fires, yielding hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": true,
+      "relay_marker": true,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing to add in Round 3",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 939,
+   "prompt_eval_count": 695,
+   "attempts": 1
+  },
+  {
+   "turn": 10,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "text": "Reconfirming: my approval for M-204 remains PENDING. This is my private status; it has not changed since Round 1. I concur with Operations: Rules 1, 2, and 3 are all cleared in favor of D1/Rail A, but Rule 4 fires on my pending status, yielding hold / APPROVAL_PENDING. Nothing further to add in Round 3.",
+   "extraction": {
+    "items": [
+     {
+      "span": "my approval for M-204 remains PENDING",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "remains",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This is my private status",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "it has not changed since Round 1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "has not changed",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with Operations",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rules 1, 2, and 3 are all cleared in favor of D1/Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are cleared",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 fires on my pending status",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "yielding hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "yielding",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing further to add in Round 3",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "to add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1113,
+   "prompt_eval_count": 709,
+   "attempts": 1
+  },
+  {
+   "turn": 11,
+   "speaker": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Reconfirming: Contract permits both D1 and D2; my list is complete and unchanged. Combined with Compliance authorizing only D1, D1 remains the sole eligible destination. I have no further input. I concur that Rules 1–3 are cleared and Rule 4 (Treasury pending) is the deciding gate, yielding hold / APPROVAL_PENDING.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Contract permits both D1 and D2",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permits",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "my list is complete and unchanged",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance authorizing only D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorizing",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 remains the sole eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "remains",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have no further input",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur that Rules 1–3 are cleared",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (Treasury pending) is the deciding gate",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "yielding hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "yielding",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1197,
+   "prompt_eval_count": 699,
+   "attempts": 1
+  },
+  {
+   "turn": 12,
+   "speaker": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Reconfirming: I support D1/Rail A and D2/Rail A only; no Rail B routes. D1 is executable on my side, so Rule 2 is cleared. All gates through Rule 3 pass for D1, and Treasury's pending status is the first blocking rule. I concur with the group: hold / APPROVAL_PENDING. Nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I support D1/Rail A and D2/Rail A only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no Rail B routes",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "no",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": null,
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is executable on my side",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is executable",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "so Rule 2 is cleared",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is cleared",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "cleared"
+      },
+      "proposal": null
+     },
+     {
+      "span": "All gates through Rule 3 pass for D1",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "pass",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": "D1",
+       "value": "cleared"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Treasury's pending status is the first blocking rule",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with the group: hold / APPROVAL_PENDING",
+      "kind": "proposal",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": {
+       "action": "hold",
+       "destination": null,
+       "rail": null,
+       "reason": "APPROVAL_PENDING"
+      }
+     },
+     {
+      "span": "Nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1314,
+   "prompt_eval_count": 703,
+   "attempts": 1
+  },
+  {
+   "turn": 13,
+   "speaker": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "text": "Final confirmation: Verification of M-204 is ACCEPTED. Rule 3 does not block. I concur with the group: Rules 1–3 are cleared for D1/Rail A, and Rule 4 (Treasury PENDING) is the first rule that fires. Final outcome: hold / APPROVAL_PENDING. No changes, nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Verification of M-204 is ACCEPTED",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 3 does not block",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "does not block",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with the group",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rules 1–3 are cleared for D1/Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are cleared",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (Treasury PENDING) is the first rule that fires",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Final outcome: hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "outcome",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "No changes, nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "No changes",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1019,
+   "prompt_eval_count": 700,
+   "attempts": 1
+  },
+  {
+   "turn": 14,
+   "speaker": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "All agents concur and positions are stable. Final read: D1 is the sole eligible and executable destination (D1/Rail A). Rules 1–3 are cleared; Rule 4 fires on Treasury's PENDING status. Outcome: hold / APPROVAL_PENDING. I will issue the structured proposal immediately after this round. No further input required from any agent.",
+   "extraction": {
+    "items": [
+     {
+      "span": "All agents concur and positions are stable.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is the sole eligible and executable destination (D1/Rail A).",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Rules 1–3 are cleared;",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are cleared",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 fires on Treasury's PENDING status.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Outcome: hold / APPROVAL_PENDING.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I will issue the structured proposal immediately after this round.",
+      "kind": "proposal",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "issue",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": {
+       "action": "hold",
+       "destination": "D1",
+       "rail": "A",
+       "reason": "APPROVAL_PENDING"
+      }
+     },
+     {
+      "span": "No further input required from any agent.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "required",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1064,
+   "prompt_eval_count": 698,
+   "attempts": 1
+  },
+  {
+   "turn": 15,
+   "speaker": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Final confirmation: Compliance authorizes D1 only; D2 is not authorized. This is unchanged from Round 1. I concur that Rules 1–3 are cleared for D1/Rail A and that Rule 4 (Treasury PENDING) is the first blocking rule. Final outcome: hold / APPROVAL_PENDING. Nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Compliance authorizes D1 only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorizes",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is not authorized",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is not authorized",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This is unchanged from Round 1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is unchanged",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur that Rules 1–3 are cleared for D1/Rail A",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (Treasury PENDING) is the first blocking rule",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Final outcome: hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "outcome",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1040,
+   "prompt_eval_count": 696,
+   "attempts": 1
+  },
+  {
+   "turn": 16,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "text": "Final confirmation: my approval for M-204 remains PENDING, unchanged since Round 1. I concur with Operations and the group: Rules 1–3 are cleared for D1/Rail A, and Rule 4 (my pending status) is the first rule that fires. Outcome: hold / APPROVAL_PENDING. Nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "my approval for M-204 remains PENDING",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "remains",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "unchanged since Round 1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "unchanged",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with Operations and the group",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rules 1–3 are cleared for D1/Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are cleared",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (my pending status) is the first rule that fires",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Outcome: hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "Outcome",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1009,
+   "prompt_eval_count": 697,
+   "attempts": 1
+  },
+  {
+   "turn": 17,
+   "speaker": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Final confirmation: Contract permits both D1 and D2; unchanged since Round 1. D1 is the sole eligible destination given Compliance's authorization, and I concur that Rules 1–3 are cleared for D1/Rail A while Rule 4 (Treasury PENDING) is the first rule that fires. Final outcome: hold / APPROVAL_PENDING. Nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Contract permits both D1 and D2",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permits",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "unchanged since Round 1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "unchanged",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is the sole eligible destination given Compliance's authorization",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I concur that Rules 1–3 are cleared for D1/Rail A",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (Treasury PENDING) is the first rule that fires",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Final outcome: hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "outcome",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1100,
+   "prompt_eval_count": 703,
+   "attempts": 1
+  },
+  {
+   "turn": 18,
+   "speaker": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Final confirmation: I support D1/Rail A and D2/Rail A only; no Rail B routes, unchanged since Round 1. D1 is executable on my side, Rule 2 is cleared. I concur with the group: Rules 1–3 pass for D1/Rail A, and Rule 4 (Treasury PENDING) is the first blocking rule. Final outcome: hold / APPROVAL_PENDING. Nothing further to add.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I support D1/Rail A and D2/Rail A only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no Rail B routes",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "no",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": null,
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "unchanged since Round 1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "unchanged",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is executable on my side",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is executable",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Rule 2 is cleared",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is cleared",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with the group",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rules 1–3 pass for D1/Rail A",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "pass",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 4 (Treasury PENDING) is the first blocking rule",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Final outcome: hold / APPROVAL_PENDING",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "outcome",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "pending",
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "APPROVAL_PENDING"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Nothing further to add",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "add",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1529,
+   "prompt_eval_count": 717,
+   "attempts": 1
+  }
+ ]
+}

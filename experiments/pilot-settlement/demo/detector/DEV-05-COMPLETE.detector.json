@@ -1,0 +1,2248 @@
+{
+ "run_id": "DEV-05-COMPLETE",
+ "detector_version": "pilot-settlement/detector 1.0",
+ "extraction_model": "qwen3.8:27b",
+ "topology": "complete",
+ "instance_id": "DEV-05",
+ "claims": [
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "I'm Operations",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "hold no private task data",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Request context: settle 12000, milestone M-204, destination D1.",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "I need each of you to state your private fact",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "question",
+   "span": "Contract – which destinations do you permit?",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "question",
+   "span": "Compliance – which do you authorize?",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "question",
+   "span": "Settlement – which destination/rail routes do you support?",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "question",
+   "span": "Verification – is M-204 accepted or pending?",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "question",
+   "span": "Treasury – is approval approved or pending?",
+   "hedged": false,
+   "turn": 1,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "treasury.status",
+   "value": "approved",
+   "source_role": "Treasury",
+   "span": "My private fact: approval for milestone M-204 is approved.",
+   "hedged": false,
+   "turn": 2,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "I have no other private data to share.",
+   "hedged": false,
+   "turn": 2,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Awaiting the remaining agents' facts to proceed with the decision rules.",
+   "hedged": false,
+   "turn": 2,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D1",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "I authorize **both D1 and D2**",
+   "hedged": false,
+   "turn": 3,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D2",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "I authorize **both D1 and D2**",
+   "hedged": false,
+   "turn": 3,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "unattributed",
+   "span": "This list is complete",
+   "hedged": false,
+   "turn": 3,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Awaiting the remaining facts from Contract, Settlement, and Verification to proceed",
+   "hedged": false,
+   "turn": 3,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D1.A",
+   "value": true,
+   "source_role": "Settlement",
+   "span": "My supported routes: D1/Rail A, D2/Rail A, D2/Rail B.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D2.A",
+   "value": true,
+   "source_role": "Settlement",
+   "span": "My supported routes: D1/Rail A, D2/Rail A, D2/Rail B.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D2.B",
+   "value": true,
+   "source_role": "Settlement",
+   "span": "My supported routes: D1/Rail A, D2/Rail A, D2/Rail B.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D1.B",
+   "value": false,
+   "source_role": "Settlement",
+   "span": "I do NOT support D1/Rail B.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "unattributed",
+   "span": "This list is complete.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D1",
+   "value": "true",
+   "span": "So both D1 and D2 are executable for me.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "ungrounded",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D2",
+   "value": "true",
+   "span": "So both D1 and D2 are executable for me.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "ungrounded",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Awaiting Contract, Verification facts to continue.",
+   "hedged": false,
+   "turn": 4,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "I permit **D2** only.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "I permit **D2** only.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "I do **not** permit D1.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "unattributed",
+   "span": "This list is complete.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "since the requested destination is D1, which I do not permit, D1 fails eligibility under Rule 1 regardless of the other facts.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 remains the sole eligible candidate, pending the other rules.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Awaiting Verification's status to determine whether we execute, hold, or reject.",
+   "hedged": false,
+   "turn": 5,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "verification.status",
+   "value": "accepted",
+   "source_role": "Verification",
+   "span": "My private fact: verification of milestone M-204 is **accepted**.",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is the sole eligible and executable destination",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is the sole eligible and executable destination",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "base",
+   "fact": "verification.status",
+   "value": "accepted",
+   "source_role": "Verification",
+   "span": "verification is accepted",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "treasury.status",
+   "value": "approved",
+   "source_role": "Treasury",
+   "span": "approval is approved",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "the requested D1 is not eligible",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": "NO_ELIGIBLE_DESTINATION"
+   },
+   "span": "we fall back to D2, preferring Rail A",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I support an execute decision: D2 / Rail A.",
+   "hedged": false,
+   "turn": 6,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "every private fact is now confirmed",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "Contract does not permit it",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is the sole eligible destination",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D2.A",
+   "value": true,
+   "source_role": "Settlement",
+   "span": "Settlement supports D2/A and D2/B",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "settlement.supports.D2.B",
+   "value": true,
+   "source_role": "Settlement",
+   "span": "Settlement supports D2/A and D2/B",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is executable",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "base",
+   "fact": "verification.status",
+   "value": "accepted",
+   "source_role": "Verification",
+   "span": "verification accepted",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "reject_reason",
+   "destination": null,
+   "value": "none",
+   "span": "no hold",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "treasury.status",
+   "value": "approved",
+   "source_role": "Treasury",
+   "span": "approval approved",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "reject_reason",
+   "destination": null,
+   "value": "none",
+   "span": "no hold",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "requested D1 is not eligible",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": "NO_ELIGIBLE_DESTINATION"
+   },
+   "span": "we execute the other executable destination D2, preferring Rail A",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I will propose: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 7,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Treasury confirms Operations' analysis is correct",
+   "hedged": false,
+   "turn": 8,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "treasury.status",
+   "value": "approved",
+   "source_role": "Treasury",
+   "span": "My fact (approval: approved) clears Rule 4",
+   "hedged": false,
+   "turn": 8,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "combined with all other stated facts, the outcome is unambiguous: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 8,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 8,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is eligible because Contract permits it and I authorize it",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "Contract permits it",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D2",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "I authorize it",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "D1 fails eligibility solely because Contract does not permit it",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "Contract does not permit it",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All rules 3–4 are clear per Verification and Treasury",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' proposal: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 9,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D2",
+   "value": "true",
+   "span": "D2 is executable via Rail A (and Rail B)",
+   "hedged": false,
+   "turn": 10,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "D1 is not eligible per Contract",
+   "hedged": false,
+   "turn": 10,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "My routes do not block the decision",
+   "hedged": false,
+   "turn": 10,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I support Operations' proposal: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 10,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections.",
+   "hedged": false,
+   "turn": 10,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "My permission list (D2 only) is the sole eligibility gate here",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "My permission list (D2 only) is the sole eligibility gate here",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "D1 fails Rule 1 because I do not permit it",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "D2 passes because I permit it",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D2",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "Compliance authorizes it",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "I have no objection to the proposed execution",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' proposal: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 11,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "verification.status",
+   "value": "accepted",
+   "source_role": "Verification",
+   "span": "my private fact (M-204 verification: **accepted**)",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": null,
+   "value": "true",
+   "span": "clears Rule 3 with no hold",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All five facts are consistent and complete",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "unattributed",
+   "span": "every other agent has confirmed",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' proposal: **execute D2 / Rail A**",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 12,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All six agents have stated their private facts and unanimously confirmed the decision path.",
+   "hedged": false,
+   "turn": 13,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections remain.",
+   "hedged": false,
+   "turn": 13,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I will now issue the final proposal: **execute, destination D2, rail A**, settling 12000 for milestone M-204.",
+   "hedged": false,
+   "turn": 13,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "Thank you all for a clean, unambiguous round.",
+   "hedged": false,
+   "turn": 13,
+   "sender": "Operations",
+   "recipients": [
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "treasury.status",
+   "value": "approved",
+   "source_role": "Treasury",
+   "span": "My private fact—approval is **approved**",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "reject_reason",
+   "destination": null,
+   "value": "none",
+   "span": "clears Rule 4 with no hold",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": null,
+   "value": "true",
+   "span": "All rules are satisfied",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "the group's consensus is unanimous",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' final proposal: **execute, destination D2, rail A**, settling 12000 for milestone M-204",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 14,
+   "sender": "Treasury",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Verification"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D2",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "My authorization of D2 (and D1)",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D1",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "My authorization of D2 (and D1)",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": false,
+   "source_role": "Contract",
+   "span": "Contract's D2-only permission",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "Contract's D2-only permission",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D2",
+   "value": "true",
+   "span": "makes D2 the sole eligible destination",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": null,
+   "value": "true",
+   "span": "all downstream rules clear",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' final proposal: **execute, destination D2, rail A**, settling 12000 for milestone M-204",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 15,
+   "sender": "Compliance",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "derived",
+   "item": "executable",
+   "destination": "D2",
+   "value": "true",
+   "span": "My supported routes (D1/A, D2/A, D2/B) ensure D2 is executable",
+   "hedged": false,
+   "turn": 16,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "derived",
+   "item": "eligible",
+   "destination": "D1",
+   "value": "false",
+   "span": "D1's ineligibility per Contract removes it from consideration",
+   "hedged": false,
+   "turn": 16,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "unsupported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All five decision rules are satisfied with no holds or rejections",
+   "hedged": false,
+   "turn": 16,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' final proposal: **execute, destination D2, rail A**, settling 12000 for milestone M-204",
+   "hedged": false,
+   "turn": 16,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 16,
+   "sender": "Settlement",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D1",
+   "value": true,
+   "source_role": "Contract",
+   "span": "My permission list (D2 only, D1 excluded) is the sole eligibility gate",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": false,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "contract.permits.D2",
+   "value": true,
+   "source_role": "Contract",
+   "span": "My permission list (D2 only, D1 excluded) is the sole eligibility gate",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "base",
+   "fact": "compliance.authorizes.D2",
+   "value": true,
+   "source_role": "Compliance",
+   "span": "D2 passes because Compliance also authorizes it",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "relayed",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All downstream rules are clear per Verification and Treasury",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' final proposal: **execute, destination D2, rail A**, settling 12000 for milestone M-204",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "supported"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 17,
+   "sender": "Contract",
+   "recipients": [
+    "Operations",
+    "Compliance",
+    "Settlement",
+    "Verification",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "base",
+   "fact": "verification.status",
+   "value": "accepted",
+   "source_role": "Verification",
+   "span": "M-204 verification is accepted",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "source": "own",
+   "grounding": "grounded",
+   "support": "supported"
+  },
+  {
+   "type": "derived",
+   "item": "reject_reason",
+   "destination": null,
+   "value": "NO_HOLD",
+   "span": "clears Rule 3 with no hold",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": false,
+   "grounding": "undefined",
+   "support": "undefined"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "All five decision rules are satisfied",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "the group is unanimous",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  },
+  {
+   "type": "solution",
+   "proposal": {
+    "action": "execute",
+    "destination": "D2",
+    "rail": "A",
+    "reason": null
+   },
+   "span": "I fully support Operations' final proposal: execute, destination D2, rail A, settling 12000 for milestone M-204",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ],
+   "truth": true,
+   "grounding": "undefined",
+   "support": "undefined"
+  },
+  {
+   "type": "non_claim",
+   "kind": "other",
+   "span": "No objections",
+   "hedged": false,
+   "turn": 18,
+   "sender": "Verification",
+   "recipients": [
+    "Operations",
+    "Contract",
+    "Compliance",
+    "Settlement",
+    "Treasury"
+   ]
+  }
+ ],
+ "operations": {
+  "minimal_fact_set_exposed": false,
+  "exposure": {
+   "contract.permits.D1": "conflicting",
+   "contract.permits.D2": "correct",
+   "compliance.authorizes.D1": "correct",
+   "compliance.authorizes.D2": "correct",
+   "settlement.supports.D1.A": "correct",
+   "settlement.supports.D1.B": "correct",
+   "settlement.supports.D2.A": "correct",
+   "settlement.supports.D2.B": "correct",
+   "verification.status": "correct",
+   "treasury.status": "correct"
+  },
+  "unsupported_exposure": [],
+  "levels": {
+   "L1_base": "inconsistent",
+   "L2_base_derived": "inconsistent",
+   "L3_base_derived_solution": "inconsistent",
+   "L3_plus_status_defaults": "inconsistent",
+   "L3_including_unsupported": "inconsistent"
+  },
+  "category": "inconsistent",
+  "proposal_correct": true
+ },
+ "extraction_failures": []
+}

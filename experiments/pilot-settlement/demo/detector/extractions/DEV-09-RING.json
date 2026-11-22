@@ -1,0 +1,3112 @@
+{
+ "run_id": "DEV-09-RING",
+ "instance_id": "DEV-09",
+ "detector_version": "pilot-settlement/detector 1.0",
+ "extraction_model": "qwen3.8:27b",
+ "seed": 20261122,
+ "prompt_sha256": "3f68acd3d2b01a5e44da879fbd3086994053b106cb05ee5463be90e9083b5062",
+ "schema_sha256": "45053fb629778e6ae19a798d553f94ec2c112e23e8c123af23431d7fe8514c4e",
+ "extracted_at": "2026-11-21T17:38:27.750Z",
+ "messages": [
+  {
+   "turn": 1,
+   "speaker": "Operations",
+   "recipients": [
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Round 1 opening. I hold no private information. I need to confirm four things to apply the decision rules in order: (1) which destinations Contract permits and Compliance authorizes, (2) which destination/rail routes Settlement supports, (3) verification status of M-204, (4) approval status. The requested destination is D1, but D2 may be used if D1 is not executable. Please share your respective positions.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I hold no private information.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "hold",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I need to confirm four things to apply the decision rules in order: (1) which destinations Contract permits and Compliance authorizes, (2) which destination/rail routes Settlement supports, (3) verification status of M-204, (4) approval status.",
+      "kind": "question",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "The requested destination is D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 may be used if D1 is not executable",
+      "kind": "conditional",
+      "hedged": true,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "be used",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2",
+        "rail": null
+       },
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Please share your respective positions.",
+      "kind": "question",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "share",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 793,
+   "prompt_eval_count": 716,
+   "attempts": 1
+  },
+  {
+   "turn": 2,
+   "speaker": "Compliance",
+   "recipients": [
+    "Settlement",
+    "Contract"
+   ],
+   "text": "Compliance here. I authorize D1 and do not authorize D2; that list is complete. So D1 is eligible from my side, pending Contract's permission. D2 is not eligible regardless of Contract. Please confirm your positions, Contract and Settlement.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I authorize D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "do not authorize D2",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "that list is complete",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is eligible from my side",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "pending Contract's permission",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "pending",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is not eligible regardless of Contract",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Please confirm your positions, Contract and Settlement.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "confirm",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1030,
+   "prompt_eval_count": 676,
+   "attempts": 1
+  },
+  {
+   "turn": 3,
+   "speaker": "Contract",
+   "recipients": [
+    "Compliance",
+    "Verification"
+   ],
+   "text": "Contract here. I permit D1 and do not permit D2; that list is complete. Combined with Compliance's authorization, D1 is eligible and D2 is not. We still need Settlement to confirm a supported rail for D1, plus Verification and Treasury status before we can execute or hold.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I permit D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "do not permit D2",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "that list is complete",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 is eligible",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "D2 is not eligible",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "We still need Settlement to confirm a supported rail for D1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "plus Verification and Treasury status before we can execute or hold",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1060,
+   "prompt_eval_count": 684,
+   "attempts": 1
+  },
+  {
+   "turn": 4,
+   "speaker": "Settlement",
+   "recipients": [
+    "Treasury",
+    "Compliance"
+   ],
+   "text": "Settlement here. I support D2/Rail A and D2/Rail B; I do not support any D1 route (neither Rail A nor Rail B). So even if D1 were eligible, I cannot execute it. D2 is executable on my side, but Compliance has ruled it out. Please confirm, Contract, whether you permit D1 — and Treasury/Verification, share your status when you speak.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I support D2/Rail A and D2/Rail B",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I do not support any D1 route (neither Rail A nor Rail B)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "even if D1 were eligible, I cannot execute it",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "execute",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is executable on my side",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": "D2",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Compliance has ruled it out",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "ruled out",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Please confirm, Contract, whether you permit D1",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Treasury/Verification, share your status when you speak",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "share",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1153,
+   "prompt_eval_count": 710,
+   "attempts": 1
+  },
+  {
+   "turn": 5,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Settlement"
+   ],
+   "text": "Treasury here. My private status: approval is approved. Per Settlement, D1 has no supported route (neither Rail A nor B), while D2 is executable on both rails. Settlement claims Compliance ruled out D2, but I have not independently confirmed that. I still need Contract permissions, Compliance authorization, and Verification status before we can walk the decision rules in order.",
+   "extraction": {
+    "items": [
+     {
+      "span": "My private status: approval is approved.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "approved",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Per Settlement, D1 has no supported route (neither Rail A nor B)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "has",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       },
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "while D2 is executable on both rails",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D2",
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": "D2",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Settlement claims Compliance ruled out D2",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "ruled out",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "but I have not independently confirmed that",
+      "kind": "ignorance",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "confirmed",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I still need Contract permissions, Compliance authorization, and Verification status before we can walk the decision rules in order.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1048,
+   "prompt_eval_count": 700,
+   "attempts": 1
+  },
+  {
+   "turn": 6,
+   "speaker": "Verification",
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "text": "Verification here. Milestone M-204 verification status: accepted. This resolves rule 3 in our favor; no hold is triggered on verification grounds. Still need Compliance to confirm authorization, Settlement to confirm at least one rail for D1, and Treasury to report approval status before we can reach a final decision.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Milestone M-204 verification status: accepted.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "status",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "This resolves rule 3 in our favor",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "resolves",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no hold is triggered on verification grounds",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "triggered",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_HOLD"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Still need Compliance to confirm authorization",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement to confirm at least one rail for D1",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "confirm",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Treasury to report approval status",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "report",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "before we can reach a final decision",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "reach",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 970,
+   "prompt_eval_count": 688,
+   "attempts": 1
+  },
+  {
+   "turn": 7,
+   "speaker": "Operations",
+   "recipients": [
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Round 2. Good progress: Verification accepted (rule 3 cleared) and Approval approved (rule 4 cleared), so no hold can trigger. I still need three direct confirmations before applying rules 1 and 2: Contract, please state which of D1/D2 you permit; Compliance, which do you authorize; Settlement, which destination/rail pairs do you support. Treasury's relay about routes and Compliance is noted but not confirmed by the source agents. Please each give your own list explicitly.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Verification accepted (rule 3 cleared)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "accepted",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Approval approved (rule 4 cleared)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "approved",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "approved",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "so no hold can trigger",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "can trigger",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_HOLD"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I still need three direct confirmations before applying rules 1 and 2",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Contract, please state which of D1/D2 you permit",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permit",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       },
+       {
+        "type": "destination",
+        "destination": "D2",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance, which do you authorize",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement, which destination/rail pairs do you support",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "support",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Treasury's relay about routes and Compliance is noted but not confirmed by the source agents",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "confirmed",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Please each give your own list explicitly",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "give",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1299,
+   "prompt_eval_count": 726,
+   "attempts": 1
+  },
+  {
+   "turn": 8,
+   "speaker": "Compliance",
+   "recipients": [
+    "Settlement",
+    "Contract"
+   ],
+   "text": "Compliance round 2. To confirm: D1 is the only eligible destination (Contract permits, I authorize). Settlement has stated it supports no D1 rail. Therefore, no eligible destination is executable, which triggers rule 2: reject / NO_ROUTE. Verification and Treasury status are moot at this stage. I stand by this conclusion unless I'm missing something.",
+   "extraction": {
+    "items": [
+     {
+      "span": "D1 is the only eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Contract permits",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permits",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I authorize",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement has stated it supports no D1 rail",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "supports",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no eligible destination is executable",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": null,
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "which triggers rule 2: reject / NO_ROUTE",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "triggers",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Verification and Treasury status are moot at this stage",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I stand by this conclusion unless I'm missing something",
+      "kind": "other",
+      "hedged": true,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "stand by",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1227,
+   "prompt_eval_count": 697,
+   "attempts": 1
+  },
+  {
+   "turn": 9,
+   "speaker": "Contract",
+   "recipients": [
+    "Compliance",
+    "Verification"
+   ],
+   "text": "Contract round 2. I confirm D1 is the sole eligible destination and stand by that. I have not seen Settlement's message directly, but if Compliance's relay is accurate that no D1 rail is supported, rule 2 fires immediately: reject / NO_ROUTE. In that case Verification's accepted status and Treasury's approval are moot, as you noted. I'll defer to Operations for the final call once Settlement speaks or confirms.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I confirm D1 is the sole eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "and stand by that",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "stand by",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I have not seen Settlement's message directly",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have not seen",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "but if Compliance's relay is accurate that no D1 rail is supported",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "is supported",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rule 2 fires immediately: reject / NO_ROUTE",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "In that case Verification's accepted status and Treasury's approval are moot",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are moot",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       },
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "as you noted",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "noted",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I'll defer to Operations for the final call once Settlement speaks or confirms",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "defer",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1179,
+   "prompt_eval_count": 711,
+   "attempts": 1
+  },
+  {
+   "turn": 10,
+   "speaker": "Settlement",
+   "recipients": [
+    "Treasury",
+    "Compliance"
+   ],
+   "text": "Agree. My route support is fixed: D2/A, D2/B only; zero D1 routes. If D1 is the sole eligible destination (Compliance authorizes, Contract permits) and I have no rail for it, rule 2 fires: reject / NO_ROUTE. D2 is executable on my side but ineligible per Compliance. I confirm the outcome and defer to Operations for the final structured proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Agree.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "Agree",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "My route support is fixed: D2/A, D2/B only; zero D1 routes.",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is fixed",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       },
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "If D1 is the sole eligible destination (Compliance authorizes, Contract permits) and I have no rail for it, rule 2 fires: reject / NO_ROUTE.",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is executable on my side but ineligible per Compliance.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D2",
+       "value": "ineligible"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I confirm the outcome and defer to Operations for the final structured proposal.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "confirm",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 838,
+   "prompt_eval_count": 708,
+   "attempts": 1
+  },
+  {
+   "turn": 11,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Settlement"
+   ],
+   "text": "Treasury round 2. Confirming: approval is approved, so rule 4 cannot trigger a hold. Settlement has directly confirmed routes D2/A and D2/B only, zero D1 rails — that is now a first-party statement. I have not yet received Contract's permitted destinations or Compliance's authorized destinations as direct statements from those agents, so rules 1 and 2 remain unresolved. I cannot pre-judge the outcome until both confirm. Please let them speak.",
+   "extraction": {
+    "items": [
+     {
+      "span": "approval is approved",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "approved",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rule 4 cannot trigger a hold",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "cannot trigger",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Settlement has directly confirmed routes D2/A and D2/B only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "has confirmed",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "zero D1 rails",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "zero",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "that is now a first-party statement",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I have not yet received Contract's permitted destinations or Compliance's authorized destinations as direct statements from those agents",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have not received",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rules 1 and 2 remain unresolved",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "remain",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I cannot pre-judge the outcome until both confirm",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "cannot pre-judge",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Please let them speak.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "let",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1316,
+   "prompt_eval_count": 720,
+   "attempts": 1
+  },
+  {
+   "turn": 12,
+   "speaker": "Verification",
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "text": "Verification, round 2. Reconfirming: M-204 verification is accepted, so rule 3 does not trigger a hold. I have no additional private information beyond that. The decision now hinges on rules 1 and 2: I need Settlement to directly state which destination/rail pairs it supports, since Contract's speculation about NO_ROUTE rests on a relay rather than Settlement's own confirmation. I defer to Operations for the final structured proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "M-204 verification is accepted",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is accepted",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rule 3 does not trigger a hold",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "does not trigger",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_HOLD"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have no additional private information beyond that",
+      "kind": "ignorance",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I need Settlement to directly state which destination/rail pairs it supports",
+      "kind": "question",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "need",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Contract's speculation about NO_ROUTE rests on a relay rather than Settlement's own confirmation",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "rests",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I defer to Operations for the final structured proposal",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "defer",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 832,
+   "prompt_eval_count": 716,
+   "attempts": 1
+  },
+  {
+   "turn": 13,
+   "speaker": "Operations",
+   "recipients": [
+    "Verification",
+    "Treasury"
+   ],
+   "text": "Round 3. Confirmed so far: verification accepted (rule 3 cleared), approval approved (rule 4 cleared), and Settlement supports only D2/A and D2/B with zero D1 rails. I still lack direct first-party statements from Contract (which destinations it permits) and Compliance (which it authorizes). If Compliance authorizes only D1, rule 2 fires as NO_ROUTE; if it authorizes D2, we execute D2/A. I will issue the final structured proposal based on whichever the direct confirmations support.",
+   "extraction": {
+    "items": [
+     {
+      "span": "verification accepted (rule 3 cleared)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "accepted",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "approval approved (rule 4 cleared)",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "approved",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "approved",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement supports only D2/A and D2/B with zero D1 rails",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "supports",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I still lack direct first-party statements from Contract (which destinations it permits) and Compliance (which it authorizes)",
+      "kind": "ignorance",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "lack",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "If Compliance authorizes only D1, rule 2 fires as NO_ROUTE",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": "D1",
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "if it authorizes D2, we execute D2/A",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "execute",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I will issue the final structured proposal based on whichever the direct confirmations support",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "issue",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1156,
+   "prompt_eval_count": 734,
+   "attempts": 1
+  },
+  {
+   "turn": 14,
+   "speaker": "Compliance",
+   "recipients": [
+    "Settlement",
+    "Contract"
+   ],
+   "text": "Compliance round 3. I reaffirm: D1 is the only eligible destination (I authorize it, Contract permits it) and D2 is not authorized by me. Settlement has confirmed no D1 rail, so no eligible destination is executable. Rule 2 fires: reject / NO_ROUTE. I have no further input; Operations may issue the final proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Compliance round 3.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": null,
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I reaffirm: D1 is the only eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I authorize it",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorize",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Contract permits it",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "permits",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D2 is not authorized by me",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "authorized",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement has confirmed no D1 rail",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "confirmed",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "so no eligible destination is executable",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "executable",
+       "destination": null,
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Rule 2 fires: reject / NO_ROUTE.",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have no further input",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Operations may issue the final proposal.",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "may issue",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1454,
+   "prompt_eval_count": 697,
+   "attempts": 1
+  },
+  {
+   "turn": 15,
+   "speaker": "Contract",
+   "recipients": [
+    "Compliance",
+    "Verification"
+   ],
+   "text": "Contract round 3. I reaffirm D1 is the sole eligible destination and D2 is not permitted. Based on Compliance's consistent relay that Settlement supports no D1 rail, Rule 2 fires: reject / NO_ROUTE. I acknowledge Verification's note that this rests on a relay rather than Settlement's direct message, but Compliance has stated it twice and I have no contradicting information. I defer to Operations for the final structured proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I reaffirm D1 is the sole eligible destination",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "D2 is not permitted",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is not permitted",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D2"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Based on Compliance's consistent relay that Settlement supports no D1 rail",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "supports",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Rule 2 fires: reject / NO_ROUTE",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I acknowledge Verification's note that this rests on a relay rather than Settlement's direct message",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": true,
+      "predicate": "acknowledge",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance has stated it twice",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "has stated",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I have no contradicting information",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I defer to Operations for the final structured proposal",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "defer",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1160,
+   "prompt_eval_count": 712,
+   "attempts": 1
+  },
+  {
+   "turn": 16,
+   "speaker": "Settlement",
+   "recipients": [
+    "Treasury",
+    "Compliance"
+   ],
+   "text": "Settlement round 3, final. I reconfirm: my supported routes are D2/Rail A and D2/Rail B only. I have zero routes for D1, on either rail. Since Compliance has authorized only D1 and Settlement (me) cannot route D1, no eligible destination is executable. Rule 2 fires: reject / NO_ROUTE. Verification and Treasury status are irrelevant at this stage. I have no further input; Operations may issue the final proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "my supported routes are D2/Rail A and D2/Rail B only",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "are",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I have zero routes for D1, on either rail",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": "D1",
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Compliance has authorized only D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "has authorized",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement (me) cannot route D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "cannot route",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "no eligible destination is executable",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": null,
+       "value": "none"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Rule 2 fires: reject / NO_ROUTE",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "fires",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Verification and Treasury status are irrelevant at this stage",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I have no further input",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Operations may issue the final proposal",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "may issue",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1327,
+   "prompt_eval_count": 721,
+   "attempts": 1
+  },
+  {
+   "turn": 17,
+   "speaker": "Treasury",
+   "recipients": [
+    "Operations",
+    "Settlement"
+   ],
+   "text": "Treasury round 3, final. Approval is approved; rule 4 cannot trigger. Settlement has consistently stated as fact that Compliance authorized only D1, and I concur with the resulting logic: D1 eligible but unrouted → rule 2, NO_ROUTE. I note I never received a direct first-party list from Contract or Compliance, but the evidence across three rounds points firmly one direction. Deferring to Operations for the structured proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "Approval is approved",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Treasury",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "approval",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "approved",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rule 4 cannot trigger",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "cannot trigger",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ELIGIBLE_DESTINATION"
+      },
+      "proposal": null
+     },
+     {
+      "span": "Settlement has consistently stated as fact that Compliance authorized only D1",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Compliance",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "authorized",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "I concur with the resulting logic",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "concur",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "D1 eligible but unrouted",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "eligible",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": "D1",
+       "value": "true"
+      },
+      "proposal": null
+     },
+     {
+      "span": "D1 eligible but unrouted",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "unrouted",
+      "polarity": "negative",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "has_route",
+       "destination": "D1",
+       "value": "false"
+      },
+      "proposal": null
+     },
+     {
+      "span": "rule 2, NO_ROUTE",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": "D1",
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I note I never received a direct first-party list from Contract or Compliance",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "received",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "the evidence across three rounds points firmly one direction",
+      "kind": "other",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "points",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Deferring to Operations for the structured proposal",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "Deferring",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1482,
+   "prompt_eval_count": 713,
+   "attempts": 1
+  },
+  {
+   "turn": 18,
+   "speaker": "Verification",
+   "recipients": [
+    "Contract",
+    "Operations"
+   ],
+   "text": "Verification, round 3. I reconfirm M-204 verification is accepted, clearing rule 3, but since rules 1 and 2 are evaluated first, my status is moot if either fires. Based on Contract's repeated confirmation that D1 is the sole eligible destination and Settlement's supported routes being D2/A and D2/B with no D1 rail, rule 2 (NO_ROUTE) is the correct outcome. I have no contradicting information and defer to Operations for the final structured proposal.",
+   "extraction": {
+    "items": [
+     {
+      "span": "I reconfirm M-204 verification is accepted",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "reconfirm",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "milestone",
+        "destination": null,
+        "rail": null
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": "accepted",
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "clearing rule 3",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "clearing",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "eligible",
+       "destination": null,
+       "value": "cleared"
+      },
+      "proposal": null
+     },
+     {
+      "span": "rules 1 and 2 are evaluated first",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "are evaluated",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "my status is moot if either fires",
+      "kind": "conditional",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Contract's repeated confirmation that D1 is the sole eligible destination",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Contract",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "confirmation",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "destination",
+        "destination": "D1",
+        "rail": null
+       }
+      ],
+      "exhaustive": true,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "Settlement's supported routes being D2/A and D2/B with no D1 rail",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Settlement",
+      "first_person": false,
+      "relay_marker": true,
+      "predicate": "being",
+      "polarity": "positive",
+      "objects": [
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "A"
+       },
+       {
+        "type": "route",
+        "destination": "D2",
+        "rail": "B"
+       }
+      ],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "rule 2 (NO_ROUTE) is the correct outcome",
+      "kind": "derived",
+      "hedged": false,
+      "role_named": null,
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "is",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": {
+       "item": "reject_reason",
+       "destination": null,
+       "value": "NO_ROUTE"
+      },
+      "proposal": null
+     },
+     {
+      "span": "I have no contradicting information",
+      "kind": "fact",
+      "hedged": false,
+      "role_named": "Verification",
+      "first_person": true,
+      "relay_marker": false,
+      "predicate": "have",
+      "polarity": "negative",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     },
+     {
+      "span": "defer to Operations for the final structured proposal",
+      "kind": "other",
+      "hedged": false,
+      "role_named": "Operations",
+      "first_person": false,
+      "relay_marker": false,
+      "predicate": "defer",
+      "polarity": "positive",
+      "objects": [],
+      "exhaustive": false,
+      "scope_destination": null,
+      "status_value": null,
+      "derived": null,
+      "proposal": null
+     }
+    ]
+   },
+   "error": null,
+   "raw": null,
+   "done_reason": "stop",
+   "eval_count": 1330,
+   "prompt_eval_count": 728,
+   "attempts": 1
+  }
+ ]
+}

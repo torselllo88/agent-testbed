@@ -492,3 +492,35 @@ shown on its own data, dry.
   nothing). Checked in headless Chrome (`tests/e2e/suites/research.mjs`).
 - Not in this delivery: the live run via OpenRouter in exploratory mode and
   the detector through OpenRouter — the next step once the replay is agreed.
+
+## 2026-11-22 — first detector pass over the dev logs (G7 groundwork)
+
+Run by the author on the node (`pilot -- detect`, qwen3.8:27b, thinking off,
+seed 20261122): 360 messages, 359 extracted, 1 failure (DEV-02-COMPLETE turn
+18: the model's JSON broke at 14 kB, both attempts), 3015 claims. Outputs in
+`demo/detector/` for the research demo; the author keeps the full folder.
+
+- **§8.3 hedges:** 3 of 1020 fact items hedged (0.3 %) — far under the 10 %
+  that would raise spec issue S1. Not raised.
+- **Decision-support categories:** Complete 8 base_sufficient, 2
+  inconsistent; Ring 4 base_sufficient, 1 derived_sufficient, 1
+  solution_sufficient, 2 insufficient, 2 inconsistent. Operations' exposure:
+  Complete 95 of 100 fact states correct, 4 conflicting, 1 absent; Ring 70
+  correct, 28 absent, 2 conflicting. All 20 proposals were exact, so an
+  "inconsistent" or "insufficient" run is either the ring at work
+  (Operations decided from derived or solution claims — DEV-02-RING,
+  DEV-05-RING, DEV-06-RING, DEV-10-RING) or an extraction error.
+- **Extraction error classes seen** (11 false "own" claims, 24 unsourced
+  claims), the material of the §8.4 tuning half: (1) rail mis-pairing in
+  route lists ("I support D1/Rail B and D2/Rail A" → D1/A); (2) negation
+  scope ("No restrictions on my end for either destination" → permits =
+  false; "Neither destination is supported on Rail B" → rail A); (3) a
+  compound item not split ("D2 authorized, D1 not"; "D2 only, D1 excluded"
+  → both true); (4) modal or hypothetical statements taken as facts
+  ("Contract must permit D2", "pending Compliance authorization",
+  "Settlement must confirm a supported route") → unsourced base claims.
+  No change to the extraction prompt before the validation set exists
+  (§8.5: revisions on the tuning half only).
+- Research demo: the information-flow tab now carries a note that the
+  detector is pre-validation and what a conflicting state on an exact run
+  usually means.

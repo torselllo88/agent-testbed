@@ -549,3 +549,29 @@ seed 20261122): 360 messages, 359 extracted, 1 failure (DEV-02-COMPLETE turn
   "not offered".
 - The demo for the colleague is complete: replay with the detector's view,
   batch, methods, and the live run where an OpenRouter key is set (Railway).
+
+## 2026-11-22 — research demo: live runs persisted, listed, priced, cancellable
+
+Changes asked for after the first review of the live run, plus what a user
+of the page would miss:
+
+- The page links into the running experiment: **watch live →** opens the
+  viewer of the current run, finished runs link to their experiment pages.
+- Sessions are rows of a new table `pilot_live_sessions` (migration 005):
+  instance, models, stages, both runs' experiment ids, outcomes and exact /
+  wrong, the detector's categories, cost, error, and the page's view once
+  done. A session a previous process left running is closed as
+  "interrupted by a server restart" on the next start (owner lease, as the
+  experiments do). **Live runs** (`#/research/runs`) lists them all.
+- Cost: per run from the experiment's metrics, per extraction from the
+  provider's usage and the price table; shown before the button as an
+  estimate (about $0.35 on Claude Haiku 4.5: ~46 k prompt and ~4 k output
+  tokens for the two runs, ~25 k in and ~42 k out for the 36 extractions),
+  while running as "cost so far", afterwards in full, agents and detector
+  apart; calls the price table does not know are counted as unpriced.
+- Cancel: stops the current experiment through the operator control; the
+  session ends as cancelled, the detector does not run.
+- Every finished session has a link, `#/research/<instance>/live/<id>`, and
+  the instance page says how many earlier live runs it has.
+- "About & demo" left the sidebar (still at `#/demo`); the sidebar leads
+  with the research demo and the live runs.

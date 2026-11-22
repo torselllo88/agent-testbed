@@ -6,6 +6,7 @@ import { renderExperiment } from "./pages/experiment.js";
 import { renderExperiments } from "./pages/experiments.js";
 import { renderHome } from "./pages/home.js";
 import { renderResearch } from "./pages/research.js";
+import { renderResearchRuns } from "./pages/researchRuns.js";
 import { renderScenarioEditor } from "./pages/scenarioEditor.js";
 import { renderScenarios } from "./pages/scenarios.js";
 import { renderWatch } from "./pages/watch.js";
@@ -26,6 +27,8 @@ const ROUTES = [
   { pattern: /^#\/batches$/, routeKey: "batches", render: renderBatches },
   { pattern: /^#\/annotate\/([^/]+)$/, routeKey: "batches", render: (m) => renderAnnotate(decodeURIComponent(m[1])) },
   { pattern: /^#\/demo$/, routeKey: "demo", render: renderDemo },
+  { pattern: /^#\/research\/runs$/, routeKey: "research-runs", render: renderResearchRuns },
+  { pattern: /^#\/research\/([^/]+)\/live\/([^/]+)$/, routeKey: "research", render: (m) => renderResearch(decodeURIComponent(m[1]), decodeURIComponent(m[2])) },
   { pattern: /^#\/research(?:\/([^/]+))?$/, routeKey: "research", render: (m) => renderResearch(m[1] ? decodeURIComponent(m[1]) : undefined) },
 ];
 

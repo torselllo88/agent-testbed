@@ -99,7 +99,7 @@ narration, pacing). How that works, and how to author one:
 
 ## Running experiments
 
-**Web UI** — `npm run gui`: an About & demo page (`#/demo`: a one-screen introduction and a one-click demo run), a Research demo (`#/research`: the pilot's dev runs replayed — paired Complete/Ring runs, what each agent had received, every fact's path to the proposer), scenario library and editor, a live control view
+**Web UI** — `npm run gui`: a Research demo (`#/research`: the pilot's dev runs replayed — paired Complete/Ring runs, what each agent had received, every fact's path to the proposer — and, with OpenRouter, exploratory live runs listed under `#/research/runs`), an About & demo page (`#/demo`, by its link: a one-screen introduction and a one-click demo run), scenario library and editor, a live control view
 with operator controls, a clean viewer mode for audiences, batches, exports.
 See [docs/web-ui.md](docs/web-ui.md).
 

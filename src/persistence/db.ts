@@ -9,6 +9,7 @@ import { INIT_SQL } from "./migrations/001_init.js";
 import { INTERACTION_SQL } from "./migrations/002_interaction.js";
 import { ROOMS_SQL } from "./migrations/003_rooms.js";
 import { EXPOSURE_SQL } from "./migrations/004_exposure.js";
+import { PILOT_LIVE_SQL } from "./migrations/005_pilotLive.js";
 
 // node:sqlite is a prefix-only builtin (isBuiltin("sqlite") is false, only
 // isBuiltin("node:sqlite") is true). Vite/vite-node's ESM externalization
@@ -47,6 +48,7 @@ function applyMigrations(db: Db): void {
   ensureColumn(db, "debrief_sessions", "owner_id", "owner_id TEXT");
   db.exec(ROOMS_SQL);
   db.exec(EXPOSURE_SQL);
+  db.exec(PILOT_LIVE_SQL);
 }
 
 const SYNCHRONOUS_NAMES = ["OFF", "NORMAL", "FULL", "EXTRA"] as const;

@@ -4,8 +4,9 @@
 import { iconBatch, iconDashboard, iconExperiment, iconInfo, iconMoon, iconScenario, iconSun } from "./icons.js";
 
 const NAV_ITEMS = [
-  { route: "demo", href: "#/demo", icon: iconInfo, label: "About &amp; demo" },
-  { route: "research", href: "#/research", icon: iconBatch, label: "Research demo" },
+  // "About & demo" (#/demo, the narrative Station Kestrel introduction) stays reachable by its link; the research demo leads.
+  { route: "research", href: "#/research", icon: iconInfo, label: "Research demo" },
+  { route: "research-runs", href: "#/research/runs", icon: iconBatch, label: "Live runs" },
   { route: "home", href: "#/", icon: iconDashboard, label: "Overview" },
   { route: "scenarios", href: "#/scenarios", icon: iconScenario, label: "Scenarios" },
   { route: "experiments", href: "#/experiments", icon: iconExperiment, label: "Experiments" },

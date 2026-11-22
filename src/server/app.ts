@@ -28,7 +28,7 @@ import { EventRepository } from "../persistence/eventRepository.js";
 import { ExperimentRepository, type ExperimentRecord } from "../persistence/experimentRepository.js";
 import { ExposureRepository } from "../persistence/exposureRepository.js";
 import { ReadOnlyScenarioError, ScenarioRepository, type ScenarioRecord } from "../persistence/scenarioRepository.js";
-import { BUILTIN_SCENARIOS, DEMO, demoFacts, loadPilotDemoDataset, PILOT_DEMO_METHODS, pilotDemoBatchSummary, pilotDemoInstances, pilotDemoInstanceView, PilotLiveDemoService, type PilotLiveModels } from "../scenarios/index.js";
+import { BUILTIN_SCENARIOS, DEMO, demoFacts, loadPilotDemoDataset, PILOT_DEMO_METHODS, pilotDemoBatchSummary, pilotDemoInstances, pilotDemoInstanceView, PilotLiveDemoService, pilotLiveEstimateUsd, type PilotLiveModels } from "../scenarios/index.js";
 import { SCHEDULER_TYPES } from "../scheduling/index.js";
 import { decodeRouteParam, HttpError, readJsonBody, requestUrl, requireJsonContentType, sendJson, serveStatic } from "./http.js";
 
@@ -181,6 +181,15 @@ function pilotLiveModels(deps: AppDeps): PilotLiveModels | null {
   return { agents: { ...DEMO.liveModels.agents, structuredOutput: "prompt" }, extraction: { ...DEMO.liveModels.agents, structuredOutput: "native" } };
 }
 const LiveBody = z.object({ instance: z.string().min(1) });
+
+/** The live run's availability, models, price estimate and every session (without the views). */
+function liveStatus(deps: AppDeps) {
+  const models = pilotLiveModels(deps);
+  const sessions = deps.pilotLive!.list().map(({ view: _view, ...s }) => s);
+  return models
+    ? { available: true, agents: models.agents.model, extraction: models.extraction.model, estimateUsd: pilotLiveEstimateUsd(models), sessions }
+    : { available: false, agents: null, extraction: null, estimateUsd: null, sessions };
+}
 
 /** Starting a run and validating a config report the same problems in the same shape. */
 function startExperiment(ctx: RouteContext, config: unknown, scenario?: ScenarioRecord, overrides?: RunOverrides) {
@@ -352,10 +361,26 @@ const ROUTES: Route[] = [
     pattern: /^\/api\/pilot-demo$/,
     handle: ({ res, deps }) => {
       const ds = loadPilotDemoDataset(deps.pilotDemoDir);
-      const models = pilotLiveModels(deps);
-      const live = models ? { available: true, agents: models.agents.model, extraction: models.extraction.model, sessions: deps.pilotLive!.list().map(({ view: _view, ...s }) => s) } : { available: false, agents: null, extraction: null, sessions: [] };
+      const live = liveStatus(deps);
       if (!ds.instances.length) return sendJson(res, 200, { available: false, instances: [], batch: null, methods: PILOT_DEMO_METHODS, live });
       sendJson(res, 200, { available: true, instances: pilotDemoInstances(ds), batch: pilotDemoBatchSummary(ds), methods: PILOT_DEMO_METHODS, live });
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/api\/pilot-demo\/live$/,
+    handle: ({ res, deps }) => sendJson(res, 200, liveStatus(deps)),
+  },
+  {
+    method: "POST",
+    pattern: new RegExp(`^/api/pilot-demo/live/${ID}/cancel$`),
+    handle: ({ res, params, deps }) => {
+      try {
+        const { view: _view, ...session } = deps.pilotLive!.cancel(decodeRouteParam(params[0]!));
+        sendJson(res, 200, session);
+      } catch (err) {
+        throw new HttpError(409, err instanceof Error ? err.message : String(err));
+      }
     },
   },
   {
@@ -381,7 +406,7 @@ const ROUTES: Route[] = [
     handle: ({ res, params, deps }) => {
       const session = deps.pilotLive?.get(decodeRouteParam(params[0]!));
       if (!session) throw new HttpError(404, "No such live run");
-      sendJson(res, 200, deps.pilotLive!.refresh(session));
+      sendJson(res, 200, session);
     },
   },
   {
@@ -769,6 +794,9 @@ export function hostAllowed(hostHeader: string | undefined, extraHosts: readonly
 export function createApp(appDeps: AppDeps): http.Server {
   const withExposure: AppDeps = appDeps.exposure ? appDeps : { ...appDeps, exposure: new ExposureService(appDeps) };
   const deps: AppDeps = withExposure.pilotLive ? withExposure : { ...withExposure, pilotLive: new PilotLiveDemoService({ db: appDeps.db, service: appDeps.service, providers: appDeps.providers }) };
+  // A live session a previous process left running is closed as interrupted (its experiments are recovered by the experiment service).
+  const interrupted = deps.pilotLive!.recoverInterrupted();
+  if (interrupted.length) console.error(`Research demo: ${interrupted.length} live run(s) interrupted by a restart: ${interrupted.join(", ")}`);
   const repos = {
     scenarios: new ScenarioRepository(deps.db),
     experiments: new ExperimentRepository(deps.db),

@@ -13,7 +13,7 @@ await step("sidebar entry and the paired view of the first instance", async () =
   await send("Page.navigate", { url: `${APP}/#/research` });
   await waitFor(`document.querySelectorAll(".research-col").length === 2`, "two columns");
   const nav = await text(".sidebar-nav");
-  if (!nav.includes("Research demo")) throw new Error(`sidebar: ${nav}`);
+  if (!nav.includes("Research demo") || !nav.includes("Live runs") || nav.includes("About")) throw new Error(`sidebar: ${nav}`);
   const turns = await js(`document.querySelectorAll(".research-col[data-run=complete] .research-turn").length`);
   if (turns !== 18) throw new Error(`turns: ${turns}`);
   const head = await text(".research-col[data-run=ring] .research-run-head");
@@ -69,6 +69,15 @@ await step("batch tab: pair outcomes, per-graph context, the instance list", asy
   await shot("research-batch");
   await click(`#research-body a[data-pick="DEV-03"]`);
   await waitFor(`document.querySelectorAll(".research-col").length === 2 && location.hash === "#/research/DEV-03"`, "back to compare on DEV-03");
+});
+
+await step("live runs page: empty on a keyless server, with the way to the demo", async () => {
+  await send("Page.navigate", { url: `${APP}/#/research/runs` });
+  await waitFor(`document.querySelector(".empty-state")?.textContent.includes("No live runs yet")`, "empty live runs");
+  const body = await text("#app");
+  if (!body.includes("OpenRouter key")) throw new Error(`runs page: ${body.slice(0, 200)}`);
+  await send("Page.navigate", { url: `${APP}/#/research/DEV-03` });
+  await waitFor(`document.querySelectorAll(".research-col").length === 2`, "back on the research page");
 });
 
 await step("methods tab: configuration and the six gates", async () => {

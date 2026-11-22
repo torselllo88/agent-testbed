@@ -16,7 +16,9 @@ await step("the page introduces the testbed and offers one button (scripted here
     if (!body.includes(piece)) throw new Error(`missing: ${piece}`);
   }
   if (!(await js(`document.querySelector("#demo-caption").textContent.includes("scripted agents")`))) throw new Error("scripted mode not labelled");
-  if (!(await js(`document.querySelector('.sidebar-nav-item[data-route="demo"]')?.classList.contains("active")`))) throw new Error("sidebar entry not active");
+  // The page is reachable by its link only; no sidebar entry is active for it (the research demo leads the sidebar).
+  if (await js(`!!document.querySelector('.sidebar-nav-item[data-route="demo"]')`)) throw new Error("About & demo is back in the sidebar");
+  if (await js(`!!document.querySelector('.sidebar-nav-item.active')`)) throw new Error("a sidebar entry is active on #/demo");
   await shot("demo-page");
 });
 

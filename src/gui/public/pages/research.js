@@ -19,7 +19,7 @@ const n = (v) => (v === null || v === undefined ? "—" : typeof v === "number" 
 /** Page state kept across re-renders of the tabs. */
 const state = { overview: null, instance: null, view: null, tab: "compare", focus: null, fact: null, replayView: null, live: null, poll: null };
 
-export async function renderResearch(instanceId) {
+export async function renderResearch(instanceId, sessionId) {
   app.innerHTML = `<div class="loading">Loading…</div>`;
   try {
     state.overview = await api("/api/pilot-demo");
@@ -27,6 +27,25 @@ export async function renderResearch(instanceId) {
     app.innerHTML = "";
     showError(err.message);
     return;
+  }
+  if (sessionId) {
+    // A finished session by its link: shown as the live view of its instance.
+    try {
+      const s = await api(`/api/pilot-demo/live/${encodeURIComponent(sessionId)}`);
+      if (s.stage === "done" && s.view) {
+        await selectInstance(s.instance, true);
+        state.live = s;
+        state.view = s.view;
+        state.focus = null;
+        state.fact = null;
+        renderPage();
+        return;
+      }
+      state.live = s;
+      if (s.stage !== "failed" && s.stage !== "cancelled") pollLive();
+    } catch (err) {
+      showError(err.message);
+    }
   }
   if (!state.overview.available) {
     app.innerHTML = `<div class="demo"><header class="demo-hero"><h1>Research demo</h1><p class="demo-lead">No replay dataset is installed: experiments/pilot-settlement/demo/dev-runs/ holds no paired run logs.</p></header></div>`;
@@ -51,6 +70,17 @@ async function selectInstance(id, first = false) {
 
 /** Whether the page currently shows a live run's view instead of the replay. */
 const showingLive = () => state.live?.stage === "done" && state.view === state.live.view;
+const money = (usd) => (typeof usd === "number" ? `$${usd.toFixed(2)}` : "—");
+
+async function cancelLive() {
+  try {
+    state.live = await api(`/api/pilot-demo/live/${encodeURIComponent(state.live.id)}/cancel`, { method: "POST", body: "{}" });
+    renderLiveLine();
+  } catch (err) {
+    state.live.error = err.message;
+    renderLiveLine();
+  }
+}
 
 async function startLive() {
   try {
@@ -76,12 +106,17 @@ function pollLive() {
         state.focus = null;
         state.fact = null;
         state.tab = "compare";
+        history.replaceState(null, "", `#/research/${encodeURIComponent(s.instance)}/live/${encodeURIComponent(s.id)}`);
+        state.overview = await api("/api/pilot-demo");
         renderPage();
         return;
       }
       renderLiveLine();
-      if (s.stage !== "failed") pollLive();
-      else renderPage();
+      if (s.stage !== "failed" && s.stage !== "cancelled") pollLive();
+      else {
+        state.overview = await api("/api/pilot-demo");
+        renderPage();
+      }
     } catch (err) {
       state.live.error = err.message;
       renderPage();
@@ -92,19 +127,29 @@ function pollLive() {
 function liveLineHtml() {
   const o = state.overview;
   const l = state.live;
-  if (!o.live?.available) return `<span class="muted small">Live run: not offered here (no OpenRouter key).</span>`;
+  const history = (o.live?.sessions ?? []).filter((s) => s.instance === state.instance);
+  const historyNote = history.length ? ` · <a href="#/research/runs">${history.length} earlier live run${history.length === 1 ? "" : "s"} of this instance</a>` : "";
+  if (!o.live?.available) return `<span class="muted small">Live run: not offered here (no OpenRouter key).${historyNote}</span>`;
+  const estimate = o.live.estimateUsd !== null ? ` · about ${money(o.live.estimateUsd)}` : "";
   if (!l || l.instance !== state.instance) {
-    return `<button type="button" class="button-like" id="research-live">Run this instance live</button> <span class="muted small">${escapeHtml(o.live.agents)} via OpenRouter · Complete, then Ring, then the detector · about 10–15 minutes · exploratory, n = 1</span>`;
+    return `<button type="button" class="button-like" id="research-live">Run this instance live</button> <span class="muted small">${escapeHtml(o.live.agents)} via OpenRouter · Complete, then Ring, then the detector · about 10–15 minutes${estimate} · exploratory, n = 1${historyNote}</span>`;
   }
-  const run = (r) => `${r.topology}: ${r.status === "pending" ? "waiting" : r.status === "running" ? `turn ${r.turn} of 18` : r.outcome ?? r.status}`;
-  if (l.stage === "failed") return `<span class="badge bad">live run failed</span> <span class="small">${escapeHtml(l.error ?? "")}</span> <button type="button" class="button-like" id="research-live">Try again</button>`;
+  const run = (r) => {
+    if (r.status === "pending") return `${r.topology}: waiting`;
+    const where = r.status === "running" ? `<a href="#/watch/${encodeURIComponent(r.experimentId)}">watch live →</a> (turn ${r.turn} of 18)` : `<a href="#/experiments/${encodeURIComponent(r.experimentId)}">${r.outcome ?? r.status}</a>${r.correct === null ? "" : r.correct ? " · exact" : " · wrong"}`;
+    return `${r.topology}: ${where}`;
+  };
+  const cost = l.cost ? ` · cost so far ${money(l.cost.totalUsd)}` : "";
+  const link = `<a href="#/research/${encodeURIComponent(l.instance)}/live/${encodeURIComponent(l.id)}" title="This session's link">session link</a>`;
+  if (l.stage === "failed" || l.stage === "cancelled") return `<span class="badge ${l.stage === "failed" ? "bad" : "neutral"}">live run ${l.stage}</span> <span class="small">${escapeHtml(l.error ?? "")} · ${run(l.runs.complete)} · ${run(l.runs.ring)}${cost}</span> <button type="button" class="button-like" id="research-live">Run again</button>`;
   if (l.stage === "done") {
+    const finished = `${run(l.runs.complete)} · ${run(l.runs.ring)} · cost ${money(l.cost?.totalUsd)}${l.cost?.unknownCalls ? ` (+${l.cost.unknownCalls} unpriced calls)` : ""} · ${link}`;
     return showingLive()
-      ? `<span class="badge warn">showing the live run</span> <span class="small">exploratory, n = 1, ${escapeHtml(l.models.agents)}; not the pilot instrument</span> <button type="button" class="button-like" id="research-replay">Back to the replay</button>`
-      : `<span class="badge ok">live run finished</span> <button type="button" class="button-like" id="research-show-live">Show the live run</button> <button type="button" class="button-like" id="research-live">Run again</button>`;
+      ? `<span class="badge warn">showing the live run</span> <span class="small">${finished}</span> <button type="button" class="button-like" id="research-replay">Back to the replay</button>`
+      : `<span class="badge ok">live run finished</span> <span class="small">${finished}</span> <button type="button" class="button-like" id="research-show-live">Show the live run</button> <button type="button" class="button-like" id="research-live">Run again</button>`;
   }
   const det = l.detector ? ` · detector ${l.detector.done} of ${l.detector.messages} messages${l.detector.failures ? `, ${l.detector.failures} failed` : ""}` : "";
-  return `<span class="badge info">live run in progress</span> <span class="small">${run(l.runs.complete)} · ${run(l.runs.ring)}${det}</span>`;
+  return `<span class="badge info">${l.stage === "cancelling" ? "cancelling" : "live run in progress"}</span> <span class="small">${run(l.runs.complete)} · ${run(l.runs.ring)}${det}${cost}</span> ${l.stage === "cancelling" ? "" : `<button type="button" class="button-like" id="research-cancel">Cancel</button>`}`;
 }
 
 function renderLiveLine() {
@@ -112,6 +157,7 @@ function renderLiveLine() {
   if (!box) return;
   box.innerHTML = liveLineHtml();
   document.getElementById("research-live")?.addEventListener("click", () => void startLive());
+  document.getElementById("research-cancel")?.addEventListener("click", () => void cancelLive());
   document.getElementById("research-show-live")?.addEventListener("click", () => {
     state.view = state.live.view;
     state.focus = null;
@@ -152,7 +198,7 @@ function renderPage() {
         <span class="muted">${inst ? `requested ${escapeHtml(inst.requested)} · canonical <strong>${escapeHtml(fmtProposal(inst.canonical))}</strong>` : ""}</span>
       </div>
       <div class="research-bar" id="research-live-line"></div>
-      ${showingLive() ? `<div class="warning-banner small">Live run on ${escapeHtml(state.live.models.agents)} via OpenRouter, started ${escapeHtml(state.live.startedAt.slice(0, 16).replace("T", " "))} UTC: exploratory — the plan's endpoint settings are not enforced, token counts are the pilot tokenizer's approximation, there is no environment record, and one run proves nothing. The replay above the tabs is the validated instrument.</div>` : ""}
+      ${showingLive() ? `<div class="warning-banner small">Live run on ${escapeHtml(state.live.models.agents)} via OpenRouter, started ${escapeHtml(state.live.startedAt.slice(0, 16).replace("T", " "))} UTC, cost ${money(state.live.cost?.totalUsd)}: exploratory — the plan's endpoint settings are not enforced, token counts are the pilot tokenizer's approximation, there is no environment record, and one run proves nothing. The replay is the validated instrument; every live run is listed under <a href="#/research/runs">Live runs</a>.</div>` : ""}
       <div class="tabs">${tabs.map(([k, label]) => `<button type="button" class="tab ${state.tab === k ? "active" : ""}" data-tab="${k}">${label}</button>`).join("")}</div>
       <div id="research-body"></div>
     </div>`;

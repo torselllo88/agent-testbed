@@ -5,7 +5,7 @@ the [operator HTTP API](http-api.md).
 
 ## About & demo
 
-`#/demo` (first in the sidebar): a one-screen introduction for someone seeing
+`#/demo` (reachable by its link; the sidebar leads with the research demo): a one-screen introduction for someone seeing
 the testbed for the first time — what it is, what it can study, how adaptable
 it is — and **one button** that starts the demo run (Station Kestrel, in
 English) and opens the viewer. With OpenRouter configured it runs on real
@@ -20,7 +20,7 @@ models are defined in [src/scenarios/demo.ts](../src/scenarios/demo.ts).
 
 ## Research demo
 
-`#/research` (second in the sidebar): the pilot's development runs as a
+`#/research` (first in the sidebar): the pilot's development runs as a
 replay, for a reader who wants to see the instrument rather than a story.
 Three actions: pick a dev instance, compare its Complete and Ring runs side
 by side (18 turns each, same seeds, the proposal and the evaluator's verdict
@@ -47,10 +47,24 @@ endpoint-settings check (think, num_ctx, keep_alive and the sampling options
 have no meaning on OpenRouter; temperature 1.0 and the 2560-token cap are
 sent), the visible-message cap and the budget are counted with the pilot
 tokenizer as an approximation, there is no environment record, and the
-run-log's testbed block carries `exploratory: true`. One session at a time;
-sessions live in memory (`POST /api/pilot-demo/live`, `GET
-/api/pilot-demo/live/<id>`;
-[src/scenarios/pilotSettlement/liveDemo.ts](../src/scenarios/pilotSettlement/liveDemo.ts)).
+run-log's testbed block carries `exploratory: true`. Before the button the
+page shows the price of a session (from the dev logs' token volumes and the
+price table, about $0.35 on Claude Haiku 4.5); while it runs, the line shows
+each run's turn with **watch live →** into the viewer, the detector's
+progress, the cost so far and a **Cancel** (stops the current experiment,
+nothing further runs); afterwards the outcomes with links to the two
+experiments, the cost (agents and detector apart; "unpriced" calls when the
+model is not in the price table) and the session's own link
+(`#/research/<instance>/live/<session>`), which opens that view directly.
+One session at a time. Sessions are rows of `pilot_live_sessions` (the two
+runs are ordinary experiments); a session cut off by a restart is closed as
+interrupted on the next start. **Live runs** (`#/research/runs`, second in
+the sidebar) lists every session: stage, both outcomes with exact / wrong,
+the detector's categories, cost and duration, with links to the experiments
+and to the view. API: `GET /api/pilot-demo/live`, `POST /api/pilot-demo/live`,
+`GET /api/pilot-demo/live/<id>`, `POST /api/pilot-demo/live/<id>/cancel`
+([src/scenarios/pilotSettlement/liveDemo.ts](../src/scenarios/pilotSettlement/liveDemo.ts),
+[src/persistence/pilotLiveRepository.ts](../src/persistence/pilotLiveRepository.ts)).
 Without OpenRouter the page says the live run is not offered.
 
 ## Scenario library
